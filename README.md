@@ -21,7 +21,7 @@ Launch idle controller, use rosbags to record
 ### Terminal #1
 ```console
 ./build-server.sh
-aica-docker interactive control-libraries-rospy-zmq-demos:noetic -u ros --net host --no-hostname -v /home/lasa/Workspace/learning_safety_DS/learning_safety_margin/data:/home/ros/ros_ws/src/learning_safety_margin/data
+aica-docker interactive learning-safety-margin:noetic -u ros --net host --no-hostname -v /home/lasa/Workspace/learning_safety_DS/learning_safety_margin/data:/home/ros/ros_ws/src/learning_safety_margin/data
 roslaunch learning_safety_margin demo.launch demo:=idle_control
 ```
 
@@ -45,6 +45,13 @@ sudo chown -R lasa Workspace/learning_safety_DS/learning_safety_margin/data
 ```console
 roslaunch learning_safety_margin demo.launch demo:=cartesian_twist_control
 ```
+
+# Notes 
+to add to pycharm PYTHONPATH : 
+$PYTHONPATH:/opt/ros/noetic/lib/python3/dist-packages:/home/ros/ros_ws/devel/lib/python3/dist-packages:/home/ros/.local/lib/python3.8/site-packages
+
+# Questions
+how to cache pip3 install -r requirements.txt ?? takes 240s to build everytime :(
 
 
 # TODO 

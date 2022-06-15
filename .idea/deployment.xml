@@ -6,7 +6,7 @@
       <paths name="ros@localhost:2280">
         <serverdata>
           <mappings>
-            <mapping deploy="ros_ws/src/rospy_zmq_examples" local="$PROJECT_DIR$/rospy_zmq_examples" web="ros_ws/src/rospy_zmq_examples" />
+            <mapping deploy="ros_ws/src/learning_safety_margin" local="$PROJECT_DIR$/learning_safety_margin/" web="ros_ws/src/learning_safety_margin" />
           </mappings>
         </serverdata>
       </paths>
