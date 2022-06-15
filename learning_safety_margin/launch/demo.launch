@@ -1,0 +1,9 @@
+<launch>
+    <arg name="demo" default="joint_space_velocity_control"/>
+    <arg name="robot_name" default="franka"/>
+
+    <group ns="$(arg robot_name)">
+        <node type="$(arg demo)" name="$(arg demo)" pkg="learning_safety_margin" output="screen"/>
+    </group>
+
+</launch>

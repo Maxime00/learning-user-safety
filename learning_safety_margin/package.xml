@@ -1,0 +1,14 @@
+<?xml version="1.0"?>
+<package format="2">
+  <name>learning_safety_margin</name>
+  <version>0.0.0</version>
+  <description>Control libraries demos included in a ROS package with ZMQ communication</description>
+  <maintainer email="dominic.reber@epfl.ch">"Dominic Reber"</maintainer>
+  <license>GPLv3</license>
+
+  <buildtool_depend>catkin</buildtool_depend>
+  <depend>rospy</depend>
+  <depend>std_msgs</depend>
+  <depend>sensor_msgs</depend>
+
+</package>

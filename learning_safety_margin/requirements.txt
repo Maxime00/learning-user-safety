@@ -1,0 +1,12 @@
+numpy
+scipy
+cvxpy
+nbclassic==0.2.8
+jupyterlab
+matplotlib
+scikit-learn
+seaborn
+pip
+casadi
+jax
+jaxlib
