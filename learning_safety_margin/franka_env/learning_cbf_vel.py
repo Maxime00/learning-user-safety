@@ -112,6 +112,7 @@ print(safe_pts.shape, unsafe_pts.shape)
 safe_rewards = onp.ones(len(safe_pts))*2.
 unsafe_rewards = onp.ones(len(unsafe_pts))
 
+unsafe_ttelist = onp.ones(len(unsafe_pts))
 
 # Define h model (i.e., RBF)
 

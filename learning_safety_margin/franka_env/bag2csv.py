@@ -81,7 +81,7 @@ def process_user_rosbags(user_num='1'):
 		print("Saving file " + str(count) + " of  " + str(numberOfFiles) + ": " + save_dir+"_eePosition.txt")
 		print(pose2save.shape)
 		np.savetxt(save_dir+"_eePosition.txt", pose2save, delimiter=",")
-		np.savetxt(save_dir+"_eeVelocity.csv", twist2save, delimiter=",")
+		np.savetxt(save_dir+"_eeVelocity.txt", twist2save, delimiter=",")
 
 		bag.close()
 

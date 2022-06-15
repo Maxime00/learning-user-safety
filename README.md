@@ -55,6 +55,7 @@ how to cache pip3 install -r requirements.txt ?? takes 240s to build everytime :
 
 
 # TODO 
+-cp notebooks entirely with new data_path and check that it works
 - add rostopic to save cartesian EEF state + velocity
 - add rostopic to controller (must be able to rosbag when commanding with cbfmpc)
 - logic to replay demonstrations from rosbag /joint_states -> joitn controller ?
