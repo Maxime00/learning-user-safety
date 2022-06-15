@@ -47,7 +47,13 @@ roslaunch learning_safety_margin demo.launch demo:=cartesian_twist_control
 ```
 
 
-
+# TODO 
+- add rostopic to save cartesian EEF state + velocity
+- add rostopic to controller (must be able to rosbag when commanding with cbfmpc)
+- logic to replay demonstrations from rosbag /joint_states -> joitn controller ?
+- convert post process matlab file to python
+- set up python env (virtualenv??) idally no env, should be easier
+- make sure processing and controller code can run inside docker 
 
 
 Code here is based on this [example](https://github.com/domire8/control-libraries-ros-demos/tree/main/rospy_zmq)
