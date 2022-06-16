@@ -65,7 +65,7 @@ def process_user_rosbags(user_num='1'):
 			jointPos = sr.JointPositions("franka", msg.position)
 			eePos = robot.forward_kinematics(jointPos)  # outputs cartesian pose (7d)
 			# convert back from sr to save to list
-			eePositions.append(eePos.data())
+			eePositions.append(eePos.data()[:3]) # only saving transitional pos, not orientation
 
 			# velocities
 			# must convert to sr Joint state to compute forward velocities
@@ -76,10 +76,9 @@ def process_user_rosbags(user_num='1'):
 			eeVelocities.append(eeVel.data()[:3])  # only saving transitional vel, not orientation
 
 		# Reshape lists
-		pose2save = np.reshape(np.array(eePositions), (7, -1))
+		pose2save = np.reshape(np.array(eePositions), (3, -1))
 		twist2save = np.reshape(np.array(eeVelocities), (3, -1))
 		print("Saving file " + str(count) + " of  " + str(numberOfFiles) + ": " + save_dir+"_eePosition.txt")
-		print(pose2save.shape)
 		np.savetxt(save_dir+"_eePosition.txt", pose2save, delimiter=",")
 		np.savetxt(save_dir+"_eeVelocity.txt", twist2save, delimiter=",")
 

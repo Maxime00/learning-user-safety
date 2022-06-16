@@ -190,6 +190,7 @@ def phi(X):
     #     y = []
     #     for i in range(X.shape[0]):
     a = np.array([rbf(X, c, s) for c, s, in zip(centers, stds)])
+
     #         y.append(a)
     return a  # np.array(y)
 
@@ -231,7 +232,7 @@ print(rbf_std)
 # rbf_std = 0.5
 centers, stds = rbf_means_stds(X=None, X_lim = np.array([x_lim,y_lim,z_lim, vdot_lim, vdot_lim, vdot_lim]),
                                n=x_dim, k=n_dim_features, fixed_stds=True, std=rbf_std)
-print(centers.shape, stds.shape)
+print("rbf shapes", centers.shape, stds.shape)
 
 # Initialize variables
 is_bias = False
@@ -417,4 +418,7 @@ else:
         "safe_reward_values": safe_val,
         "unsafe_reward_values": unsafe_val,
         }
-if save: pickle.dump(data, open( fig_path+"data_dict.p", "wb" ) )
+if save:
+    pickle.dump(data, open( fig_path+"data_dict.p", "wb" ) )
+    pickle.dump(data, open(data_dir+"User_1/"+"data_dict.p", "wb"))
+    # TODO : ALso make user specific !!

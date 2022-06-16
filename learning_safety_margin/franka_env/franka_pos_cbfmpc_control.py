@@ -11,7 +11,7 @@ from control_utils import *
 DEBUG_FLAG = False
 MaxSpeed = 1.5 # max Qolo speed: 1.51 m/s               --> Equivalent to 5.44 km/h
 MaxAngular = 4.124/6
-        
+
 def alpha(x):
     return psi * x
 
@@ -36,13 +36,13 @@ data_path = path + '/figures/oa/w_artificial_pts/artsafepts_2std/'
 print(data_path)
 data = pickle.load( open(data_path+ "data_dict.p", "rb" ) )
 params = data["theta"]
-bias_param = data["bias"] 
+bias_param = data["bias"]
 slack_param = data["unsafe_slack"]
 bias_param=0.1
 
 # Initialize RBF Parameters
 print(ws_lim, x_lim, y_lim, z_lim, x_dim, n_dim_features, rbf_std)
-centers, stds = rbf_means_stds(X=None, X_lim = np.array([x_lim,y_lim,z_lim]), 
+centers, stds = rbf_means_stds(X=None, X_lim = np.array([x_lim,y_lim,z_lim]),
                                n=x_dim, k=n_dim_features, fixed_stds=True, std=rbf_std)
 
 x = np.array([0.,0.,0.])#onp.random.uniform(low=[0.6, 0.2], high=[1.,0.8], size=(3,))
@@ -55,7 +55,7 @@ class SingleIntegrator():
 
     def forward_sim(self, x, u, steps=1):
         return x + u * self.dt*steps
-        
+
 
 class CBFMPC_Controller(SingleIntegrator):
 
@@ -79,9 +79,9 @@ class CBFMPC_Controller(SingleIntegrator):
         self.R2 = 1
         self.R3 = 1
 
-        self.Q = casadi.diagcat(self.Q_x, self.Q_y, self.Q_theta) # State Weights 
+        self.Q = casadi.diagcat(self.Q_x, self.Q_y, self.Q_theta) # State Weights
         self.R = casadi.diagcat(self.R1, self.R2, self.R3) # Control Weights
-        
+
         # Set up variables
         self.x = casadi.SX.sym('x', 3)
         self.u = casadi.SX.sym('u', 3)
@@ -128,7 +128,7 @@ class CBFMPC_Controller(SingleIntegrator):
 
         self.lb_vars = np.vstack((self.lbX, self.lbU))
         self.ub_vars = np.vstack((self.ubX, self.ubU))
- 
+
         self.cost_fn = 0
         self.constraints = self.X[:,0] - self.P[:self.n_states] # Initialize constraint list with x0 constraint
         self.lb_con = np.array([0]*self.n_states)
@@ -200,14 +200,14 @@ class CBFMPC_Controller(SingleIntegrator):
             ubx=args['ubx'],
             lbg=args['lbg'],
             ubg=args['ubg'],
-            p=args['p']    
+            p=args['p']
                 )
 
         U = casadi.reshape(sol['x'][self.n_states * (self.N+1):], self.n_controls, self.N).T
         X = casadi.reshape(sol['x'][:self.n_states * (self.N+1)], self.n_states, self.N+1).T
         return X, U
 
-if __name__ == "__main__": 
+if __name__ == "__main__":
     controller = CBFMPC_Controller(centers, stds, params, bias_param, n_steps=50)
 
     num_pts = 30
@@ -236,8 +236,8 @@ if __name__ == "__main__":
 
     fig = plt.figure(figsize=(10, 10))
     ax = plt.axes(projection='3d')
-    for i in range(len(xvec)): 
-        if hvec[i] < 0: 
+    for i in range(len(xvec)):
+        if hvec[i] < 0:
             im = ax.scatter(xvec[i], yvec[i], zvec[i], c=hvec[i], norm=divnorm, cmap=cm.coolwarm_r)#, marker=m)
             neg_pts.append([xvec[i], yvec[i], zvec[i]])
             neg_h.append(hvec[i])
@@ -254,11 +254,12 @@ if __name__ == "__main__":
     ylist = np.linspace(-0.4,-0.2,3)
     zlist = np.linspace(0,0.3,5)
     traj = []
-    for i in range(len(xlist)): 
+    for i in range(len(xlist)):
         for j in range(len(ylist)):
             x0 = [xlist[i],ylist[j], 0.1]
-            if controller.h_fun(x0) > 0: 
+            if controller.h_fun(x0) > 0:
                 X, U = controller.control(x0, xgoal)
+                print(U.shape, X.shape)
                 Xmat = np.array(X)
                 ax.plot(Xmat[:, 0], Xmat[:, 1], Xmat[:,2])
                 traj.append(Xmat)
@@ -268,7 +269,7 @@ if __name__ == "__main__":
     plt.ylim(ws_lim[1])
     plt.show()
 
-    
+
     yy,zz = np.meshgrid(x2, x3)
     hvals = np.zeros(yy.shape)
     yvec = yy.ravel()
@@ -278,7 +279,7 @@ if __name__ == "__main__":
         hvec[i] = controller.h_fun([0.5, yvec[i], zvec[i]])
 
     hvals = hvec.reshape((num_pts, num_pts))
-    
+
     fig,ax = plt.subplots()
     im = ax.imshow(hvals, extent=[y_lim[0],y_lim[1], z_lim[0], z_lim[1]], origin='lower',norm=divnorm, cmap=cm.coolwarm_r)
     fig.colorbar(im)

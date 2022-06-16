@@ -55,16 +55,19 @@ how to cache pip3 install -r requirements.txt ?? takes 240s to build everytime :
 
 
 # TODO 
--cp notebooks entirely with new data_path and check that it works
+- make controller that uses mpc 
+- make processing script with arg USer_nu,ber-> runs bag2csv + learning
+- make cartesiancontrol user specific- > add argumetn to demo.launch ??
+- need logic to get target ? fom demos? or hardset it because all demos end in same point ?
 - add rostopic to save cartesian EEF state + velocity
 - add rostopic to controller (must be able to rosbag when commanding with cbfmpc)
 - logic to replay demonstrations from rosbag /joint_states -> joitn controller ?
-- convert post process matlab file to python
-- set up python env (virtualenv??) idally no env, should be easier
+
 - make sure processing and controller code can run inside docker 
 
 
 Code here is based on this [example](https://github.com/domire8/control-libraries-ros-demos/tree/main/rospy_zmq)
+
 
 # `ros_examples` demonstration scripts
 
