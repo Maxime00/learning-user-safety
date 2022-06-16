@@ -1,22 +1,16 @@
 import numpy as onp
 import matplotlib.pyplot as plt
 import jax.numpy as np#jnp
-import glob
-import os
+
 import pickle
 
 from jax import random, vmap, jit, grad, ops, lax, tree_util, device_put, device_get, jacobian, jacfwd, jacrev, jvp
 import cvxpy as cp
 
-from mpl_toolkits.mplot3d import Axes3D
-from matplotlib import cm
-import matplotlib.colors as colors
-
 import seaborn as sns
 sns.set_style('darkgrid')
 palette = sns.color_palette()
 
-#import celluloid
 import jax
 print(jax.devices())
 

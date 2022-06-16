@@ -28,19 +28,27 @@ roslaunch learning_safety_margin demo.launch demo:=idle_control
 ### Terminal #2
 ```console 
 aica-docker connect learning-safety-margin-noetic-runtime 
-cd src/rospy_zmq_examples/data/rosbags
+cd src/learning_safety_margin/data/rosbags
 rosbag record /joint_states
 ```
 
 ## Data processing
 
-Run some script inside docker to process data
-also move chosen trajectories to someplace that can be read by controller
+Currently will only process User_1 data -> TODO : make user specific
+```console 
+aica-docker connect learning-safety-margin-noetic-runtime 
+cd src/learning_safety_margin/franka_env
+python3 bag2csv.py <user_number>
+python3 learning_cbf_vel.py
+```
+
 
 sudo chown -R lasa Workspace/learning_safety_DS/learning_safety_margin/data
 
 ## Run demos 
  
+Currently runs with mpc controller
+TODO : add controller to replay demos 
 ###Terminal #1
 ```console
 roslaunch learning_safety_margin demo.launch demo:=cartesian_twist_control
@@ -51,12 +59,11 @@ to add to pycharm PYTHONPATH :
 $PYTHONPATH:/opt/ros/noetic/lib/python3/dist-packages:/home/ros/ros_ws/devel/lib/python3/dist-packages:/home/ros/.local/lib/python3.8/site-packages
 
 # Questions
-how to cache pip3 install -r requirements.txt ?? takes 240s to build everytime :(
-
+How to pass argument with demo.launch file 
 
 # TODO 
-- make controller that uses mpc 
-- make processing script with arg USer_nu,ber-> runs bag2csv + learning
+- test controller that uses mpc 
+- make processing script with arg USer_number-> runs bag2csv + learning
 - make cartesiancontrol user specific- > add argumetn to demo.launch ??
 - need logic to get target ? fom demos? or hardset it because all demos end in same point ?
 - add rostopic to save cartesian EEF state + velocity
