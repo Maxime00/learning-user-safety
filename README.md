@@ -28,10 +28,12 @@ roslaunch learning_safety_margin demo.launch demo:=idle_control
 ### Terminal #2
 ```console 
 aica-docker connect learning-safety-margin-noetic-runtime 
-cd src/learning_safety_margin/data/rosbags
+cd src/learning_safety_margin/data
 rosbag record /joint_states
 ```
 
+docker cp learning-safety-margin-noetic-ssh:/home/ros/ros_ws/src/learning_safety_margin/data/User_0/csv /home/lasa/Workspace/learning_safety_DS/learning_safety_margin/data/User_0/csv
+sudo chown -R lasa /home/lasa/Workspace/learning_safety_DS/learning_safety_margin/data/
 mv filename ../new_folder
 rm filename
 
@@ -48,7 +50,6 @@ python3 learning_cbf_vel.py
 ```
 
 
-sudo chown -R lasa Workspace/learning_safety_DS/learning_safety_margin/data
 
 ## Run demos 
  
@@ -58,7 +59,9 @@ compute planned command less often
 ###Terminal #1
 ```console
 roslaunch learning_safety_margin demo.launch demo:=cartesian_impedance_MPC_control user_number:=1
+roslaunch learning_safety_margin demo.launch demo:=joint_torque_control
 roslaunch learning_safety_margin demo.launch demo:=joint_space_velocity_control
+
 ```
 
 # Notes 
@@ -69,9 +72,10 @@ $PYTHONPATH:/opt/ros/noetic/lib/python3/dist-packages:/home/ros/ros_ws/devel/lib
 How to pass argument with demo.launch file 
 
 # TODO 
+- remove transpose from learning 
+- update bag2csv in process and data_learning
 - test controller that uses mpc 
-- make processing script with arg USer_number-> runs bag2csv + learning
-- make cartesiancontrol user specific- > add argumetn to demo.launch ??
+- get joitn states as csv from rosbag
 - need logic to get target ? fom demos? or hardset it because all demos end in same point ?
 - add rostopic to save cartesian EEF state + velocity
 - add rostopic to controller (must be able to rosbag when commanding with cbfmpc)

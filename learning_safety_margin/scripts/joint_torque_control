@@ -1,0 +1,112 @@
+#!/usr/bin/env python3
+
+import numpy as np
+import rospy
+import state_representation as sr
+from controllers import create_joint_controller, CONTROLLER_TYPE
+from dynamical_systems import create_cartesian_ds, DYNAMICAL_SYSTEM_TYPE
+from network_interfaces.control_type import ControlType
+from network_interfaces.zmq.network import CommandMessage
+from learning_safety_margin.robot_interface import RobotInterface
+
+from sensor_msgs.msg import JointState
+from std_msgs.msg import Header
+
+def convert_joint_state_msg(state):
+    # Convert sr.joint_state msg to ros JointState msg
+    header = Header()
+    header.stamp = rospy.get_rostime()
+    #header.frame_id = state.get_reference_frame() # is this important ??
+    names = state.joint_state.get_names()
+    pos = state.joint_state.get_positions()
+    vel = state.joint_state.get_velocities()
+    effort = state.joint_state.get_torques()
+    msg = JointState(header, names, pos, vel, effort)
+
+    return msg
+
+
+def control_loop(init_pos, traj, robot, freq):
+
+    # create publisher
+    pub = rospy.Publisher('/joint_states', JointState, queue_size=10)
+
+    target_set = False
+    command = CommandMessage()
+    command.control_type = [ControlType.EFFORT.value]
+
+    ds = create_cartesian_ds(DYNAMICAL_SYSTEM_TYPE.POINT_ATTRACTOR)
+    ds.set_parameter_value("gain", [50., 50., 50., 10., 10., 10.], sr.ParameterType.DOUBLE_ARRAY)
+
+    ctrl = create_joint_controller(CONTROLLER_TYPE.VELOCITY_IMPEDANCE, 7)
+    # ctrl.set_parameter_value("stiffness", [220, 220, 220, 180, 120, 120, 100], sr.ParameterType.DOUBLE_ARRAY)
+    # ctrl.set_parameter_value("damping", [15, 15, 15, 13, 11, 10, 8], sr.ParameterType.DOUBLE_ARRAY)
+    ctrl.set_parameter_value("stiffness", [10, 5, 4, 2., 2, 2, 2], sr.ParameterType.DOUBLE_ARRAY)
+    ctrl.set_parameter_value("damping", [3., 2., 2., 1., .5, .5, .5], sr.ParameterType.DOUBLE_ARRAY)
+
+    rate = rospy.Rate(freq)
+    while not rospy.is_shutdown():
+        state = robot.get_state()
+
+        if not state:
+            continue
+        print("EEF position: ", state.ee_state.get_position())
+        print("EEF orientation: ", state.ee_state.get_orientation())
+        if not target_set:
+            # ul = np.array([2.8973, 1.7628, 2.8973, -0.0698, 2.8973, 3.7525, 2.8973]) - 0.25
+            # ll = np.array([-2.8973, -1.7628, -2.8973, -3.0718, -2.8973, -0.0175, -2.8973]) + 0.25
+            # q0 = 0.5 * (ul + ll)
+            # target = sr.JointState(state.joint_state.get_name(), state.joint_state.get_names())
+            # target.set_positions(q0)
+            # ds.set_parameter_value("attractor", target, sr.ParameterType.STATE, sr.StateType.JOINT_STATE)
+            # target = sr.CartesianPose(state.ee_state.get_name(), np.array([.5, 0., .5]), np.array([0., 1., 0., 0.]),
+            #                           state.ee_state.get_reference_frame())
+
+            target = sr.CartesianPose(state.ee_state.get_name(), init_pos[0:3], np.array([0., 1., 0., 0.]),
+                                      state.ee_state.get_reference_frame())
+
+
+            ds.set_parameter_value("attractor", target, sr.ParameterType.STATE, sr.StateType.CARTESIAN_POSE)
+            target_set = True
+
+        else:
+            # desired_vel = sr.JointVelocities(ds.evaluate(state.joint_state))
+            # desired_vel.clamp(.5, .5)
+
+            twist = sr.CartesianTwist(ds.evaluate(state.ee_state))
+            # print("Twist pose : ", twist.data())
+            twist.clamp(.25, .5)
+            # print("Twist pose after clamp : ", twist.data())
+            desired_vel =np.linalg.lstsq(state.jacobian.data(), twist.get_twist())[0]
+
+            desired_state = sr.JointState(state.joint_state.get_name(), state.joint_state.get_names())
+            desired_state.set_velocities(desired_vel)
+
+            #command = ctrl.compute_command(desired_state, state.joint_state)
+
+            command_torques = sr.JointTorques(ctrl.compute_command(desired_state, state.joint_state))
+            command.joint_state = state.joint_state
+            command.joint_state.set_torques(command_torques.get_torques())
+
+            robot.send_command(command)
+            print("Command:", command.joint_state.get_torques())
+
+        # Publish joint states for recording
+        pub.publish(convert_joint_state_msg(state))
+
+        rate.sleep()
+
+
+if __name__ == '__main__':
+
+    rospy.init_node("test", anonymous=True)
+
+    data_dir = "/home/ros/ros_ws/src/learning_safety_margin/data/example_traj_to_replay/csv/"
+    fname = data_dir + "1_jointVelocities.txt"
+    fname_2 = data_dir + "1_eePosition.txt"
+    traj = np.loadtxt(fname, delimiter=',')
+    cartPos = np.loadtxt(fname, delimiter=',')
+    init_pos = cartPos[0,:]
+    print("INIT POSE : ", init_pos)
+    robot_interface = RobotInterface("*:1701", "*:1702")
+    control_loop(init_pos, traj, robot_interface, 50)

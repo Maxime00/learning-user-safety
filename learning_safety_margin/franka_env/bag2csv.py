@@ -14,7 +14,8 @@ def process_user_rosbags(user_num='1'):
 	data_dir = "/home/ros/ros_ws/src/learning_safety_margin/data"
 
 	# Set up user dir
-	subject_dir = os.path.join(data_dir, "User_"+user_num)
+	#subject_dir = os.path.join(data_dir, "User_"+user_num)
+	subject_dir = os.path.join(data_dir, "example_traj_to_replay")
 	rosbag_dir = os.path.join(subject_dir, "rosbags")
 	csv_dir = os.path.join(subject_dir, "csv")
 
@@ -50,9 +51,13 @@ def process_user_rosbags(user_num='1'):
 		if "/daring/" in bagFile:
 			countDaring += 1
 			save_dir = os.path.join(csv_dir, "daring", str(countDaring))
+		else:
+			save_dir = os.path.join(csv_dir, str(count))
 
 		eePositions = []
 		eeVelocities = []
+		jointPositions = []
+		jointVelocities = []
 		temp_jointState = sr.JointState("franka", robot.get_joint_frames())
 
 		# access bag
@@ -65,7 +70,7 @@ def process_user_rosbags(user_num='1'):
 			jointPos = sr.JointPositions("franka", msg.position)
 			eePos = robot.forward_kinematics(jointPos)  # outputs cartesian pose (7d)
 			# convert back from sr to save to list
-			eePositions.append(eePos.data()[:3]) # only saving transitional pos, not orientation
+			eePositions.append(eePos.data()) # only saving transitional pos, not orientation
 
 			# velocities
 			# must convert to sr Joint state to compute forward velocities
@@ -73,14 +78,23 @@ def process_user_rosbags(user_num='1'):
 			temp_jointState.set_positions(msg.position)
 			eeVel = robot.forward_velocity(temp_jointState)  # outputs cartesian twist (6d)
 			# convert back from sr to save to list
-			eeVelocities.append(eeVel.data()[:3])  # only saving transitional vel, not orientation
+			eeVelocities.append(eeVel.data())  # only saving transitional vel, not orientation
+
+			# Joint State
+			jointPositions.append(temp_jointState.get_positions())
+			jointVelocities.append(temp_jointState.get_velocities())
+
 
 		# Reshape lists
-		pose2save = np.reshape(np.array(eePositions), (3, -1))
-		twist2save = np.reshape(np.array(eeVelocities), (3, -1))
+		pose2save = np.array(eePositions)
+		twist2save = np.array(eeVelocities)
+		jointPos2save = np.array(jointPositions)
+		jointVel2save = np.array(jointVelocities)
 		print("Saving file " + str(count) + " of  " + str(numberOfFiles) + ": " + save_dir+"_eePosition.txt")
 		np.savetxt(save_dir+"_eePosition.txt", pose2save, delimiter=",")
 		np.savetxt(save_dir+"_eeVelocity.txt", twist2save, delimiter=",")
+		np.savetxt(save_dir + "_jointPositions.txt", jointPos2save, delimiter=",")
+		np.savetxt(save_dir + "_jointVelocities.txt", jointVel2save, delimiter=",")
 
 		bag.close()
 

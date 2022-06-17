@@ -25,7 +25,6 @@ def control_loop(planner, robot, freq): #planner,
 
     ctrl = create_cartesian_controller(CONTROLLER_TYPE.VELOCITY_IMPEDANCE)
 
-
     ctrl.set_parameter_value("stiffness", 10., sr.ParameterType.DOUBLE) # 100 100 5 5 - good: 80 80 5 5
     ctrl.set_parameter_value("damping", 5., sr.ParameterType.DOUBLE) # 35 35 2. 2.5
     ctrl.set_parameter_value("inertia", .1, sr.ParameterType.DOUBLE)
@@ -181,7 +180,7 @@ if __name__ == '__main__':
         print("Processing rosbags for User_" + user_number)
 
     # Set up data path
-    data_dir = "/home/ros/ros_ws/src/learning_safety_margin/data/User_1/"
+    data_dir = "/home/ros/ros_ws/src/learning_safety_margin/data/User_"+user_number+"/"
     # TODO : make user specific ! Figure out hwo to pass argument using launch file
 
     data = pickle.load(open(data_dir + "data_dict.p", "rb"))

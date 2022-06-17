@@ -25,6 +25,7 @@ def control_loop(robot, freq):
         if not target_set:
             target = sr.CartesianPose(state.ee_state.get_name(), np.array([.5, 0., .5]), np.array([0., 1., 0., 0.]),
                                       state.ee_state.get_reference_frame())
+
             ds.set_parameter_value("attractor", target, sr.ParameterType.STATE, sr.StateType.CARTESIAN_POSE)
             target_set = True
         else:

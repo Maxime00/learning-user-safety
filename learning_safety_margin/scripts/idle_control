@@ -7,7 +7,7 @@ from controllers import create_cartesian_controller, CONTROLLER_TYPE
 from dynamical_systems import create_cartesian_ds, DYNAMICAL_SYSTEM_TYPE
 from network_interfaces.control_type import ControlType
 from network_interfaces.zmq.network import CommandMessage
-from rospy_zmq_examples.robot_interface import RobotInterface
+from learning_safety_margin.robot_interface import RobotInterface
 
 from sensor_msgs.msg import JointState
 from std_msgs.msg import Header
@@ -36,13 +36,13 @@ def control_loop(robot, freq):
     command.control_type = [ControlType.EFFORT.value]
 
     ds = create_cartesian_ds(DYNAMICAL_SYSTEM_TYPE.POINT_ATTRACTOR)
-    ds.set_parameter_value("gain", [0., 0., 0., 0., 0., 0.], sr.ParameterType.DOUBLE_ARRAY)
+    ds.set_parameter_value("gain", [0., 0., 0., 10., 10., 10.], sr.ParameterType.DOUBLE_ARRAY)
 
     ctrl = create_cartesian_controller(CONTROLLER_TYPE.COMPLIANT_TWIST)
     ctrl.set_parameter_value("linear_principle_damping", 0., sr.ParameterType.DOUBLE)
     ctrl.set_parameter_value("linear_orthogonal_damping", 0., sr.ParameterType.DOUBLE)
-    ctrl.set_parameter_value("angular_stiffness", 0., sr.ParameterType.DOUBLE)
-    ctrl.set_parameter_value("angular_damping", 0., sr.ParameterType.DOUBLE)
+    ctrl.set_parameter_value("angular_stiffness", 5., sr.ParameterType.DOUBLE)
+    ctrl.set_parameter_value("angular_damping", 5., sr.ParameterType.DOUBLE)
 
     rate = rospy.Rate(freq)
     while not rospy.is_shutdown():
