@@ -13,7 +13,7 @@ import pickle
 from learning_safety_margin.cbf_mpc_pos_planner import *
 from learning_safety_margin.control_utils import *
 
-def control_loop(planner, robot, freq):
+def control_loop(robot, freq):
     target_set = False
     command = CommandMessage()
     command.control_type = [ControlType.EFFORT.value]
@@ -22,7 +22,7 @@ def control_loop(planner, robot, freq):
     ds.set_parameter_value("gain", [50., 50., 50., 10., 10., 10.], sr.ParameterType.DOUBLE_ARRAY)
 
     ctrl = create_cartesian_controller(CONTROLLER_TYPE.COMPLIANT_TWIST)
-    ctrl.set_parameter_value("linear_principle_damping", 80., sr.ParameterType.DOUBLE) # 100 100 5 5
+    ctrl.set_parameter_value("linear_principle_damping", 80., sr.ParameterType.DOUBLE) # 100 100 5 5 - good: 80 80 5 5
     ctrl.set_parameter_value("linear_orthogonal_damping", 80., sr.ParameterType.DOUBLE) # 35 35 2. 2.5
     ctrl.set_parameter_value("angular_stiffness", 5., sr.ParameterType.DOUBLE)
     ctrl.set_parameter_value("angular_damping", 5., sr.ParameterType.DOUBLE)
@@ -44,11 +44,13 @@ def control_loop(planner, robot, freq):
             target_set = True
         else:
             # get desired twist from MPC planner
-            X, U = planner.control(state.ee_state.get_position(), target.data()[:3])
-            #twist = sr.CartesianTwist(ds.evaluate(state.ee_state))
-            twist = sr.CartesianTwist(name=state.ee_state.get_name(), linear_velocity=U[1, :],
-                                      reference=state.ee_state.get_reference_frame())
+            #X, U = planner.control(state.ee_state.get_position(), target.data()[:3])
 
+            #print("MPC velocity command : ", U[:,1])
+            #twist = sr.CartesianTwist(name=state.ee_state.get_name(), linear_velocity=np.array(U[:, 1]),
+            #                          reference=state.ee_state.get_reference_frame())
+
+            twist = sr.CartesianTwist(ds.evaluate(state.ee_state))
             print("Twist pose : ", twist.data() )
             twist.clamp(.25, .5)
             print("Twist pose after clamp : ", twist.data())
@@ -66,20 +68,20 @@ if __name__ == '__main__':
     robot_interface = RobotInterface("*:1701", "*:1702")
 
     # Set up data path
-    data_dir = "/home/ros/ros_ws/src/learning_safety_margin/data/User_1/"
-    # TODO : make user specific ! Figure out hwo to pass argument using launch file
+    # data_dir = "/home/ros/ros_ws/src/learning_safety_margin/data/User_1/"
+    # # TODO : make user specific ! Figure out hwo to pass argument using launch file
+    #
+    # data = pickle.load(open(data_dir + "data_dict.p", "rb"))
+    # params = data["theta"]
+    # bias_param = data["bias"]
+    # slack_param = data["unsafe_slack"]
+    # bias_param = 0.1
+    #
+    # # Initialize RBF Parameters
+    # print(ws_lim, x_lim, y_lim, z_lim, x_dim, n_dim_features, rbf_std)
+    # centers, stds = rbf_means_stds(X=None, X_lim=np.array([x_lim, y_lim, z_lim]),
+    #                                n=x_dim, k=n_dim_features, fixed_stds=True, std=rbf_std)
+    #
+    # mpc_planner = CBFMPC_Controller(centers, stds, params, bias_param, n_steps=10)
 
-    data = pickle.load(open(data_dir + "data_dict.p", "rb"))
-    params = data["theta"]
-    bias_param = data["bias"]
-    slack_param = data["unsafe_slack"]
-    bias_param = 0.1
-
-    # Initialize RBF Parameters
-    print(ws_lim, x_lim, y_lim, z_lim, x_dim, n_dim_features, rbf_std)
-    centers, stds = rbf_means_stds(X=None, X_lim=np.array([x_lim, y_lim, z_lim]),
-                                   n=x_dim, k=n_dim_features, fixed_stds=True, std=rbf_std)
-
-    mpc_planner = CBFMPC_Controller(centers, stds, params, bias_param, n_steps=50)
-
-    control_loop(mpc_planner, robot_interface, 200)
+    control_loop(robot_interface, 100)

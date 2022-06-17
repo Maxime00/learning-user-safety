@@ -161,6 +161,7 @@ class CBFMPC_Controller(SingleIntegrator):
             p=args['p']
         )
 
+        #removed transpose !
         U = casadi.reshape(sol['x'][self.n_states * (self.N + 1):], self.n_controls, self.N).T
         X = casadi.reshape(sol['x'][:self.n_states * (self.N + 1)], self.n_states, self.N + 1).T
         return X, U

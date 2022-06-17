@@ -6,7 +6,7 @@ import state_representation as sr
 from dynamical_systems import create_cartesian_ds, DYNAMICAL_SYSTEM_TYPE
 from network_interfaces.control_type import ControlType
 from network_interfaces.zmq.network import CommandMessage
-from rospy_zmq_examples.robot_interface import RobotInterface
+from learning_safety_margin.robot_interface import RobotInterface
 
 
 def control_loop(robot, freq):
@@ -23,7 +23,7 @@ def control_loop(robot, freq):
         if not state:
             continue
         if not target_set:
-            target = sr.CartesianPose(state.ee_state.get_name(), np.array([.6, -.3, .5]), np.array([0., 1., 0., 0.]),
+            target = sr.CartesianPose(state.ee_state.get_name(), np.array([.5, 0., .5]), np.array([0., 1., 0., 0.]),
                                       state.ee_state.get_reference_frame())
             ds.set_parameter_value("attractor", target, sr.ParameterType.STATE, sr.StateType.CARTESIAN_POSE)
             target_set = True
@@ -33,6 +33,7 @@ def control_loop(robot, freq):
             command.joint_state = state.joint_state
             command.joint_state.set_velocities(np.linalg.lstsq(state.jacobian.data(), twist.get_twist())[0])
             robot.send_command(command)
+            print("Command Vel:", command.joint_state.get_velocities())
         rate.sleep()
 
 

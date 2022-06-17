@@ -32,9 +32,14 @@ cd src/learning_safety_margin/data/rosbags
 rosbag record /joint_states
 ```
 
+mv filename ../new_folder
+rm filename
+
 ## Data processing
 
 Currently will only process User_1 data -> TODO : make user specific
+just make script that takes in user_number, checks for directories and adds them then calls processing and learning
+should have second argumetn to decide if it learns vel or acc-> need to add other learnign script - > give dsitinct names to data_dict
 ```console 
 aica-docker connect learning-safety-margin-noetic-runtime 
 cd src/learning_safety_margin/franka_env
@@ -49,9 +54,11 @@ sudo chown -R lasa Workspace/learning_safety_DS/learning_safety_margin/data
  
 Currently runs with mpc controller
 TODO : add controller to replay demos 
+compute planned command less often
 ###Terminal #1
 ```console
-roslaunch learning_safety_margin demo.launch demo:=cartesian_twist_control
+roslaunch learning_safety_margin demo.launch demo:=cartesian_impedance_MPC_control
+roslaunch learning_safety_margin demo.launch demo:=joint_space_velocity_control
 ```
 
 # Notes 

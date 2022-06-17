@@ -21,6 +21,7 @@ set(DEMOS_SCRIPTS
     joint_space_velocity_control
     idle_control
     cartesian_twist_control
+    cartesian_impedance_MPC_control
 )
 
 foreach(SCRIPT ${DEMOS_SCRIPTS})
