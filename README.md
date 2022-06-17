@@ -57,7 +57,7 @@ TODO : add controller to replay demos
 compute planned command less often
 ###Terminal #1
 ```console
-roslaunch learning_safety_margin demo.launch demo:=cartesian_impedance_MPC_control
+roslaunch learning_safety_margin demo.launch demo:=cartesian_impedance_MPC_control user_number:=1
 roslaunch learning_safety_margin demo.launch demo:=joint_space_velocity_control
 ```
 

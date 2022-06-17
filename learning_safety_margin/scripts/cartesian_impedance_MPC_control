@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import time
+import sys
 import numpy as np
 import rospy
 import state_representation as sr
@@ -65,8 +66,6 @@ def control_loop(planner, robot, freq): #planner,
                 X, U = planner.control(state.ee_state.get_position(), target.data()[:3])
                 print("Finished planning trajectory :", computing_count)
                 print("--- %s seconds --- \n" % (time.time() - start_time))
-                rospy.sleep(3.0)
-                timeZero = time.time()
 
             # get desired twist from MPC planner
             # plan trajectory from predicted end of previous planner to end goal
@@ -85,9 +84,7 @@ def control_loop(planner, robot, freq): #planner,
             # Get twist using MPC planner
             # planner_count +=1
             #
-            # # exit after trying to play entire traj
-            # if planner_count > len(U[1]):
-            #     break
+
 
             # print("MPC velocity command : ", U[:,planner_count-1])
             # print("MPC predicted state: ", X[:,planner_count-1])
@@ -95,18 +92,22 @@ def control_loop(planner, robot, freq): #planner,
 
             # Must get command corresponding to closest current state
             # Rather move to next step only when current state is closer
-
-            current_planned_state = X[planner_count,:]
-            state_diff = feedback_state.get_position() - current_planned_state
-            next_state_diff = feedback_state.get_position() - X[planner_count+1,:]
+            state_diff = np.linalg.norm(feedback_state.get_position() - X[planner_count,:])
+            next_state_diff = np.linalg.norm(feedback_state.get_position() - X[planner_count+1,:])
+            print("state diff: ", state_diff)
 
             if next_state_diff < state_diff: # move to next state
+                print("Going to next state ! \n")
                 planner_count +=1
 
+            # exit after trying to play entire traj
+            if planner_count > len(np.array(U[:, 0])):  
+                break
 
-            desired_twist = sr.CartesianTwist(name=state.ee_state.get_name(), linear_velocity=np.array(U[planner_count,:]),
+            desired_twist = sr.CartesianTwist(name=state.ee_state.get_name(), linear_velocity=np.array(U[planner_count,:]).transpose(),
                                       reference=state.ee_state.get_reference_frame())
 
+            #planner_count += 1
 
             # Get twist using DS
             # desired_twist = sr.CartesianTwist(ds.evaluate(state.ee_state))
@@ -157,7 +158,7 @@ def control_loop(planner, robot, freq): #planner,
             command_torques = sr.JointTorques(ctrl.compute_command(desired_state, feedback_state, state.jacobian))
             command.joint_state = state.joint_state
             command.joint_state.set_torques(command_torques.get_torques())
-
+            print("timestep :", planner_count)
             print("Command Torques:", command.joint_state.get_torques())
             robot.send_command(command)
 
@@ -169,6 +170,15 @@ if __name__ == '__main__':
     rospy.init_node("test", anonymous=True)
 
     robot_interface = RobotInterface("*:1701", "*:1702")
+
+    # Check passed argument - User number
+    if len(sys.argv) >= 2:
+        user_number = sys.argv[1]
+    else:
+        user_number = 0
+
+    if isinstance(user_number, str):
+        print("Processing rosbags for User_" + user_number)
 
     # Set up data path
     data_dir = "/home/ros/ros_ws/src/learning_safety_margin/data/User_1/"
@@ -185,8 +195,11 @@ if __name__ == '__main__':
     centers, stds = rbf_means_stds(X=None, X_lim=np.array([x_lim, y_lim, z_lim]),
                                    n=x_dim, k=n_dim_features, fixed_stds=True, std=rbf_std)
 
-    mpc_planner = CBFMPC_Controller(centers, stds, params, bias_param, n_steps=200)
+    freq = 100
+    dt = 1./freq
 
-    control_loop(mpc_planner, robot_interface, 200)
+    mpc_planner = CBFMPC_Controller(centers, stds, params, bias_param, dt=dt, n_steps=50)
+
+    control_loop(mpc_planner, robot_interface, freq)
 
     #control_loop( robot_interface, 200)

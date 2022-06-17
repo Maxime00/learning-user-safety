@@ -41,13 +41,13 @@ def process_user_rosbags(user_num='1'):
 		# current structure safe, unsafe, daring directories with trajNumber_eePosition.txt
 
 		# Set csv file path depending on safety label
-		if "safe" in bagFile:
+		if "/safe/" in bagFile:
 			countSafe += 1
 			save_dir = os.path.join(csv_dir, "safe", str(countSafe))
-		if "unsafe" in bagFile:
+		if "/unsafe/" in bagFile:
 			countUnsafe += 1
 			save_dir = os.path.join(csv_dir, "unsafe", str(countUnsafe))
-		if "daring" in bagFile:
+		if "/daring/" in bagFile:
 			countDaring += 1
 			save_dir = os.path.join(csv_dir, "daring", str(countDaring))
 
