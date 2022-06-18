@@ -33,6 +33,7 @@ rosbag record /joint_states
 ```
 
 docker cp learning-safety-margin-noetic-ssh:/home/ros/ros_ws/src/learning_safety_margin/data/User_0/csv /home/lasa/Workspace/learning_safety_DS/learning_safety_margin/data/User_0/csv
+docker cp learning-safety-margin-noetic-ssh:/home/ros/ros_ws/src/learning_safety_margin/data/example_traj_to_replay/csv /home/lasa/Workspace/learning_safety_DS/learning_safety_margin/data/example_traj_to_replay
 sudo chown -R lasa /home/lasa/Workspace/learning_safety_DS/learning_safety_margin/data/
 mv filename ../new_folder
 rm filename
@@ -58,11 +59,15 @@ TODO : add controller to replay demos
 compute planned command less often
 ###Terminal #1
 ```console
+bash build-server.sh
+aica-docker interactive learning-safety-margin:noetic -u ros --net host --no-hostname -v /home/lasa/Workspace/learning_safety_DS/learning_safety_margin/data:/home/ros/ros_ws/src/learning_safety_margin/data
 roslaunch learning_safety_margin demo.launch demo:=cartesian_impedance_MPC_control user_number:=1
 roslaunch learning_safety_margin demo.launch demo:=joint_torque_control
 roslaunch learning_safety_margin demo.launch demo:=joint_space_velocity_control
-
 ```
+
+### Terminal 2
+franka_lightweight_interface 17 panda_ --sensitivity low --damping off
 
 # Notes 
 to add to pycharm PYTHONPATH : 
@@ -72,6 +77,8 @@ $PYTHONPATH:/opt/ros/noetic/lib/python3/dist-packages:/home/ros/ros_ws/devel/lib
 How to pass argument with demo.launch file 
 
 # TODO 
+- try traj_follow controller with cartesian pose + ds ? -> moving attraactor or something maybe could work 
+- -Tune gains ?
 - remove transpose from learning 
 - update bag2csv in process and data_learning
 - test controller that uses mpc 
@@ -137,6 +144,8 @@ Available demos are:
 ## Running the simulator simultaneously
 
 The scripts require a simulator (or real robot with the same interface) to be running. Start the simulator with:
+
+NOTE : To run in simulation, ip of RobotInterface should be robot_interface = RobotInterface("*:1601", "*:1602")
 
 ```console
 cd path/to/desired/location

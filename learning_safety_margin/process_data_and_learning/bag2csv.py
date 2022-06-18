@@ -6,15 +6,17 @@ import glob
 
 from robot_model import Model, InverseKinematicsParameters, QPInverseVelocityParameters
 import state_representation as sr
+from sensor_msgs.msg import JointState
+from std_msgs.msg import Header
 
-
-def process_user_rosbags(user_num='0'):
+def process_user_rosbags(user_num='1'):
 
 	# Set up data path
 	data_dir = "/home/ros/ros_ws/src/learning_safety_margin/data"
 
 	# Set up user dir
-	subject_dir = os.path.join(data_dir, "User_"+user_num)
+	#subject_dir = os.path.join(data_dir, "User_"+user_num)
+	subject_dir = os.path.join(data_dir, "example_traj_to_replay")
 	rosbag_dir = os.path.join(subject_dir, "rosbags")
 	csv_dir = os.path.join(subject_dir, "csv")
 
@@ -23,7 +25,7 @@ def process_user_rosbags(user_num='0'):
 	robot = Model("franka", urdf_path)
 
 	# Verify directory
-	listOfBagFiles = glob.glob(rosbag_dir + '/**/*.bag', recursive=True)
+	listOfBagFiles = glob.glob(rosbag_dir + '/*.bag', recursive=True)
 
 	# Loop for all bags in 'User_X' folder
 	numberOfFiles = str(len(listOfBagFiles))
@@ -50,37 +52,61 @@ def process_user_rosbags(user_num='0'):
 		if "/daring/" in bagFile:
 			countDaring += 1
 			save_dir = os.path.join(csv_dir, "daring", str(countDaring))
+		else:
+			save_dir = os.path.join(csv_dir, str(count))
 
 		eePositions = []
 		eeVelocities = []
+		jointPositions = []
+		jointVelocities = []
 		temp_jointState = sr.JointState("franka", robot.get_joint_frames())
 
 		# access bag
 		bag = rosbag.Bag(bagFile)
 
+		# DEBUG PRINT
+		# frames = robot.get_frames()
+		# base_frame = robot.get_base_frame()
+		# joint_frames = robot.get_joint_frames()
+		# print("Frames : ", frames ,"\n")
+		# print(" BASE Frames : ", base_frame, "\n")
+		# print(" JOINT Frames : ", joint_frames, "\n")
+
+
 		for topic, msg, t in bag.read_messages():
 
 			# positions
 			# must convert to sr to compute forward kinematics
-			jointPos = sr.JointPositions("franka", msg.position)
-			eePos = robot.forward_kinematics(jointPos)  # outputs cartesian pose (7d)
+			# print(topic)
+
+			jointPos = sr.JointPositions("franka", np.array(msg.position))
+			eePos = robot.forward_kinematics(jointPos, 'panda_link8')  # outputs cartesian pose (7d)
 			# convert back from sr to save to list
-			eePositions.append(eePos.data()[:3]) # only saving transitional pos, not orientation
+			eePositions.append(eePos.data()) # only saving transitional pos, not orientation
 
 			# velocities
 			# must convert to sr Joint state to compute forward velocities
-			temp_jointState.set_velocities(msg.velocity)
-			temp_jointState.set_positions(msg.position)
-			eeVel = robot.forward_velocity(temp_jointState)  # outputs cartesian twist (6d)
+			temp_jointState.set_velocities( np.array(msg.velocity))
+			temp_jointState.set_positions( np.array(msg.position))
+			eeVel = robot.forward_velocity(temp_jointState, 'panda_link8')  # outputs cartesian twist (6d)
 			# convert back from sr to save to list
-			eeVelocities.append(eeVel.data()[:3])  # only saving transitional vel, not orientation
+			eeVelocities.append(eeVel.data())  # only saving transitional vel, not orientation
+
+			# Joint State
+			jointPositions.append(msg.position)#temp_jointState.get_positions())
+			jointVelocities.append(msg.velocity)
+
 
 		# Reshape lists
-		pose2save = np.reshape(np.array(eePositions), (3, -1))
-		twist2save = np.reshape(np.array(eeVelocities), (3, -1))
+		pose2save = np.array(eePositions)
+		twist2save = np.array(eeVelocities)
+		jointPos2save = np.array(jointPositions)
+		jointVel2save = np.array(jointVelocities)
 		print("Saving file " + str(count) + " of  " + str(numberOfFiles) + ": " + save_dir+"_eePosition.txt")
 		np.savetxt(save_dir+"_eePosition.txt", pose2save, delimiter=",")
 		np.savetxt(save_dir+"_eeVelocity.txt", twist2save, delimiter=",")
+		np.savetxt(save_dir + "_jointPositions.txt", jointPos2save, delimiter=",")
+		np.savetxt(save_dir + "_jointVelocities.txt", jointVel2save, delimiter=",")
 
 		bag.close()
 

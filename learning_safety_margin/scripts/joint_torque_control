@@ -2,6 +2,7 @@
 
 import numpy as np
 import rospy
+import time
 import state_representation as sr
 from controllers import create_joint_controller, CONTROLLER_TYPE
 from dynamical_systems import create_cartesian_ds, DYNAMICAL_SYSTEM_TYPE
@@ -26,12 +27,12 @@ def convert_joint_state_msg(state):
     return msg
 
 
-def control_loop(init_pos, traj, robot, freq):
+def control_loop(traj_pos, traj_vel, robot, freq):
 
     # create publisher
     pub = rospy.Publisher('/joint_states', JointState, queue_size=10)
 
-    target_set = False
+
     command = CommandMessage()
     command.control_type = [ControlType.EFFORT.value]
 
@@ -44,6 +45,17 @@ def control_loop(init_pos, traj, robot, freq):
     ctrl.set_parameter_value("stiffness", [10, 5, 4, 2., 2, 2, 2], sr.ParameterType.DOUBLE_ARRAY)
     ctrl.set_parameter_value("damping", [3., 2., 2., 1., .5, .5, .5], sr.ParameterType.DOUBLE_ARRAY)
 
+    flag = 0
+    init_pos_err_threshold = 0.6
+    out_of_traj_err_threshold = 0.8
+    back_in_traj_err_threshold = 0.6
+    error_threshold = 0.5
+    q0 = traj_pos[0, :]
+    time_period = 1. / freq
+    nIter= 0
+    alpha = 0.9
+    dq_filtered = np.zeros(7)
+
     rate = rospy.Rate(freq)
     while not rospy.is_shutdown():
         state = robot.get_state()
@@ -52,7 +64,9 @@ def control_loop(init_pos, traj, robot, freq):
             continue
         print("EEF position: ", state.ee_state.get_position())
         print("EEF orientation: ", state.ee_state.get_orientation())
-        if not target_set:
+        print("FLAG : ", flag)
+        if flag == 0:
+            # ------GO TO START POSITION ------------------------
             # ul = np.array([2.8973, 1.7628, 2.8973, -0.0698, 2.8973, 3.7525, 2.8973]) - 0.25
             # ll = np.array([-2.8973, -1.7628, -2.8973, -3.0718, -2.8973, -0.0175, -2.8973]) + 0.25
             # q0 = 0.5 * (ul + ll)
@@ -62,34 +76,151 @@ def control_loop(init_pos, traj, robot, freq):
             # target = sr.CartesianPose(state.ee_state.get_name(), np.array([.5, 0., .5]), np.array([0., 1., 0., 0.]),
             #                           state.ee_state.get_reference_frame())
 
-            target = sr.CartesianPose(state.ee_state.get_name(), init_pos[0:3], np.array([0., 1., 0., 0.]),
-                                      state.ee_state.get_reference_frame())
+            # target = sr.CartesianPose(state.ee_state.get_name(), init_pos[0:3], np.array([0., 1., 0., 0.]),
+            #                           state.ee_state.get_reference_frame())
+            #
+            #
+            # ds.set_parameter_value("attractor", target, sr.ParameterType.STATE, sr.StateType.CARTESIAN_POSE)
+
+            error = np.linalg.norm(q0 - state.joint_state.get_positions())
+            # print("q0: ", q0)
+            print("|q-q0| : ", abs(state.joint_state.get_positions() - q0))
+            print("Error:", error)
+
+            if error < init_pos_err_threshold:
+                print("REACHED START POSITION : ", q0)
+                flag = 1
+                timeZero = time.time()
+
+            desired_state = sr.JointState(state.joint_state.get_name(), state.joint_state.get_names())
+            feedback_state = sr.JointState(state.joint_state)
+
+            # Extract form Yang code
+            velo_d = q0 - state.joint_state.get_positions()
+            # NOTE: this might cause error
+            velo_d = velo_d / np.linalg.norm(velo_d) if np.linalg.norm(velo_d) > 1.0 else velo_d
+            desired_state.set_velocities(velo_d)
+
+            pos_d = feedback_state.get_positions() + time_period * velo_d
+            desired_state.set_positions(pos_d)
+
+            print("Joint positions: ", feedback_state.get_positions())
+            print("Joint Velocities: ", feedback_state.get_velocities())
+            print("Desired positions: ", desired_state.get_positions())
+            print("Desired Velocities: ", desired_state.get_velocities())
+
+            # command = ctrl.compute_command(desired_state, state.joint_state)
+
+            command_torques = sr.JointTorques(ctrl.compute_command(desired_state, feedback_state))
+            command.joint_state = state.joint_state
+            command.joint_state.set_torques(command_torques.get_torques())
+
+            print("Command:", command.joint_state.get_torques())
+            if np.any(command_torques.get_torques() > 30):
+                print("TORQUES TOO BIG !!!")
+                break
+
+            else :
+                robot.send_command(command)
 
 
-            ds.set_parameter_value("attractor", target, sr.ParameterType.STATE, sr.StateType.CARTESIAN_POSE)
-            target_set = True
 
-        else:
+        elif flag == 1:
+            #-------FOLLOW TRAJECTORY ---------------------
             # desired_vel = sr.JointVelocities(ds.evaluate(state.joint_state))
             # desired_vel.clamp(.5, .5)
 
-            twist = sr.CartesianTwist(ds.evaluate(state.ee_state))
-            # print("Twist pose : ", twist.data())
-            twist.clamp(.25, .5)
-            # print("Twist pose after clamp : ", twist.data())
-            desired_vel =np.linalg.lstsq(state.jacobian.data(), twist.get_twist())[0]
+            # nIter_time = time.time() - timeZero
 
             desired_state = sr.JointState(state.joint_state.get_name(), state.joint_state.get_names())
-            desired_state.set_velocities(desired_vel)
+            feedback_state = sr.JointState(state.joint_state)
+
+            ## Logic to increase iter only when closer to next state
+            state_diff = np.linalg.norm(traj_pos[nIter,:]- feedback_state.get_positions() )
+            next_state_diff = np.linalg.norm(traj_pos[nIter+1,:]- feedback_state.get_positions())
+            dist_to_end = np.linalg.norm(traj_pos[-1, :] - feedback_state.get_positions())
+
+            print("STATE DIFF : ", state_diff)
+            print("nITER : ", nIter)
+
+            # if next_state_diff < state_diff:  # move to next state
+            #     print("Going to next state ! \n")
+            #     nIter += 1
+            nIter += 1
+            if state_diff > out_of_traj_err_threshold:
+                print("left planned trajectory, going back !")
+                target = traj_pos[nIter, :]
+                flag = 2
+
+            if dist_to_end < error_threshold:
+                print("going back to start position")
+                flag = 0
+
+
+            # Get desired state from traj
+            desired_state.set_positions(traj_pos[nIter,:])
+
+            dq_filtered = (1 - alpha) * dq_filtered + alpha * traj_vel[nIter,:]
+            desired_state.set_velocities(dq_filtered)
+            #desired_state.set_velocities(traj_vel[nIter,:])
+            # TODO : should smooth velocities ???
+
+            print("Joint positions: ", feedback_state.get_positions())
+            print("Joint Velocities: ", feedback_state.get_velocities())
+
+            # twist = sr.CartesianTwist(ds.evaluate(state.ee_state))
+            # # print("Twist pose : ", twist.data())
+            # twist.clamp(.25, .5)
+            # # print("Twist pose after clamp : ", twist.data())
+            # desired_vel =np.linalg.lstsq(state.jacobian.data(), twist.get_twist())[0]
+            #
+            # desired_state = sr.JointState(state.joint_state.get_name(), state.joint_state.get_names())
+            # desired_state.set_velocities(desired_vel)
+
 
             #command = ctrl.compute_command(desired_state, state.joint_state)
 
-            command_torques = sr.JointTorques(ctrl.compute_command(desired_state, state.joint_state))
+            command_torques = sr.JointTorques(ctrl.compute_command(desired_state, feedback_state))
             command.joint_state = state.joint_state
             command.joint_state.set_torques(command_torques.get_torques())
 
             robot.send_command(command)
+            print("Command:", command.joint_state.get_torques(), "\n")
+
+        if flag == 2:
+            # ------GO back to trajectory ------------------------
+
+            error = np.linalg.norm(target- state.joint_state.get_positions())
+            # print("q0: ", q0)
+            print("|q-target| : ", abs(state.joint_state.get_positions() - target))
+            print("Error:", error)
+
+            if error < back_in_traj_err_threshold:
+                print("WENT BACK TO TRAJ : ", target)
+                flag = 1
+                timeZero = time.time()
+
+            desired_state = sr.JointState(state.joint_state.get_name(), state.joint_state.get_names())
+            feedback_state = sr.JointState(state.joint_state)
+
+            # Extract form Yang code
+            velo_d = target - state.joint_state.get_positions()
+            # NOTE: this might cause error
+            velo_d = velo_d / np.linalg.norm(velo_d) if np.linalg.norm(velo_d) > 1.0 else velo_d
+            desired_state.set_velocities(velo_d)
+
+            pos_d = feedback_state.get_positions() + time_period * velo_d
+            desired_state.set_positions(pos_d)
+
+            # command = ctrl.compute_command(desired_state, state.joint_state)
+
+            command_torques = sr.JointTorques(ctrl.compute_command(desired_state, feedback_state))
+            command.joint_state = state.joint_state
+            command.joint_state.set_torques(command_torques.get_torques())
+
             print("Command:", command.joint_state.get_torques())
+            robot.send_command(command)
+
 
         # Publish joint states for recording
         pub.publish(convert_joint_state_msg(state))
@@ -97,16 +228,16 @@ def control_loop(init_pos, traj, robot, freq):
         rate.sleep()
 
 
+# Controller to replay demonstrations
 if __name__ == '__main__':
 
     rospy.init_node("test", anonymous=True)
 
     data_dir = "/home/ros/ros_ws/src/learning_safety_margin/data/example_traj_to_replay/csv/"
-    fname = data_dir + "1_jointVelocities.txt"
-    fname_2 = data_dir + "1_eePosition.txt"
-    traj = np.loadtxt(fname, delimiter=',')
-    cartPos = np.loadtxt(fname, delimiter=',')
-    init_pos = cartPos[0,:]
-    print("INIT POSE : ", init_pos)
+    f_vel = data_dir + "1_jointVelocities.txt"
+    f_pos = data_dir + "1_jointPositions.txt"
+    traj_vel = np.loadtxt(f_vel, delimiter=',')
+    traj_pos = np.loadtxt(f_pos, delimiter=',')
+
     robot_interface = RobotInterface("*:1701", "*:1702")
-    control_loop(init_pos, traj, robot_interface, 50)
+    control_loop(traj_pos, traj_vel, robot_interface, 500)

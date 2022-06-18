@@ -6,7 +6,8 @@ import glob
 
 from robot_model import Model, InverseKinematicsParameters, QPInverseVelocityParameters
 import state_representation as sr
-
+from sensor_msgs.msg import JointState
+from std_msgs.msg import Header
 
 def process_user_rosbags(user_num='1'):
 
@@ -24,7 +25,7 @@ def process_user_rosbags(user_num='1'):
 	robot = Model("franka", urdf_path)
 
 	# Verify directory
-	listOfBagFiles = glob.glob(rosbag_dir + '/**/*.bag', recursive=True)
+	listOfBagFiles = glob.glob(rosbag_dir + '/*.bag', recursive=True)
 
 	# Loop for all bags in 'User_X' folder
 	numberOfFiles = str(len(listOfBagFiles))
@@ -63,26 +64,42 @@ def process_user_rosbags(user_num='1'):
 		# access bag
 		bag = rosbag.Bag(bagFile)
 
+		# s = JointState()
+		# s.position = 'foo'
+		#
+		# bag.write('joint_states', s)
+		# print(s.position)
+		# DEBUG PRINT
+		# frames = robot.get_frames()
+		# base_frame = robot.get_base_frame()
+		# joint_frames = robot.get_joint_frames()
+		# print("Frames : ", frames ,"\n")
+		# print(" BASE Frames : ", base_frame, "\n")
+		# print(" JOINT Frames : ", joint_frames, "\n")
+
+
 		for topic, msg, t in bag.read_messages():
 
 			# positions
 			# must convert to sr to compute forward kinematics
-			jointPos = sr.JointPositions("franka", msg.position)
-			eePos = robot.forward_kinematics(jointPos)  # outputs cartesian pose (7d)
+			# print(topic)
+
+			jointPos = sr.JointPositions("franka", np.array(msg.position))
+			eePos = robot.forward_kinematics(jointPos, 'panda_link8')  # outputs cartesian pose (7d)
 			# convert back from sr to save to list
 			eePositions.append(eePos.data()) # only saving transitional pos, not orientation
 
 			# velocities
 			# must convert to sr Joint state to compute forward velocities
-			temp_jointState.set_velocities(msg.velocity)
-			temp_jointState.set_positions(msg.position)
-			eeVel = robot.forward_velocity(temp_jointState)  # outputs cartesian twist (6d)
+			temp_jointState.set_velocities( np.array(msg.velocity))
+			temp_jointState.set_positions( np.array(msg.position))
+			eeVel = robot.forward_velocity(temp_jointState, 'panda_link8')  # outputs cartesian twist (6d)
 			# convert back from sr to save to list
 			eeVelocities.append(eeVel.data())  # only saving transitional vel, not orientation
 
 			# Joint State
-			jointPositions.append(temp_jointState.get_positions())
-			jointVelocities.append(temp_jointState.get_velocities())
+			jointPositions.append(msg.position)#temp_jointState.get_positions())
+			jointVelocities.append(msg.velocity)
 
 
 		# Reshape lists
