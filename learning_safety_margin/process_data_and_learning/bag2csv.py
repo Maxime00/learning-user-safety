@@ -6,6 +6,8 @@ import glob
 
 from robot_model import Model, InverseKinematicsParameters, QPInverseVelocityParameters
 import state_representation as sr
+from scipy import signal
+import matplotlib.pyplot as plt
 from sensor_msgs.msg import JointState
 from std_msgs.msg import Header
 
@@ -59,6 +61,7 @@ def process_user_rosbags(user_num='1'):
 		eeVelocities = []
 		jointPositions = []
 		jointVelocities = []
+		jointTorques = []
 		temp_jointState = sr.JointState("franka", robot.get_joint_frames())
 
 		# access bag
@@ -95,6 +98,7 @@ def process_user_rosbags(user_num='1'):
 			# Joint State
 			jointPositions.append(msg.position)#temp_jointState.get_positions())
 			jointVelocities.append(msg.velocity)
+			jointTorques.append(msg.effort)
 
 
 		# Reshape lists
@@ -102,11 +106,27 @@ def process_user_rosbags(user_num='1'):
 		twist2save = np.array(eeVelocities)
 		jointPos2save = np.array(jointPositions)
 		jointVel2save = np.array(jointVelocities)
+		jointTorques = np.array(jointTorques)
+
+		#filter torques
+		smoothTorques = np.zeros(jointTorques.shape)
+		smoothVel = np.zeros(jointVel2save.shape)
+		for i in range(0,len(jointTorques[0,:])):
+			smoothTorques[:,i] = signal.savgol_filter(x=jointTorques[:,i], window_length=100, polyorder = 3)
+			smoothVel[:, i] = signal.savgol_filter(x=jointVel2save[:, i], window_length=100, polyorder=3)
+
+		# plot torques
+		# plt.plot(smoothVel)
+		# plt.title("im new")
+		# plt.show()
+
+
 		print("Saving file " + str(count) + " of  " + str(numberOfFiles) + ": " + save_dir+"_eePosition.txt")
 		np.savetxt(save_dir+"_eePosition.txt", pose2save, delimiter=",")
 		np.savetxt(save_dir+"_eeVelocity.txt", twist2save, delimiter=",")
 		np.savetxt(save_dir + "_jointPositions.txt", jointPos2save, delimiter=",")
-		np.savetxt(save_dir + "_jointVelocities.txt", jointVel2save, delimiter=",")
+		np.savetxt(save_dir + "_jointVelocities.txt", smoothVel, delimiter=",")
+		np.savetxt(save_dir + "_jointTorques.txt", smoothTorques, delimiter=",")
 
 		bag.close()
 

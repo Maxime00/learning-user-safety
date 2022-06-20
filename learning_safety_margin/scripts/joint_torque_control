@@ -27,7 +27,7 @@ def convert_joint_state_msg(state):
     return msg
 
 
-def control_loop(traj_pos, traj_vel, robot, freq):
+def control_loop(traj_pos, traj_vel, traj_torques, robot, freq):
 
     # create publisher
     pub = rospy.Publisher('/joint_states', JointState, queue_size=10)
@@ -46,14 +46,14 @@ def control_loop(traj_pos, traj_vel, robot, freq):
     ctrl.set_parameter_value("damping", [3., 2., 2., 1., .5, .5, .5], sr.ParameterType.DOUBLE_ARRAY)
 
     flag = 0
-    init_pos_err_threshold = 0.6
+    init_pos_err_threshold = 0.5
     out_of_traj_err_threshold = 0.8
     back_in_traj_err_threshold = 0.6
     error_threshold = 0.5
     q0 = traj_pos[0, :]
     time_period = 1. / freq
     nIter= 0
-    alpha = 0.9
+    alpha = 0.99
     dq_filtered = np.zeros(7)
 
     rate = rospy.Rate(freq)
@@ -146,11 +146,12 @@ def control_loop(traj_pos, traj_vel, robot, freq):
             # if next_state_diff < state_diff:  # move to next state
             #     print("Going to next state ! \n")
             #     nIter += 1
+
             nIter += 1
-            if state_diff > out_of_traj_err_threshold:
-                print("left planned trajectory, going back !")
-                target = traj_pos[nIter, :]
-                flag = 2
+            # if state_diff > out_of_traj_err_threshold:
+            #     print("left planned trajectory, going back !")
+            #     target = traj_pos[nIter, :]
+            #     flag = 2
 
             if dist_to_end < error_threshold:
                 print("going back to start position")
@@ -181,8 +182,14 @@ def control_loop(traj_pos, traj_vel, robot, freq):
             #command = ctrl.compute_command(desired_state, state.joint_state)
 
             command_torques = sr.JointTorques(ctrl.compute_command(desired_state, feedback_state))
+
+
+            command_torques_demo = traj_torques[nIter, :]
             command.joint_state = state.joint_state
-            command.joint_state.set_torques(command_torques.get_torques())
+            command.joint_state.set_torques(command_torques_demo) #  command_torques.get_torques())
+
+            print("Command from demo :", command_torques_demo)
+            print("Command:", command_torques.data())
 
             robot.send_command(command)
             print("Command:", command.joint_state.get_torques(), "\n")
@@ -206,7 +213,7 @@ def control_loop(traj_pos, traj_vel, robot, freq):
             # Extract form Yang code
             velo_d = target - state.joint_state.get_positions()
             # NOTE: this might cause error
-            velo_d = velo_d / np.linalg.norm(velo_d) if np.linalg.norm(velo_d) > 1.0 else velo_d
+            #velo_d = velo_d / np.linalg.norm(velo_d) if np.linalg.norm(velo_d) > 1.0 else velo_d
             desired_state.set_velocities(velo_d)
 
             pos_d = feedback_state.get_positions() + time_period * velo_d
@@ -236,8 +243,11 @@ if __name__ == '__main__':
     data_dir = "/home/ros/ros_ws/src/learning_safety_margin/data/example_traj_to_replay/csv/"
     f_vel = data_dir + "1_jointVelocities.txt"
     f_pos = data_dir + "1_jointPositions.txt"
+    f_torques = data_dir + "1_jointTorques.txt"
+
     traj_vel = np.loadtxt(f_vel, delimiter=',')
     traj_pos = np.loadtxt(f_pos, delimiter=',')
+    traj_torques = np.loadtxt(f_torques, delimiter=',')
 
     robot_interface = RobotInterface("*:1701", "*:1702")
-    control_loop(traj_pos, traj_vel, robot_interface, 500)
+    control_loop(traj_pos, traj_vel, traj_torques, robot_interface, 500)
