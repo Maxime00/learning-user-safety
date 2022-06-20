@@ -1,20 +1,17 @@
 import numpy as np
 import casadi
-from learning_safety_margin.control_utils import *
-
-DEBUG_FLAG = False
-MaxSpeed = 1.5  # max Qolo speed: 1.51 m/s               --> Equivalent to 5.44 km/h
-MaxAngular = 4.124 / 6
+from learning_safety_margin.vel_control_utils import *
 
 
-class SingleIntegrator():
+class DoubleIntegrator():
     def __init__(self, dt=0.1):
         self.dt = dt
 
     def forward_sim(self, x, u, steps=1):
-        return x + u * self.dt * steps
+        return x + casadi.vertcat(x[3], x[4], x[5], u[0], u[1], u[2]) * self.dt*steps
+        
 
-class CBFMPC_Controller(SingleIntegrator):
+class CBFMPC_Controller(DoubleIntegrator):
 
     def __init__(self, centers, stds, theta, bias, dt=0.1, n_steps=10):
 
@@ -24,7 +21,7 @@ class CBFMPC_Controller(SingleIntegrator):
         self.dt = dt
         
         # Set up variables
-        self.x = casadi.SX.sym('x', 3)
+        self.x = casadi.SX.sym('x', 6)
         self.u = casadi.SX.sym('u', 3)
 
         self.n_states = self.x.numel()
@@ -40,12 +37,13 @@ class CBFMPC_Controller(SingleIntegrator):
         # Optimization weights' variables
         self.Q_x = 100
         self.Q_y = 100
-        self.Q_theta = 10
+        self.Q_theta = 100
+        self.Q_v = 10
         self.R1 = 1
         self.R2 = 1
         self.R3 = 1
 
-        self.Q = casadi.diagcat(self.Q_x, self.Q_y, self.Q_theta) # State Weights 
+        self.Q = casadi.diagcat(self.Q_x, self.Q_y, self.Q_theta, self.Q_v, self.Q_v, self.Q_v) # State Weights 
         self.R = casadi.diagcat(self.R1, self.R2, self.R3) # Control Weights
 
         # CBF Parameters
@@ -64,7 +62,7 @@ class CBFMPC_Controller(SingleIntegrator):
             s = self.stds[i]
             rbf = casadi.exp(-1 / (2 * s**2) * casadi.norm_2(self.x-c)**2)
             self.phi = casadi.horzcat(self.phi, rbf)
-        self.h = casadi.mtimes(self.phi, self.theta)+ self.bias
+        self.h = casadi.mtimes(self.phi, self.theta)+ self.bias 
         self.h_fun = casadi.Function('h_fun', [self.x],  [self.h])
 
         # Set up Cost Function and Constraint Expressions
@@ -118,10 +116,16 @@ class CBFMPC_Controller(SingleIntegrator):
         self.lbx[0: self.n_states*(self.N+1): self.n_states] = ws_lim[0,0]     # X lower bound
         self.lbx[1: self.n_states*(self.N+1): self.n_states] = ws_lim[1,0]     # Y lower bound
         self.lbx[2: self.n_states*(self.N+1): self.n_states] = ws_lim[2,0]     # Z lower bound
+        self.lbx[3: self.n_states*(self.N+1): self.n_states] = ws_lim[3,0]     # VX lower bound
+        self.lbx[4: self.n_states*(self.N+1): self.n_states] = ws_lim[4,0]     # VY lower bound
+        self.lbx[5: self.n_states*(self.N+1): self.n_states] = ws_lim[5,0]     # VZ lower bound
 
         self.ubx[0: self.n_states*(self.N+1): self.n_states] = ws_lim[0,1]     # X lower bound
         self.ubx[1: self.n_states*(self.N+1): self.n_states] = ws_lim[1,1]     # Y lower bound
         self.ubx[2: self.n_states*(self.N+1): self.n_states] = ws_lim[2,1]     # Z lower bound
+        self.ubx[3: self.n_states*(self.N+1): self.n_states] = ws_lim[3,1]     # VX lower bound
+        self.ubx[4: self.n_states*(self.N+1): self.n_states] = ws_lim[4,1]     # VY lower bound
+        self.ubx[5: self.n_states*(self.N+1): self.n_states] = ws_lim[5,1]     # VZ lower bound
 
         self.lbx[self.n_states*(self.N+1):] = -1.                 # v lower bound for all V
         self.ubx[self.n_states*(self.N+1):] = 1.                  # v upper bound for all V
@@ -133,8 +137,8 @@ class CBFMPC_Controller(SingleIntegrator):
         args['lbg'] = self.lb_con
         args['ubg'] = self.ub_con
 
-        args['lbx'] = self.lbx#self.lb_vars.reshape((-1,1))
-        args['ubx'] = self.ubx#self.ub_vars.reshape((-1,1))
+        args['lbx'] = self.lbx
+        args['ubx'] = self.ubx
 
         u0 = casadi.DM.zeros((self.n_controls, self.N))  # initial control
         X0 = casadi.repmat(x0, 1, self.N+1)         # initial state full
@@ -160,27 +164,3 @@ class CBFMPC_Controller(SingleIntegrator):
         U = casadi.reshape(sol['x'][self.n_states * (self.N+1):], self.n_controls, self.N).T
         X = casadi.reshape(sol['x'][:self.n_states * (self.N+1)], self.n_states, self.N+1).T
         return X, U
-
-
-    #controller = CBFMPC_Controller(centers, stds, params, bias_param, n_steps=50)
-
-
-
-    # xgoal = [0.5, 0.4, 0.1]
-    # xlist = np.linspace(0.4, 0.6, 3)
-    # ylist = np.linspace(-0.4, -0.2, 3)
-    # zlist = np.linspace(0, 0.3, 5)
-    # traj = []
-    # for i in range(len(xlist)):
-    #     for j in range(len(ylist)):
-    #         x0 = [xlist[i], ylist[j], 0.1]
-    #         if controller.h_fun(x0) > 0:
-    #             X, U = controller.control(x0, xgoal)
-    #             Xmat = np.array(X)
-    #             ax.plot(Xmat[:, 0], Xmat[:, 1], Xmat[:, 2])
-    #             traj.append(Xmat)
-    #         else:
-    #             print('unsafe start point! Invalid.')
-    # plt.xlim(ws_lim[0])
-    # plt.ylim(ws_lim[1])
-    # plt.show()
