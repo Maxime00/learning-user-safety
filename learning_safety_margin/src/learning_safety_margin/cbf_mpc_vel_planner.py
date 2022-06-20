@@ -19,6 +19,7 @@ class CBFMPC_Controller(DoubleIntegrator):
         # Set MPC Parameters
         self.N = n_steps
         self.dt = dt
+        self.tlist = np.linspace(0,self.N*self.dt, self.N+1)
         
         # Set up variables
         self.x = casadi.SX.sym('x', 6)
@@ -131,7 +132,7 @@ class CBFMPC_Controller(DoubleIntegrator):
         self.ubx[self.n_states*(self.N+1):] = 1.                  # v upper bound for all V
 
 
-    def control(self, x0, xgoal):
+    def control(self, x0, xgoal, t0=0):
         # Set up arg dictionary for optimization inputs
         args = {}
         args['lbg'] = self.lb_con
@@ -163,4 +164,6 @@ class CBFMPC_Controller(DoubleIntegrator):
 
         U = casadi.reshape(sol['x'][self.n_states * (self.N+1):], self.n_controls, self.N).T
         X = casadi.reshape(sol['x'][:self.n_states * (self.N+1)], self.n_states, self.N+1).T
-        return X, U
+
+        T = self.tlist + t0
+        return X, U, T
