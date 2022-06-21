@@ -23,6 +23,7 @@ set(DEMOS_SCRIPTS
     cartesian_twist_control
     cartesian_impedance_MPC_control
     joint_torque_control
+    cartesian_impedance_cbfvel_control
 )
 
 foreach(SCRIPT ${DEMOS_SCRIPTS})

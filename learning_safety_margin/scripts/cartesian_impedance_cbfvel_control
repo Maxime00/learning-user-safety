@@ -12,8 +12,8 @@ from network_interfaces.zmq.network import CommandMessage
 from learning_safety_margin.robot_interface import RobotInterface
 
 import pickle
-from learning_safety_margin.cbf_mpc_pos_planner import *
-from learning_safety_margin.control_utils import *
+from learning_safety_margin.cbf_mpc_vel_planner import *
+from learning_safety_margin.vel_control_utils import *
 import matplotlib.pyplot as plt
 
 def control_loop(planner, robot, freq): #planner,
@@ -63,7 +63,10 @@ def control_loop(planner, robot, freq): #planner,
                 #planner_count += 1
                 print("MPC planning trajectory :", computing_count)
                 start_time = time.time()
-                X, U = planner.control(state.ee_state.get_position(), target.data()[:3])
+                print("Get state: ", state.ee_state.get_position(), state.ee_state.get_linear_velocity())
+                x0 = np.hstack((state.ee_state.get_position(), state.ee_state.get_linear_velocity()))
+                xtarget = np.hstack((targetdata()[:3],[0,0,0]))
+                X, U = planner.control(x0, target.data()[:3])
                 print("Finished planning trajectory :", computing_count)
                 print("--- %s seconds --- \n" % (time.time() - start_time))
                 X = np.array(X)
@@ -202,8 +205,10 @@ if __name__ == '__main__':
 
     # Initialize RBF Parameters
     print(ws_lim, x_lim, y_lim, z_lim, x_dim, n_dim_features, rbf_std)
-    centers, stds = rbf_means_stds(X=None, X_lim=np.array([x_lim, y_lim, z_lim]),
+    centers, stds = rbf_means_stds(X=None, X_lim=np.array([x_lim, y_lim, z_lim, vdot_lim, vdot_lim, vdot_lim]),
                                    n=x_dim, k=n_dim_features, fixed_stds=True, std=rbf_std)
+
+    print(params.shape, centers.shape)
 
     freq = 100
     dt = 1./freq
