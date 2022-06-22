@@ -1,110 +1,14 @@
-# Safety margin Instructions
+# Safety Margin Instructions
 
 Docker setup for Ahalya's project : learning user-specific safety margin
-
-Available:
-- Record kinesthetic demonstrations from Panda
-- process data for learning
-- learn trajectories with modulable safety 
-- Command Panda to follow learned trajectories
-
-
-## To connect to robot
-Fwi command :
-```console
-franka_lightweight_interface 17 panda_ --sensitivity low --damping off
-```
-
-## Recording
-Launch idle controller, use rosbags to record
-
-### Terminal #1
-```console
-./build-server.sh
-aica-docker interactive learning-safety-margin:noetic -u ros --net host --no-hostname 
-aica-docker interactive learning-safety-margin:noetic -u ros --net host --no-hostname -v /home/lasa/Workspace/learning_safety_DS/learning_safety_margin/data:/home/ros/ros_ws/src/learning_safety_margin/data
-roslaunch learning_safety_margin demo.launch demo:=idle_control
-```
-
-### Terminal #2
-```console 
-aica-docker connect learning-safety-margin-noetic-runtime 
-cd src/learning_safety_margin/data
-rosbag record /joint_states
-```
-
-docker cp learning-safety-margin-noetic-ssh:/home/ros/ros_ws/src/learning_safety_margin/data/User_0/csv /home/lasa/Workspace/learning_safety_DS/learning_safety_margin/data/User_0/csv
-docker cp learning-safety-margin-noetic-ssh:/home/ros/ros_ws/src/learning_safety_margin/data/example_traj_to_replay/csv /home/lasa/Workspace/learning_safety_DS/learning_safety_margin/data/example_traj_to_replay
-sudo chown -R lasa /home/lasa/Workspace/learning_safety_DS/learning_safety_margin/data/
-mv filename ../new_folder
-rm filename
-
-## Data processing
-
-Currently will only process User_1 data -> TODO : make user specific
-just make script that takes in user_number, checks for directories and adds them then calls processing and learning
-should have second argumetn to decide if it learns vel or acc-> need to add other learnign script - > give dsitinct names to data_dict
-```console 
-aica-docker connect learning-safety-margin-noetic-runtime 
-cd src/learning_safety_margin/franka_env
-python3 bag2csv.py <user_number>
-python3 learning_cbf_vel.py
-```
-
-
-
-## Run demos 
- 
-Currently runs with mpc controller
-TODO : add controller to replay demos 
-compute planned command less often
-###Terminal #1
-```console
-bash build-server.sh
-aica-docker interactive learning-safety-margin:noetic -u ros --net host --no-hostname -v /home/lasa/Workspace/learning_safety_DS/learning_safety_margin/data:/home/ros/ros_ws/src/learning_safety_margin/data
-roslaunch learning_safety_margin demo.launch demo:=cartesian_impedance_MPC_control user_number:=1
-roslaunch learning_safety_margin demo.launch demo:=joint_torque_control
-roslaunch learning_safety_margin demo.launch demo:=joint_torque_traj_follow_control
-roslaunch learning_safety_margin demo.launch demo:=joint_torque_traj_follow_control robot_name:=franka
-roslaunch learning_safety_margin demo.launch demo:=cartesian_twist_traj_follow_control
-roslaunch learning_safety_margin demo.launch demo:=joint_space_velocity_control
-```
-
-### Terminal 2
-franka_lightweight_interface 17 panda_ --sensitivity low --damping off
-
-# Notes 
-to add to pycharm PYTHONPATH : 
-$PYTHONPATH:/opt/ros/noetic/lib/python3/dist-packages:/home/ros/ros_ws/devel/lib/python3/dist-packages:/home/ros/.local/lib/python3.8/site-packages
-
-# Questions
-How to pass argument with demo.launch file 
-
-# TODO 
-- try traj_follow controller with cartesian pose + ds ? -> moving attraactor or something maybe could work 
-- -Tune gains ?
-- remove transpose from learning 
-- update bag2csv in process and data_learning
-- test controller that uses mpc 
-- get joitn states as csv from rosbag
-- need logic to get target ? fom demos? or hardset it because all demos end in same point ?
-- add rostopic to save cartesian EEF state + velocity
-- add rostopic to controller (must be able to rosbag when commanding with cbfmpc)
-- logic to replay demonstrations from rosbag /joint_states -> joitn controller ?
-
-- make sure processing and controller code can run inside docker 
-
-
-Code here is based on this [example](https://github.com/domire8/control-libraries-ros-demos/tree/main/rospy_zmq)
-
-
-# `ros_examples` demonstration scripts
 
 ## Table of contents:
 
 * [Prerequisites](#prerequisites)
-* [Running a demo script](#running-demonstration-scripts)
-* [Running a demo with the simulator](#running-the-simulator-simultaneously)
+* [Connect to robot](#connect-to-robot)
+* [Recording Demonstrations](#Recording)
+* [Process Data](#Data-processing)
+* [Running Controller](#run-controllers)
 * [Development](#development)
 
 ## Prerequisites
@@ -124,50 +28,123 @@ cd docker-images/scripts
 
 Visit the [docker-images](https://github.com/aica-technology/docker-images) repository for more information on this.
 
-## Running demonstration scripts
 
-If working with Docker, build and run the image with
-
+## Connect to robot
+### To connect to real robot
+Go to franka-lightweight-interface and run docker with following commands :
 ```console
-./build-server.sh
-aica-docker interactive control-libraries-rospy-zmq-demos:noetic -u ros --net host --no-hostname
+cd Workspace/franka-lightweight-interface
+bash run-rt.sh
+franka_lightweight_interface 17 panda_ --sensitivity low --damping off
 ```
 
-Running the scripts uses ROS commands, e.g. to run a script:
-
+### To connect to simulator robot
+Go to simulator-backend and run docker with following commands :
 ```console
-roslaunch rospy_zmq_examples demo.launch demo:=<demo>
-roslaunch rospy_zmq_examples demo.launch demo:=cartesian_twist_control
-```
-
-Available demos are:
-
-- cartesian_twist_control
-- joint_space_velocity_control
-
-## Running the simulator simultaneously
-
-The scripts require a simulator (or real robot with the same interface) to be running. Start the simulator with:
-
-NOTE : To run in simulation, ip of RobotInterface should be robot_interface = RobotInterface("*:1601", "*:1602")
-
-```console
-cd path/to/desired/location
-git clone -b develop git@github.com:epfl-lasa/simulator-backend.git
-cd simulator-backend/pybullet_zmq
-./build-server.sh
+cd Workspace/simulator-backend/pybullet_zmq
+bash build-server.sh
 aica-docker interactive aica-technology/zmq-simulator -u ros2 --net host --no-hostname
 python3 pybullet_zmq/bin/zmq-simulator
 ```
+Once the simulator is running, you can start your controllers as shown [below](#run-controllers)
+NOTE : To run controllers in the simulator, IP ports of RobotInterface should be robot_interface = RobotInterface("*:1601", "*:1602")
 
-Once the simulator is running (in this case the franka simulator), do
-
+To run controllers in the simulator, you must add 'robot_name:=franka' to the roslaunch command :
 ```console
-roslaunch rospy_zmq_examples demo.launch demo:=<demo> robot_name:=franka
+roslaunch learning_safety_margin demo.launch demo:=joint_torque_traj_follow_control robot_name:=franka
 ```
-
 Note that the robot name has to be the same as specified in the simulator, otherwise the topics won't be in the same
 namespace and the demos don't work.
+
+## Recording
+Launch idle controller, use rosbags to record
+
+### Terminal #1
+```console
+./build-server.sh
+aica-docker interactive learning-safety-margin:noetic -u ros --net host --no-hostname 
+aica-docker interactive learning-safety-margin:noetic -u ros --net host --no-hostname -v /home/lasa/Workspace/learning_safety_DS/learning_safety_margin/data:/home/ros/ros_ws/src/learning_safety_margin/data
+roslaunch learning_safety_margin demo.launch demo:=idle_control
+```
+
+### Terminal #2
+```console 
+aica-docker connect learning-safety-margin-noetic-runtime 
+cd src/learning_safety_margin/data
+rosbag record /joint_states
+```
+
+### some useful command for data handling
+```console
+docker cp learning-safety-margin-noetic-ssh:/home/ros/ros_ws/src/learning_safety_margin/data/User_0/csv /home/lasa/Workspace/learning_safety_DS/learning_safety_margin/data/User_0/csv
+docker cp learning-safety-margin-noetic-ssh:/home/ros/ros_ws/src/learning_safety_margin/data/example_traj_to_replay/csv /home/lasa/Workspace/learning_safety_DS/learning_safety_margin/data/example_traj_to_replay
+sudo chown -R lasa /home/lasa/Workspace/learning_safety_DS/learning_safety_margin/data/
+mv filename ../new_folder
+rm filename
+```
+
+
+## Data processing
+
+Run and connect to learning-safety-margin docker container
+Run process_and_learn.py script inside docker container with the following arguments :
+-u <user_number>
+-l <learning_algo> ['pos', 'vel']
+
+```console 
+aica-docker connect learning-safety-margin-noetic-runtime 
+cd src/learning_safety_margin/process_data_and_learning
+python3 process_and_learn.py -u <user_number> -l -l <learning_algo> 
+```
+
+## Run Controllers
+
+### Terminal 1
+
+Connect to either the real robot or simulator as shown [above](#connect-to-robot)
+```console
+cd Workspace/franka-lightweight-interface
+bash run-rt.sh
+franka_lightweight_interface 17 panda_ --sensitivity low --damping off
+```
+
+### Terminal #2
+Start docker container and launch controller from there
+
+TODO : add arguments to chose user_number and safety of replayed traj
+currently
+```console
+bash build-server.sh
+aica-docker interactive learning-safety-margin:noetic -u ros --net host --no-hostname -v /home/lasa/Workspace/learning_safety_DS/learning_safety_margin/data:/home/ros/ros_ws/src/learning_safety_margin/data
+roslaunch learning_safety_margin demo.launch demo:=cartesian_impedance_MPC_control user_number:=1
+roslaunch learning_safety_margin demo.launch demo:=joint_torque_control
+roslaunch learning_safety_margin demo.launch demo:=joint_torque_traj_follow_control
+roslaunch learning_safety_margin demo.launch demo:=joint_torque_traj_follow_control robot_name:=franka
+roslaunch learning_safety_margin demo.launch demo:=cartesian_twist_traj_follow_control
+roslaunch learning_safety_margin demo.launch demo:=joint_space_velocity_control
+```
+future 
+```console
+bash build-server.sh
+aica-docker interactive learning-safety-margin:noetic -u ros --net host --no-hostname -v /home/lasa/Workspace/learning_safety_DS/learning_safety_margin/data:/home/ros/ros_ws/src/learning_safety_margin/data
+roslaunch learning_safety_margin demo.launch demo:=joint_torque_traj_follow_control user_number:=1 safety:=safe
+```
+
+# Notes 
+to add to pycharm PYTHONPATH : 
+$PYTHONPATH:/opt/ros/noetic/lib/python3/dist-packages:/home/ros/ros_ws/devel/lib/python3/dist-packages:/home/ros/.local/lib/python3.8/site-packages
+
+
+# TODO 
+- torque plots in traj_follow_controller
+- comapre ref and rec ref
+- onffline plotting function
+- add arguments for user_specific and safety 
+- Tune gains
+- test controller that uses mpc
+- need logic to get target ? fom demos? or hardset it because all demos end in same point ?
+- add data_recording in mpc controller
+
 
 ## Development
 
@@ -176,3 +153,6 @@ To run the Docker image as SSH server:
 ```console
 bash build-server.sh -s
 ```
+
+Code here is based on this [example](https://github.com/domire8/control-libraries-ros-demos/tree/main/rospy_zmq)
+
