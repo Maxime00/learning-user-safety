@@ -266,6 +266,8 @@ def control_loop(traj, robot, freq):
             # save file
             np.savetxt(data_dir + "recorded_jointState.csv", recorded_state, delimiter=",")
 
+
+            ## TODO : ADD MORE PLOTS
             # Convert pandas to np.array for plotting - same format as recorded traj
             temp_time = traj['time'].to_numpy()
             temp_pos = traj['position'].to_numpy()
@@ -288,6 +290,7 @@ def control_loop(traj, robot, freq):
 if __name__ == '__main__':
 
     rospy.init_node("test", anonymous=True)
+    ## TODO : make user-specific and add safety arguemnt
 
     data_dir = "/home/ros/ros_ws/src/learning_safety_margin/data/example_traj_to_replay/csv/"
     f_traj = data_dir + "1_jointTraj.pkl"
