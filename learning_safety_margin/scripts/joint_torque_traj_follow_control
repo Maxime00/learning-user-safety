@@ -4,6 +4,8 @@ import numpy as np
 import pandas as pd
 import rospy
 import time
+import sys
+import os
 import matplotlib.pyplot as plt
 import state_representation as sr
 from controllers import create_joint_controller, CONTROLLER_TYPE
@@ -46,7 +48,6 @@ def pandas_to_np(df):
         reference_arr[i, 15:22] = temp_torques[i]
 
     return reference_arr
-
 
 def plot_ref_vs_rec(df_ref, rec):
 
@@ -153,11 +154,11 @@ def control_loop(traj, robot, freq):
     ctrl = create_joint_controller(CONTROLLER_TYPE.IMPEDANCE, nb_joints)
 
     ## IRL GAINS
-    # ctrl.set_parameter_value("stiffness", [220, 220, 220, 180, 120, 120, 100], sr.ParameterType.DOUBLE_ARRAY)
-    # ctrl.set_parameter_value("damping", [15, 15, 15, 13, 11, 10, 8], sr.ParameterType.DOUBLE_ARRAY)
+    ctrl.set_parameter_value("stiffness", [220, 220, 220, 180, 120, 120, 100], sr.ParameterType.DOUBLE_ARRAY)
+    ctrl.set_parameter_value("damping", [15, 15, 15, 13, 11, 10, 8], sr.ParameterType.DOUBLE_ARRAY)
     ## SIMULATOR GAINS
-    ctrl.set_parameter_value("stiffness", [10., 5., 4., 2., 2, 2, 2], sr.ParameterType.DOUBLE_ARRAY)
-    ctrl.set_parameter_value("damping", [3., 2., 2., 1., .5, .5, .5], sr.ParameterType.DOUBLE_ARRAY)
+    # ctrl.set_parameter_value("stiffness", [10., 5., 4., 2., 2, 2, 2], sr.ParameterType.DOUBLE_ARRAY)
+    # ctrl.set_parameter_value("damping", [3., 2., 2., 1., .5, .5, .5], sr.ParameterType.DOUBLE_ARRAY)
 
     # SET UP variables
     desired_state = sr.JointState("franka", nb_joints)
@@ -204,7 +205,7 @@ def control_loop(traj, robot, freq):
 
 
                 print("WAIT ...")
-                rospy.sleep(4.0)
+                rospy.sleep(2.0)
                 timeZero = time.time()
                 continue
 
@@ -214,6 +215,7 @@ def control_loop(traj, robot, freq):
             feedback_state.set_velocities(dq_filtered)
 
             velo_d = initial_pos - state.joint_state.get_positions()
+            
             # NOTE: this might cause error
             velo_d = velo_d / np.linalg.norm(velo_d) if np.linalg.norm(velo_d) > 1.0 else velo_d
             desired_state.set_velocities(velo_d)
@@ -312,7 +314,7 @@ def control_loop(traj, robot, freq):
             # remove zeros
             recorded_state = recorded_state[~np.isnan(recorded_state).any(axis=1)]
             # save file
-            np.save(data_dir + "recorded_jointState", recorded_state)
+            np.save(save_dir + "_replay_jointState", recorded_state, allow_pickle=False)
 
             # call plot function
             plot_ref_vs_rec(traj, recorded_state)
@@ -327,13 +329,35 @@ def control_loop(traj, robot, freq):
 if __name__ == '__main__':
 
     rospy.init_node("test", anonymous=True)
-    ## TODO : make user-specific and add safety arguemnt
 
-    data_dir = "/home/ros/ros_ws/src/learning_safety_margin/data/example_traj_to_replay/csv/"
-    f_traj = data_dir + "1_jointTraj.pkl"
+    # Check passed argument - User number
+    if len(sys.argv) >= 2:
+        user_number = sys.argv[1]
+        traj_number = sys.argv[2]
+    else:
+        user_number = 0
 
-    traj = pd.read_pickle(f_traj)
+    if isinstance(user_number, str):
+        print("Processing rosbags for User_" + user_number)
+
+    data_dir = "/home/ros/ros_ws/src/learning_safety_margin/data/User_"+user_number+"/"
+
+    ## TODO : choose random traj, same number fo traj for each safety category -> set save_dir accordingly
+    safe_category = "safe/"
+    traj_nbr = traj_number
+
+    fn = traj_nbr + "_jointState.pkl"
+    fpath = data_dir + "csv/"+ safe_category + fn
+
+    # Set save dir and create folder if needed
+    save_dir = data_dir + "replays/"+ safe_category
+    if not os.path.isdir(save_dir):
+        os.mkdir(save_dir)
+
+    save_dir += traj_nbr
+
+    traj = pd.read_pickle(fpath)
     print("DF shape :",  traj.shape, " \n DF columns :", traj.columns )
 
-    robot_interface = RobotInterface("*:1601", "*:1602")
+    robot_interface = RobotInterface("*:1701", "*:1702")
     control_loop(traj, robot_interface, 200)
