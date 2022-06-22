@@ -215,7 +215,7 @@ def control_loop(traj, robot, freq):
             feedback_state.set_velocities(dq_filtered)
 
             velo_d = initial_pos - state.joint_state.get_positions()
-            
+
             # NOTE: this might cause error
             velo_d = velo_d / np.linalg.norm(velo_d) if np.linalg.norm(velo_d) > 1.0 else velo_d
             desired_state.set_velocities(velo_d)
