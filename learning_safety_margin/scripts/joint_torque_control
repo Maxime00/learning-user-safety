@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 
 import numpy as np
+import pandas as pd
 import rospy
 import time
+import pandas
 import state_representation as sr
 from controllers import create_joint_controller, CONTROLLER_TYPE
 from dynamical_systems import create_cartesian_ds, DYNAMICAL_SYSTEM_TYPE
@@ -244,10 +246,12 @@ if __name__ == '__main__':
     f_vel = data_dir + "1_jointVelocities.txt"
     f_pos = data_dir + "1_jointPositions.txt"
     f_torques = data_dir + "1_jointTorques.txt"
+    f_traj = data_dir + "1_jointTraj.pkl"
 
     traj_vel = np.loadtxt(f_vel, delimiter=',')
     traj_pos = np.loadtxt(f_pos, delimiter=',')
     traj_torques = np.loadtxt(f_torques, delimiter=',')
+    traj = pd.read_pickle(f_traj)
 
     robot_interface = RobotInterface("*:1701", "*:1702")
     control_loop(traj_pos, traj_vel, traj_torques, robot_interface, 500)

@@ -1,8 +1,11 @@
+import pandas as pd
 import rosbag
 import sys
 import os
 import numpy as np
 import glob
+import pickle
+import time
 
 from robot_model import Model, InverseKinematicsParameters, QPInverseVelocityParameters
 import state_representation as sr
@@ -10,6 +13,12 @@ from scipy import signal
 import matplotlib.pyplot as plt
 from sensor_msgs.msg import JointState
 from std_msgs.msg import Header
+
+
+def find_closest_time(df, time):
+    dist = (df['time'] - time).abs()
+    return df.loc[dist.idxmin()]
+
 
 def process_user_rosbags(user_num='1'):
 
@@ -62,6 +71,7 @@ def process_user_rosbags(user_num='1'):
 		jointPositions = []
 		jointVelocities = []
 		jointTorques = []
+		time_idx = []
 		temp_jointState = sr.JointState("franka", robot.get_joint_frames())
 
 		# access bag
@@ -81,7 +91,6 @@ def process_user_rosbags(user_num='1'):
 			# positions
 			# must convert to sr to compute forward kinematics
 			# print(topic)
-
 			jointPos = sr.JointPositions("franka", np.array(msg.position))
 			eePos = robot.forward_kinematics(jointPos, 'panda_link8')  # outputs cartesian pose (7d)
 			# convert back from sr to save to list
@@ -96,9 +105,10 @@ def process_user_rosbags(user_num='1'):
 			eeVelocities.append(eeVel.data())  # only saving transitional vel, not orientation
 
 			# Joint State
-			jointPositions.append(msg.position)#temp_jointState.get_positions())
-			jointVelocities.append(msg.velocity)
+			jointPositions.append(np.array(msg.position))#temp_jointState.get_positions())
+			jointVelocities.append(np.array(msg.velocity))
 			jointTorques.append(msg.effort)
+			time_idx.append(t.to_sec())
 
 
 		# Reshape lists
@@ -107,26 +117,59 @@ def process_user_rosbags(user_num='1'):
 		jointPos2save = np.array(jointPositions)
 		jointVel2save = np.array(jointVelocities)
 		jointTorques = np.array(jointTorques)
+		# make time relative to traj
+		time_idx = np.array(time_idx)
+		time_idx = time_idx - time_idx[0]
+
 
 		#filter torques
-		smoothTorques = np.zeros(jointTorques.shape)
+		# smoothTorques = np.zeros(jointTorques.shape)
 		smoothVel = np.zeros(jointVel2save.shape)
 		for i in range(0,len(jointTorques[0,:])):
-			smoothTorques[:,i] = signal.savgol_filter(x=jointTorques[:,i], window_length=100, polyorder = 3)
+			# smoothTorques[:,i] = signal.savgol_filter(x=jointTorques[:,i], window_length=100, polyorder = 3)
 			smoothVel[:, i] = signal.savgol_filter(x=jointVel2save[:, i], window_length=100, polyorder=3)
 
-		# plot torques
-		# plt.plot(smoothVel)
-		# plt.title("im new")
-		# plt.show()
+		# plot velocities
+		# plt.figure()
+		# plt.plot(time_idx, jointVel2save)
+		# plt.title("raw")
+		#
+		# # plot velocities smooth
+		# plt.figure()
+		# plt.plot(time_idx, smoothVel)
+		# plt.title("smooth")
 
 
+		# convert to pandas
+		traj_dict = {'time' : time_idx ,'position': jointPositions, 'velocity': jointVelocities}
+		trajectory_df = pd.DataFrame.from_dict(data=traj_dict)
+		time_start = time.time()
+		df_row = find_closest_time(trajectory_df, 0.6365582985521)
+		print("time to compute : ", time.time()-time_start)
+		print(trajectory_df['position'].loc[:])
+
+		nb_joints = 7
+		temp_time = trajectory_df['time'].to_numpy()
+		temp_pos = trajectory_df['position'].to_numpy()
+		temp_vel = trajectory_df['velocity'].to_numpy()
+		reference_arr = np.zeros((len(temp_time), 1 + 2 * nb_joints))
+		reference_arr[:,0] = temp_time
+		for i in range(0, (len(temp_pos))):
+			reference_arr[i, 1:8] = temp_pos[i]
+			reference_arr[i, 8:15] = temp_vel[i]
+
+		print(temp_time.shape)
+		print(reference_arr[0:20,0])
+
+		# Save to file
 		print("Saving file " + str(count) + " of  " + str(numberOfFiles) + ": " + save_dir+"_eePosition.txt")
 		np.savetxt(save_dir+"_eePosition.txt", pose2save, delimiter=",")
 		np.savetxt(save_dir+"_eeVelocity.txt", twist2save, delimiter=",")
-		np.savetxt(save_dir + "_jointPositions.txt", jointPos2save, delimiter=",")
-		np.savetxt(save_dir + "_jointVelocities.txt", smoothVel, delimiter=",")
-		np.savetxt(save_dir + "_jointTorques.txt", smoothTorques, delimiter=",")
+		# np.savetxt(save_dir + "_jointPositions.txt", jointPos2save, delimiter=",")
+		# np.savetxt(save_dir + "_jointVelocities.txt", smoothVel, delimiter=",")
+		# np.savetxt(save_dir + "_jointTorques.txt", smoothTorques, delimiter=",")
+		trajectory_df.to_csv(save_dir+"_jointTraj.csv")
+		trajectory_df.to_pickle(path = save_dir+"_jointTraj.pkl")
 
 		bag.close()
 

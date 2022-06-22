@@ -64,6 +64,8 @@ bash build-server.sh
 aica-docker interactive learning-safety-margin:noetic -u ros --net host --no-hostname -v /home/lasa/Workspace/learning_safety_DS/learning_safety_margin/data:/home/ros/ros_ws/src/learning_safety_margin/data
 roslaunch learning_safety_margin demo.launch demo:=cartesian_impedance_MPC_control user_number:=1
 roslaunch learning_safety_margin demo.launch demo:=joint_torque_control
+roslaunch learning_safety_margin demo.launch demo:=joint_torque_traj_follow_control
+roslaunch learning_safety_margin demo.launch demo:=joint_torque_traj_follow_control robot_name:=franka
 roslaunch learning_safety_margin demo.launch demo:=cartesian_twist_traj_follow_control
 roslaunch learning_safety_margin demo.launch demo:=joint_space_velocity_control
 ```
