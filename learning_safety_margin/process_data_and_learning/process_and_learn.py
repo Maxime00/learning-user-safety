@@ -10,14 +10,8 @@ def set_up_dir(user_number):
 
     if not os.path.isdir(data_dir):
         os.mkdir(data_dir)
-
-    if not os.path.isdir(os.path.join(data_dir, "daring")):
         os.mkdir(os.path.join(data_dir, "daring"))
-
-    if not os.path.isdir(os.path.join(data_dir, "safe")):
         os.mkdir(os.path.join(data_dir, "safe"))
-
-    if not os.path.isdir(os.path.join(data_dir, "unsafe")):
         os.mkdir(os.path.join(data_dir, "unsafe"))
 
 def parser():

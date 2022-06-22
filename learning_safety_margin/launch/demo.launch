@@ -1,10 +1,10 @@
 <launch>
     <arg name="demo" default="joint_space_velocity_control"/>
     <arg name="robot_name" default="franka"/>
-    <arg name="args_for_control" default="test 1"/>
+    <arg name="user_number" default="1"/>
 
     <group ns="$(arg robot_name)">
-        <node type="$(arg demo)" name="$(arg demo)" pkg="learning_safety_margin" output="screen" args="$(arg args_for_control)"/>
+        <node type="$(arg demo)" name="$(arg demo)" pkg="learning_safety_margin" output="screen" args="$(arg user_number)"/>
     </group>
 
 </launch>
