@@ -205,8 +205,7 @@ if __name__ == '__main__':
 
     # Initialize RBF Parameters
     print(ws_lim, x_lim, y_lim, z_lim, x_dim, n_dim_features, rbf_std)
-    centers, stds = rbf_means_stds(X=None, X_lim=np.array([x_lim, y_lim, z_lim, vdot_lim, vdot_lim, vdot_lim]),
-                                   n=x_dim, k=n_dim_features, fixed_stds=True, std=rbf_std)
+    centers, stds = rbf_means_stds(X=None, X_lim=np.array([x_lim, y_lim, z_lim, vdot_lim, vdot_lim, vdot_lim]), n=x_dim, k=n_dim_features, fixed_stds=True, std=rbf_std)
 
     print(params.shape, centers.shape)
 
