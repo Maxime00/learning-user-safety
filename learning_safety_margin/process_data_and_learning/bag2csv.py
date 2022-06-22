@@ -26,8 +26,8 @@ def process_user_rosbags(user_num='0'):
 	data_dir = "/home/ros/ros_ws/src/learning_safety_margin/data"
 
 	# Set up user dir
-	#subject_dir = os.path.join(data_dir, "User_"+user_num)
-	subject_dir = os.path.join(data_dir, "example_traj_to_replay")
+	subject_dir = os.path.join(data_dir, "User_"+user_num)
+	# subject_dir = os.path.join(data_dir, "example_traj_to_replay")
 	rosbag_dir = os.path.join(subject_dir, "rosbags")
 	csv_dir = os.path.join(subject_dir, "csv")
 
@@ -36,7 +36,7 @@ def process_user_rosbags(user_num='0'):
 	robot = Model("franka", urdf_path)
 
 	# Verify directory
-	listOfBagFiles = glob.glob(rosbag_dir + '/*.bag', recursive=True)
+	listOfBagFiles = glob.glob(rosbag_dir + '/**/*.bag', recursive=True)
 
 	# Loop for all bags in 'User_X' folder
 	numberOfFiles = str(len(listOfBagFiles))
@@ -57,10 +57,10 @@ def process_user_rosbags(user_num='0'):
 		if "/safe/" in bagFile:
 			countSafe += 1
 			save_dir = os.path.join(csv_dir, "safe", str(countSafe))
-		if "/unsafe/" in bagFile:
+		elif "/unsafe/" in bagFile:
 			countUnsafe += 1
 			save_dir = os.path.join(csv_dir, "unsafe", str(countUnsafe))
-		if "/daring/" in bagFile:
+		elif "/daring/" in bagFile:
 			countDaring += 1
 			save_dir = os.path.join(csv_dir, "daring", str(countDaring))
 		else:
@@ -149,7 +149,7 @@ def process_user_rosbags(user_num='0'):
 		print("Saving file " + str(count) + " of  " + str(numberOfFiles) + ": " + save_dir+"_eePosition.txt")
 		np.savetxt(save_dir+"_eePosition.txt", pose2save, delimiter=",")
 		np.savetxt(save_dir+"_eeVelocity.txt", twist2save, delimiter=",")
-		trajectory_df.to_pickle(path = save_dir+"_jointTraj.pkl")
+		trajectory_df.to_pickle(path = save_dir+"_jointState.pkl")
 
 		bag.close()
 
