@@ -12,7 +12,7 @@ ADD ./learning_safety_margin/requirements.txt ./src/learning_safety_margin/requi
 RUN pip3 install -r ./src/learning_safety_margin/requirements.txt
 
 # set up MOSEK license
-WORKDIR /root
+WORKDIR /home/${USER}
 ADD ./learning_safety_margin/mosek.lic ./mosek/mosek.lic
 
 WORKDIR /home/${USER}/ros_ws
