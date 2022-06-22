@@ -52,7 +52,7 @@ def vel_learning(user_number):
     safe_traj = []
     for i in range(0, nSafe):
         fname = csv_dir + 'safe/' + str(i + 1) + '_eePosition.txt'
-        pos = onp.loadtxt(fname, delimiter=',').T
+        pos = onp.loadtxt(fname, delimiter=',')
         safe_traj.append(pos)
         ax.plot(pos[:, 0], pos[:, 1], pos[:, 2], 'g')
 
@@ -60,7 +60,7 @@ def vel_learning(user_number):
     tte_list = []
     for i in range(0, nUnsafe):
         fname = csv_dir + 'unsafe/' + str(i + 1) + '_eePosition.txt'
-        pos = onp.loadtxt(fname, delimiter=',').T
+        pos = onp.loadtxt(fname, delimiter=',')
         unsafe_traj.append(pos)
         ax.plot(pos[:, 0], pos[:, 1], pos[:, 2], 'r')
 
@@ -76,20 +76,21 @@ def vel_learning(user_number):
     safe_vel = []
     for i in range(0, nSafe):
         fname = csv_dir + 'safe/' + str(i+1) + '_eeVelocity.txt'
-        vel = onp.loadtxt(fname, delimiter=',').T
+        vel = onp.loadtxt(fname, delimiter=',')
         safe_vel.append(vel)
         ax.plot(vel[:,0], vel[:,1], vel[:,2], 'g')
 
     unsafe_vel = []
     for i in range(0, nUnsafe):
         fname = csv_dir + 'unsafe/' + str(i+1) + '_eeVelocity.txt'
-        vel = onp.loadtxt(fname, delimiter=',').T
+        vel = onp.loadtxt(fname, delimiter=',')
         unsafe_vel.append(vel)
         ax.plot(vel[:,0], vel[:,1], vel[:,2], 'r')
     ax.set_xlabel('$\dot{x}$')
     ax.set_ylabel('$\dot{y}$')
     ax.set_zlabel('$\dot{z}$')
     ax.set_title('Franka CBF Velocity Limits: Velocity Data')
+    plt.show()
 
     xtraj = onp.hstack((safe_traj[0], safe_vel[0]))
     safe_pts = xtraj

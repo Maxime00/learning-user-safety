@@ -2,3 +2,9 @@
 *.pdf
 *.gif
 *.png
+
+# data
+*.bag
+*.txt
+*.pkl
+

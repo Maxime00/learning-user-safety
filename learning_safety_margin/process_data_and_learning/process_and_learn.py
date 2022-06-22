@@ -20,6 +20,16 @@ def set_up_dir(user_number):
     if not os.path.isdir(os.path.join(data_dir, "unsafe")):
         os.mkdir(os.path.join(data_dir, "unsafe"))
 
+def bags_need_processing(user_number):
+
+    data_dir = "/home/ros/ros_ws/src/learning_safety_margin/data/User_"+user_number
+
+    if len(os.listdir(data_dir + "/csv")) >= 3*len(os.listdir(data_dir + "/rosbags")):
+        return False
+    elif len(os.listdir(data_dir + "/csv")) < 3*len(os.listdir(data_dir + "/rosbags")):
+        return True
+
+
 def parser():
     # Parse arguments calls functions accordingly
 
@@ -36,9 +46,12 @@ def parser():
 
     set_up_dir(args.user_number)
 
-    print("Processing rosbags for User_" + args.user_number)
-    process_user_rosbags(args.user_number)
-    print("Finished processing rosbags for User_" + args.user_number)
+    if bags_need_processing():
+        print("Processing rosbags for User_" + args.user_number)
+        process_user_rosbags(args.user_number)
+        print("Finished processing rosbags for User_" + args.user_number)
+    else :
+        print("Rosbags already processed for User_"+ args.user_number)
 
     if args.learning_algorithm == 'pos':
         print("Learning position limits cbf for User_" + args.user_number)

@@ -64,7 +64,7 @@ def pos_learning(user_number):
     safe_traj = []
     for i in range(0, nSafe):
         fname = csv_dir + 'safe/' + str(i + 1) + '_eePosition.txt'
-        pos = onp.loadtxt(fname, delimiter=',').T
+        pos = onp.loadtxt(fname, delimiter=',')
         safe_traj.append(pos)
         ax.plot(pos[:, 0], pos[:, 1], pos[:, 2], 'g')
 
@@ -72,21 +72,21 @@ def pos_learning(user_number):
     tte_list = []
     for i in range(0, nUnsafe):
         fname = csv_dir + 'unsafe/' + str(i + 1) + '_eePosition.txt'
-        pos = onp.loadtxt(fname, delimiter=',').T
+        pos = onp.loadtxt(fname, delimiter=',')
         unsafe_traj.append(pos)
         ax.plot(pos[:, 0], pos[:, 1], pos[:, 2], 'r')
 
     daring_traj = []
     for i in range(0, nDaring):
         fname = csv_dir + 'daring/' + str(i + 1) + '_eePosition.txt'
-        pos = onp.loadtxt(fname, delimiter=',').T
+        pos = onp.loadtxt(fname, delimiter=',')
         daring_traj.append(pos)
         ax.plot(pos[:, 0], pos[:, 1], pos[:, 2], 'b')
 
     daring_veltraj = []
     for i in range(0, nDaring):
         fname = csv_dir + 'daring/' + str(i + 1) + '_eeVelocity.txt'
-        vel = onp.loadtxt(fname, delimiter=',').T
+        vel = onp.loadtxt(fname, delimiter=',')
         daring_veltraj.append(vel)
 
     ax.set_xlabel('$x$')
