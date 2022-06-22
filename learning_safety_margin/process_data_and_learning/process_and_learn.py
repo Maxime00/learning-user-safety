@@ -24,9 +24,9 @@ def bags_need_processing(user_number):
 
     data_dir = "/home/ros/ros_ws/src/learning_safety_margin/data/User_"+user_number
 
-    if len(os.listdir(data_dir + "/csv")) >= 3*len(os.listdir(data_dir + "/rosbags")):
+    if len(next(os.walk(data_dir + "/csv"))[2]) >= 3*len(next(os.walk(data_dir + "/rosbags"))[2]):
         return False
-    elif len(os.listdir(data_dir + "/csv")) < 3*len(os.listdir(data_dir + "/rosbags")):
+    elif len(next(os.walk(data_dir + "/csv"))[2]) < 3*len(next(os.walk(data_dir + "/rosbags"))[2]):
         return True
 
 
@@ -46,7 +46,7 @@ def parser():
 
     set_up_dir(args.user_number)
 
-    if bags_need_processing():
+    if bags_need_processing(args.user_number):
         print("Processing rosbags for User_" + args.user_number)
         process_user_rosbags(args.user_number)
         print("Finished processing rosbags for User_" + args.user_number)

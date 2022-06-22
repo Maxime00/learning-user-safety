@@ -94,7 +94,7 @@ def pos_learning(user_number):
     ax.set_zlabel('$z$')
     ax.set_title('Franka CBF Obstacle Avoidance: Position Data')
     if save: plt.savefig(fig_path + 'demonstration_data.pdf')
-    plt.show()
+    # plt.show()
 
     for traj_ind in range(0, nUnsafe):
         x_traj = unsafe_traj[traj_ind]
@@ -181,7 +181,7 @@ def pos_learning(user_number):
     ax.set_ylim(y_lim)
     ax.set_zlim(z_lim)
     if save: plt.savefig(fig_path + 'demodata.pdf')
-    plt.show()
+    # plt.show()
 
     # Define reward lists
     safe_rewards = onp.ones(len(safe_pts))*2.
@@ -311,7 +311,7 @@ def pos_learning(user_number):
     plt.title('Demonstration Data')
     plt.legend()
     if save: plt.savefig(fig_path + 'cbf_data.pdf')
-    plt.show()
+    # plt.show()
 
     # Initialize Data
     n_safe = len(x_safe)
@@ -348,7 +348,7 @@ def pos_learning(user_number):
     ax.set_zlabel(r'$\theta$', rotation=180, fontsize=18)
     plt.title('RBF Means')
     if save: plt.savefig(fig_path+'RBF Means on Workspace.pdf')
-    plt.show()
+    # plt.show()
 
     x_all = np.vstack((x_safe, x_unsafe, x_semisafe))
     print(x_all.shape, x_safe.shape, x_unsafe.shape, x_semisafe.shape)
@@ -378,7 +378,7 @@ def pos_learning(user_number):
     ax.set_zlabel(r'$\theta$', rotation=180, fontsize=18)
     plt.title('Demo Data + Artificial Pts')
     if save: plt.savefig(fig_path+'demodata_withartificialpts.pdf')
-    plt.show()
+    # plt.show()
 
     # Initialize variables
     is_bias = False
@@ -593,6 +593,7 @@ def pos_learning(user_number):
             }
 
     pickle.dump(data, open( data_dir+"pos_data_dict.p", "wb" ) )
+    plt.show()
 
 
 if __name__ == '__main__':
