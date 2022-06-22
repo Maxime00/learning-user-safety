@@ -26,8 +26,8 @@ def process_user_rosbags(user_num='0'):
 	data_dir = "/home/ros/ros_ws/src/learning_safety_margin/data"
 
 	# Set up user dir
-	subject_dir = os.path.join(data_dir, "User_"+user_num)
-	#subject_dir = os.path.join(data_dir, "example_traj_to_replay")
+	#subject_dir = os.path.join(data_dir, "User_"+user_num)
+	subject_dir = os.path.join(data_dir, "example_traj_to_replay")
 	rosbag_dir = os.path.join(subject_dir, "rosbags")
 	csv_dir = os.path.join(subject_dir, "csv")
 

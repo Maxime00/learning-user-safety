@@ -32,9 +32,27 @@ def find_closest_time(df, time):
     dist = (df['time'] - time).abs()
     return df.loc[dist.idxmin()]
 
-def plot_ref_vs_rec(ref, rec):
+def pandas_to_np(df):
+
+    temp_time = df['time'].to_numpy()
+    temp_pos = df['position'].to_numpy()
+    temp_vel = df['velocity'].to_numpy()
+    temp_torques = df['torques'].to_numpy()
+    reference_arr = np.zeros((len(temp_time), 1 + 7 * 3))
+    reference_arr[:, 0] = temp_time
+    for i in range(0, (len(temp_pos))):
+        reference_arr[i, 1:8] = temp_pos[i]
+        reference_arr[i, 8:15] = temp_vel[i]
+        reference_arr[i, 15:22] = temp_torques[i]
+
+    return reference_arr
+
+
+def plot_ref_vs_rec(df_ref, rec):
 
     traj_name ="test"
+
+    ref = pandas_to_np(df_ref)
 
     # Formatting for ease
     rec_time = rec[:, 0]
@@ -42,13 +60,21 @@ def plot_ref_vs_rec(ref, rec):
 
     rec_pos = rec[:, 1:8]
     ref_pos = ref[:, 1:8]
-    rec_ref_pos = rec[:, 15:22]
+    rec_ref_pos = rec[:, 22:29]
     error_pos = rec_pos - rec_ref_pos
 
     rec_vel = rec[:, 8:15]
     ref_vel = ref[:,8:15]
-    rec_ref_vel = rec[:, 22:29]
+    rec_ref_vel = rec[:, 29:36]
     error_vel = rec_vel - rec_ref_vel
+
+    rec_tor = rec[:, 15:22]
+    ref_tor = ref[:, 15:22]
+    rec_ref_tor = rec[:, 36:43]
+    error_tor = rec_tor - rec_ref_tor
+
+    print("PLOTTING REFERENCE VS RECORDED TRAJECTORY")
+    print("Length of reference : ", len(ref_time), "\n Length of recorded : ", len(rec_time))
 
     # Plot reference and state
     fig, axs = plt.subplots(4, 2)
@@ -56,10 +82,10 @@ def plot_ref_vs_rec(ref, rec):
 
     for i, ax in enumerate(axs.ravel()[:-1]):
         ax.plot(rec_time[:], rec_pos[:, i])
-        ax.plot(ref_time[:], ref_pos[:, i], label=":")
+        ax.plot(ref_time[:], ref_pos[:, i])
         ax.set(ylabel="joint {}".format(i))
         ax.set(xlabel="Time [sec]")
-        ax.legend()
+    fig.legend(labels=['Recorded', 'Reference'], loc=(.6,.15))
 
     # Plot position error
     fig, axs = plt.subplots(4, 2)
@@ -70,15 +96,17 @@ def plot_ref_vs_rec(ref, rec):
         ax.set(ylabel="joint {}".format(i))
         ax.set(xlabel="Time [sec]")
 
+
     # Plot velocities and reference
     fig, axs = plt.subplots(4, 2)
     fig.suptitle("Joint Velocities and reference of '{}'".format(traj_name))
 
     for i, ax in enumerate(axs.ravel()[:-1]):
         ax.plot(rec_time, rec_vel[:, i])
-        ax.plot(ref_time, ref_vel[:, i], ":")
+        ax.plot(ref_time, ref_vel[:, i])
         ax.set(ylabel="joint {}".format(i))
         ax.set(xlabel="Time [sec]")
+    fig.legend(labels=['Recorded', 'Reference'], loc=(.6, .15))
 
     # Plot velocity error
     fig, axs = plt.subplots(4, 2)
@@ -86,6 +114,26 @@ def plot_ref_vs_rec(ref, rec):
 
     for i, ax in enumerate(axs.ravel()[:-1]):
         ax.plot(rec_time, error_vel[:, i])
+        ax.set(ylabel="joint {}".format(i))
+        ax.set(xlabel="Time [sec]")
+
+    # Plot torques and reference
+    fig, axs = plt.subplots(4, 2)
+    fig.suptitle("Joint Torques and reference of '{}'".format(traj_name))
+
+    for i, ax in enumerate(axs.ravel()[:-1]):
+        ax.plot(rec_time, rec_tor[:, i])
+        ax.plot(ref_time, ref_tor[:, i])
+        ax.set(ylabel="joint {}".format(i))
+        ax.set(xlabel="Time [sec]")
+    fig.legend(labels=['Recorded', 'Reference'], loc=(.6, .15))
+
+    # Plot torque error
+    fig, axs = plt.subplots(4, 2)
+    fig.suptitle("Joint Torques error of '{}'".format(traj_name))
+
+    for i, ax in enumerate(axs.ravel()[:-1]):
+        ax.plot(rec_time, error_tor[:, i])
         ax.set(ylabel="joint {}".format(i))
         ax.set(xlabel="Time [sec]")
 
@@ -97,21 +145,19 @@ def control_loop(traj, robot, freq):
     # create publisher
     pub = rospy.Publisher('/joint_states', JointState, queue_size=10)
 
-
     command = CommandMessage()
     command.control_type = [ControlType.EFFORT.value]
-    #
-    # ds = create_cartesian_ds(DYNAMICAL_SYSTEM_TYPE.POINT_ATTRACTOR)
-    # ds.set_parameter_value("gain", [50., 50., 50., 10., 10., 10.], sr.ParameterType.DOUBLE_ARRAY)
 
     # SET UP controller
     nb_joints = 7
     ctrl = create_joint_controller(CONTROLLER_TYPE.IMPEDANCE, nb_joints)
 
-    ctrl.set_parameter_value("stiffness", [220, 220, 220, 180, 120, 120, 100], sr.ParameterType.DOUBLE_ARRAY)
-    ctrl.set_parameter_value("damping", [15, 15, 15, 13, 11, 10, 8], sr.ParameterType.DOUBLE_ARRAY)
-    # ctrl.set_parameter_value("stiffness", [10., 5., 4., 2., 2, 2, 2], sr.ParameterType.DOUBLE_ARRAY)
-    # ctrl.set_parameter_value("damping", [3., 2., 2., 1., .5, .5, .5], sr.ParameterType.DOUBLE_ARRAY)
+    ## IRL GAINS
+    # ctrl.set_parameter_value("stiffness", [220, 220, 220, 180, 120, 120, 100], sr.ParameterType.DOUBLE_ARRAY)
+    # ctrl.set_parameter_value("damping", [15, 15, 15, 13, 11, 10, 8], sr.ParameterType.DOUBLE_ARRAY)
+    ## SIMULATOR GAINS
+    ctrl.set_parameter_value("stiffness", [10., 5., 4., 2., 2, 2, 2], sr.ParameterType.DOUBLE_ARRAY)
+    ctrl.set_parameter_value("damping", [3., 2., 2., 1., .5, .5, .5], sr.ParameterType.DOUBLE_ARRAY)
 
     # SET UP variables
     desired_state = sr.JointState("franka", nb_joints)
@@ -125,7 +171,7 @@ def control_loop(traj, robot, freq):
     alpha = 0.99
     dq_filtered = np.zeros(7)
 
-    recorded_state = np.zeros((10000, 1 + nb_joints * 4))* np.nan
+    recorded_state = np.zeros((10000, 1 + nb_joints * 6))* np.nan
     idx= 0
 
     rate = rospy.Rate(freq)
@@ -242,8 +288,10 @@ def control_loop(traj, robot, freq):
             recorded_state[idx, 0] = nIter_time
             recorded_state[idx, 1:8] = state.joint_state.get_positions()
             recorded_state[idx, 8:15] = state.joint_state.get_velocities()
-            recorded_state[idx, 15:22] = df_desired['position']
-            recorded_state[idx, 22:29] = df_desired['velocity']
+            recorded_state[idx, 15:22] = state.joint_state.get_torques()
+            recorded_state[idx, 22:29] = df_desired['position']
+            recorded_state[idx, 29:36] = df_desired['velocity']
+            recorded_state[idx, 36:43] = df_desired['torques']
             idx+=1
 
             # Set command torques
@@ -264,19 +312,10 @@ def control_loop(traj, robot, freq):
             # remove zeros
             recorded_state = recorded_state[~np.isnan(recorded_state).any(axis=1)]
             # save file
-            np.savetxt(data_dir + "recorded_jointState.csv", recorded_state, delimiter=",")
+            np.save(data_dir + "recorded_jointState", recorded_state)
 
-            # Convert pandas to np.array for plotting - same format as recorded traj
-            temp_time = traj['time'].to_numpy()
-            temp_pos = traj['position'].to_numpy()
-            temp_vel = traj['velocity'].to_numpy()
-            reference_arr = np.zeros((len(temp_time), 1+2*nb_joints))
-            reference_arr[:, 0] = temp_time
-            for i in range(0, (len(temp_pos))):
-                reference_arr[i, 1:8] = temp_pos[i]
-                reference_arr[i, 8:15] = temp_vel[i]
-
-            plot_ref_vs_rec(reference_arr, recorded_state)
+            # call plot function
+            plot_ref_vs_rec(traj, recorded_state)
 
         # Publish joint states for recording
         pub.publish(convert_joint_state_msg(state))
@@ -288,6 +327,7 @@ def control_loop(traj, robot, freq):
 if __name__ == '__main__':
 
     rospy.init_node("test", anonymous=True)
+    ## TODO : make user-specific and add safety arguemnt
 
     data_dir = "/home/ros/ros_ws/src/learning_safety_margin/data/example_traj_to_replay/csv/"
     f_traj = data_dir + "1_jointTraj.pkl"
@@ -295,5 +335,5 @@ if __name__ == '__main__':
     traj = pd.read_pickle(f_traj)
     print("DF shape :",  traj.shape, " \n DF columns :", traj.columns )
 
-    robot_interface = RobotInterface("*:1701", "*:1702")
+    robot_interface = RobotInterface("*:1601", "*:1602")
     control_loop(traj, robot_interface, 200)

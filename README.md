@@ -47,7 +47,8 @@ aica-docker interactive aica-technology/zmq-simulator -u ros2 --net host --no-ho
 python3 pybullet_zmq/bin/zmq-simulator
 ```
 Once the simulator is running, you can start your controllers as shown [below](#run-controllers)
-NOTE : To run controllers in the simulator, IP ports of RobotInterface should be robot_interface = RobotInterface("*:1601", "*:1602")
+NOTE : To run controllers in the simulator, IP ports of RobotInterface should be 'robot_interface = RobotInterface("*:1601", "*:1602")'
+Similarly, binded ports in aica-server command in build-server.sh script should be '-p1601:1601 -p1602:1602'
 
 To run controllers in the simulator, you must add 'robot_name:=franka' to the roslaunch command :
 ```console
@@ -111,6 +112,11 @@ franka_lightweight_interface 17 panda_ --sensitivity low --damping off
 ### Terminal #2
 Start docker container and launch controller from there
 
+If running an ssh container, you can connect to it using :
+```console
+aica-docker connect learning-safety-margin-noetic-ssh
+```
+
 TODO : add arguments to chose user_number and safety of replayed traj
 currently
 ```console
@@ -131,7 +137,7 @@ roslaunch learning_safety_margin demo.launch demo:=joint_torque_traj_follow_cont
 ```
 
 # Notes 
-to add to pycharm PYTHONPATH : 
+to add to pycharm environment variable PYTHONPATH : 
 $PYTHONPATH:/opt/ros/noetic/lib/python3/dist-packages:/home/ros/ros_ws/devel/lib/python3/dist-packages:/home/ros/.local/lib/python3.8/site-packages
 
 
@@ -152,6 +158,11 @@ To run the Docker image as SSH server:
 
 ```console
 bash build-server.sh -s
+```
+
+You can then connect to it using
+```console
+aica-docker connect learning-safety-margin-noetic-ssh
 ```
 
 Code here is based on this [example](https://github.com/domire8/control-libraries-ros-demos/tree/main/rospy_zmq)
