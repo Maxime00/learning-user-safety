@@ -95,7 +95,7 @@ Run process_and_learn.py script inside docker container with the following argum
 ```console 
 aica-docker connect learning-safety-margin-noetic-runtime 
 cd src/learning_safety_margin/process_data_and_learning
-python3 process_and_learn.py -u <user_number> -l -l <learning_algo> 
+python3 process_and_learn.py -u <user_number> -l <learning_algo> 
 ```
 
 ## Run Controllers
@@ -124,7 +124,7 @@ bash build-server.sh
 aica-docker interactive learning-safety-margin:noetic -u ros --net host --no-hostname -v /home/lasa/Workspace/learning_safety_DS/learning_safety_margin/data:/home/ros/ros_ws/src/learning_safety_margin/data
 roslaunch learning_safety_margin demo.launch demo:=cartesian_impedance_MPC_control user_number:=1
 roslaunch learning_safety_margin demo.launch demo:=joint_torque_control
-roslaunch learning_safety_margin demo.launch demo:=joint_torque_traj_follow_control
+roslaunch learning_safety_margin demo.launch demo:=joint_torque_traj_follow_control args_for_control:="test 1"
 roslaunch learning_safety_margin demo.launch demo:=joint_torque_traj_follow_control robot_name:=franka
 roslaunch learning_safety_margin demo.launch demo:=cartesian_twist_traj_follow_control
 roslaunch learning_safety_margin demo.launch demo:=joint_space_velocity_control
@@ -142,9 +142,8 @@ $PYTHONPATH:/opt/ros/noetic/lib/python3/dist-packages:/home/ros/ros_ws/devel/lib
 
 
 # TODO 
-- torque plots in traj_follow_controller
-- comapre ref and rec ref
-- onffline plotting function
+- add replays folder in User_ dir to store 
+- replays must output safety and traj_number
 - add arguments for user_specific and safety 
 - Tune gains
 - test controller that uses mpc
