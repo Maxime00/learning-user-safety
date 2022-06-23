@@ -235,7 +235,6 @@ if __name__ == '__main__':
 
     # Set up data path
     data_dir = "/home/ros/ros_ws/src/learning_safety_margin/data/User_"+user_number+"/"
-    # TODO : make user specific ! Figure out hwo to pass argument using launch file
 
     data = pickle.load(open(data_dir + "data_dict.p", "rb"))
     params = data["theta"]

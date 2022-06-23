@@ -1,0 +1,421 @@
+#!/usr/bin/env python3
+
+import pandas as pd
+import numpy as np
+import pickle
+import rospy
+import time
+import sys
+import os
+import matplotlib.pyplot as plt
+import state_representation as sr
+from controllers import create_joint_controller, create_cartesian_controller, CONTROLLER_TYPE
+from dynamical_systems import create_cartesian_ds, DYNAMICAL_SYSTEM_TYPE
+from network_interfaces.control_type import ControlType
+from network_interfaces.zmq.network import CommandMessage
+from learning_safety_margin.robot_interface import RobotInterface
+
+from sensor_msgs.msg import JointState
+from std_msgs.msg import Header
+
+from learning_safety_margin.cbf_mpc_vel_planner import *
+from learning_safety_margin.vel_control_utils import *
+from scipy import interpolate
+from pyquaternion import Quaternion
+
+def convert_joint_state_msg(state):
+    # Convert sr.joint_state msg to ros JointState msg
+    header = Header()
+    header.stamp = rospy.get_rostime()
+    #header.frame_id = state.get_reference_frame() # is this important ??
+    names = state.joint_state.get_names()
+    pos = state.joint_state.get_positions()
+    vel = state.joint_state.get_velocities()
+    effort = state.joint_state.get_torques()
+    msg = JointState(header, names, pos, vel, effort)
+
+    return msg
+
+def find_closest_time(df, time):
+    dist = (df['time'] - time).abs()
+    return df.loc[dist.idxmin()]
+
+def pandas_to_np(df):
+
+    temp_time = df['time'].to_numpy()
+    temp_pos = df['position'].to_numpy()
+    temp_vel = df['velocity'].to_numpy()
+    temp_torques = df['torques'].to_numpy()
+    reference_arr = np.zeros((len(temp_time), 1 + 7 * 3))
+    reference_arr[:, 0] = temp_time
+    for i in range(0, (len(temp_pos))):
+        reference_arr[i, 1:8] = temp_pos[i]
+        reference_arr[i, 8:15] = temp_vel[i]
+        reference_arr[i, 15:22] = temp_torques[i]
+
+    return reference_arr
+
+def plot_ref_vs_rec(pos_vel, acc, t, rec):
+
+    traj_name ="test"
+
+    # Formatting for ease
+    rec_time = rec[:, 0]
+    ref_time = t
+
+    rec_pos = rec[:, 1:4]
+    ref_pos = pos_vel[:, 0:3]
+    rec_ref_pos = rec[:, 10:13]
+    error_pos = rec_pos - rec_ref_pos
+
+    rec_vel = rec[:, 4:7]
+    ref_vel = pos_vel[:,3:6]
+    rec_ref_vel = rec[:, 13:16]
+    error_vel = rec_vel - rec_ref_vel
+
+    rec_acc = rec[:, 7:10]
+    ref_acc = acc
+    rec_ref_acc = rec[:, 16:19]
+    error_acc = rec_acc - rec_ref_acc
+
+    print("PLOTTING REFERENCE VS RECORDED TRAJECTORY")
+    print("Length of reference : ", len(ref_time), "\n Length of recorded : ", len(rec_time))
+
+    # Plot reference and state
+    fig, axs = plt.subplots(3, 1)
+    fig.suptitle("EE Position and reference of '{}'".format(traj_name))
+
+    for i, ax in enumerate(axs.ravel()):
+        ax.plot(rec_time[:], rec_pos[:, i])
+        ax.plot(ref_time[:], ref_pos[:, i])
+        ax.set(ylabel="Dim {}".format(i))
+        ax.set(xlabel="Time [sec]")
+    fig.legend(labels=['Recorded', 'Reference'])
+
+    # Plot position error
+    fig, axs = plt.subplots(3, 1)
+    fig.suptitle("EE position error of '{}'".format(traj_name))
+
+    for i, ax in enumerate(axs.ravel()):
+        ax.plot(rec_time, error_pos[:, i])
+        ax.set(ylabel="Dim {}".format(i))
+        ax.set(xlabel="Time [sec]")
+
+
+    # Plot velocities and reference
+    fig, axs = plt.subplots(3, 1)
+    fig.suptitle("EE Velocity and reference of '{}'".format(traj_name))
+
+    for i, ax in enumerate(axs.ravel()):
+        ax.plot(rec_time, rec_vel[:, i])
+        ax.plot(ref_time, ref_vel[:, i])
+        ax.set(ylabel="Dim {}".format(i))
+        ax.set(xlabel="Time [sec]")
+    fig.legend(labels=['Recorded', 'Reference'])
+
+    # Plot velocity error
+    fig, axs = plt.subplots(3, 1)
+    fig.suptitle("EE Velocity error of '{}'".format(traj_name))
+
+    for i, ax in enumerate(axs.ravel()):
+        ax.plot(rec_time, error_vel[:, i])
+        ax.set(ylabel="Dim {}".format(i))
+        ax.set(xlabel="Time [sec]")
+
+    # Plot torques and reference
+    fig, axs = plt.subplots(3, 1)
+    fig.suptitle("EE acceleration and reference of '{}'".format(traj_name))
+
+    for i, ax in enumerate(axs.ravel()):
+        ax.plot(rec_time, rec_acc[:, i])
+        ax.plot(ref_time, ref_acc[:, i])
+        ax.set(ylabel="Dim {}".format(i))
+        ax.set(xlabel="Time [sec]")
+    fig.legend(labels=['Recorded', 'Reference'])
+
+    # Plot torque error
+    fig, axs = plt.subplots(3, 1)
+    fig.suptitle("EE acceleration error of '{}'".format(traj_name))
+
+    for i, ax in enumerate(axs.ravel()):
+        ax.plot(rec_time, error_acc[:, i])
+        ax.set(ylabel="Dim {}".format(i))
+        ax.set(xlabel="Time [sec]")
+
+    plt.show()
+
+
+def control_loop(planner, robot, freq):
+
+    # create publisher
+    pub = rospy.Publisher('/joint_states', JointState, queue_size=10)
+
+    command = CommandMessage()
+    command.control_type = [ControlType.EFFORT.value]
+
+    # SET UP CARTESIAN CTRL
+    ctrl = create_cartesian_controller(CONTROLLER_TYPE.IMPEDANCE)
+
+    ctrl.set_parameter_value("stiffness", 10., sr.ParameterType.DOUBLE) # 100 100 5 5 - good: 80 80 5 5
+    ctrl.set_parameter_value("damping", 5., sr.ParameterType.DOUBLE) # 35 35 2. 2.5
+    ctrl.set_parameter_value("inertia", .1, sr.ParameterType.DOUBLE)
+
+    # DS for orientation control
+    ds = create_cartesian_ds(DYNAMICAL_SYSTEM_TYPE.POINT_ATTRACTOR)
+    ds.set_parameter_value("gain", [0., 0., 0., 10., 10., 10.], sr.ParameterType.DOUBLE_ARRAY)
+
+    # SET UP TORQUE controller
+    # nb_joints = 7
+    # ctrl = create_joint_controller(CONTROLLER_TYPE.IMPEDANCE, nb_joints)
+    #
+    # ## IRL GAINS
+    # ctrl.set_parameter_value("stiffness", [220, 220, 220, 180, 120, 120, 100], sr.ParameterType.DOUBLE_ARRAY)
+    # ctrl.set_parameter_value("damping", [15, 15, 15, 13, 11, 10, 8], sr.ParameterType.DOUBLE_ARRAY)
+    ## SIMULATOR GAINS
+    # ctrl.set_parameter_value("stiffness", [10., 5., 4., 2., 2, 2, 2], sr.ParameterType.DOUBLE_ARRAY)
+    # ctrl.set_parameter_value("damping", [3., 2., 2., 1., .5, .5, .5], sr.ParameterType.DOUBLE_ARRAY)
+
+    # SET UP variables
+    # desired_state = sr.JointState("franka", nb_joints)
+    # feedback_state = sr.JointState("franka", nb_joints)
+    desired_state =sr.CartesianState('panda_ee', 'panda_base')
+    feedback_state = sr.CartesianState('panda_ee', 'panda_base')
+
+    flag = 0
+    computed_traj = False
+    time_period = 1. / freq
+    target_y_lim = 0.3
+
+    n_dim = 3  # cartesian space[x,y,z]]
+    alpha = 0.6
+    dq_filtered = np.zeros(n_dim)
+
+    recorded_state = np.zeros((10000, 1 + n_dim * 6))* np.nan
+    idx= 0
+
+    # wait a bit to receive correct state
+    wait_k_loops = 5
+    k=0
+
+    rate = rospy.Rate(freq)
+    while not rospy.is_shutdown():
+        state = robot.get_state()
+
+        if not state:
+            continue
+
+        print("EEF position: ", state.ee_state.get_position())
+        print("EEF orientation: ", state.ee_state.get_orientation())
+
+        if k< wait_k_loops:
+            k+=1
+            continue
+
+        if flag == 0:
+            #----------- PLAN & FOLLOW TRAJECTORY ---------------------
+
+            if not computed_traj:
+                ## ------------ PLAN TRAJECTORY ONCE -----------------------
+
+                ## Set start and target depending on starting position
+                target = np.zeros(2*n_dim)
+                target[0:3] = state.ee_state.get_position()
+
+                # simply invert y coordinate for target, set to target_y_lim if too small
+                if abs(target[1]) > target_y_lim:
+                    target[1] = -target[1]
+                elif (abs(target[1]) < target_y_lim) and (target[1] > 0):
+                     target[1] = - target_y_lim
+                elif (abs(target[1]) < target_y_lim) and (target[1] < 0):
+                    target[1] = target_y_lim
+
+                start = np.zeros(2*n_dim)
+                start[0:3] = state.ee_state.get_position()
+
+                # Calculate trajectory using MPC planner
+                print("MPC planning trajectory from %s \n to %s" %(start[0:3], target[0:3]))
+                start_time = time.time()
+                X, U, T = planner.control(start, target)
+                print("Finished planning trajectory in %s seconds \n" % (time.time() - start_time))
+
+                # convert into np arrays for reading ease
+                X = np.array(X)  # pos + vel  (n_steps, 6)
+                U = np.array(U)  # accel (n_steps, 3)
+                print("FINAl POS OF PLANNER : ", X[-1,0:3], "\n")
+
+                # append 0 accelerations to U to match size of other variables
+                U = np.append(U, [[0,0,0]],axis=0)
+
+                # Create interpolation functions
+                f_X = interpolate.interp1d(T, X, axis=0)
+                f_U = interpolate.interp1d(T, U, axis=0)
+
+                ### set DS target for orientation control
+                target_ds = sr.CartesianPose(state.ee_state.get_name(), target[0:3], np.array([0., 1., 0., 0.]),
+                                          state.ee_state.get_reference_frame())
+                ds.set_parameter_value("attractor", target_ds, sr.ParameterType.STATE, sr.StateType.CARTESIAN_POSE)
+
+                # wait loop to read terminal
+                print("WAIT a sec...")
+                rospy.sleep(3.0)
+
+                computed_traj = True
+                timeZero = time.time()
+                # continue
+
+            elif computed_traj :
+                # GET current time
+                nIter_time = time.time() - timeZero
+                print("Time : ", round(nIter_time,4))
+
+                # Check if reached end of traj
+                if nIter_time > T[-1]:
+                    print("REACHED END OF TRAJ")
+                    error = np.linalg.norm(X[-1, 0:3] - state.ee_state.get_position())
+                    print("DISTANCE TO TARGET : ", error)
+
+                    flag = 1
+
+                    # Stop robot
+                    command.joint_state = state.joint_state
+                    command.joint_state.set_torques(np.zeros(7))
+                    robot.send_command(command)
+
+                    print("WAIT ...")
+                    rospy.sleep(1.0)
+                    continue
+
+                ## Feedback state
+                feedback_state.set_position(state.ee_state.get_position())
+                # filter velocities
+                dq_filtered = (1 - alpha) * dq_filtered + alpha * state.ee_state.get_linear_velocity()
+                feedback_state.set_linear_velocity(dq_filtered)
+
+                ## Get desired state from traj
+                X_desired = f_X(nIter_time)
+                U_desired = f_U(nIter_time)
+
+                desired_state.set_position(X_desired[0:3])
+                desired_state.set_linear_velocity(X_desired[3:6])
+                desired_state.set_linear_acceleration(U_desired)
+
+                # Set desired angular velocity
+                ds_twist = sr.CartesianTwist(ds.evaluate(state.ee_state))
+                ds_twist.clamp(.25, .5)
+                # desired_state.set_angular_velocity(ds_twist.data()[3:6])
+
+                # integrate angular vel and add to quaternion ??
+                # orientation = feedback_state.get_orientation()
+                # print(orientation)
+                # angVel = ds_twist.data()[3:6]
+                # orient_dt = 0.5 * angVel * time_period
+                # print(orient_dt)
+                # quat_dt = Quaternion(1.0, orient_dt[0],orient_dt[1], orient_dt[2])
+                # print(quat_dt)
+                # orientation.__add__(quat_dt)
+                # print(orientation)
+                # print(type(orientation))
+
+                # desired_state.set_orientation(orientation)
+
+                ## DEBUG prints
+                print("Cartesian positions: ", feedback_state.get_position())
+                print("Cartesian Velocities: ", feedback_state.get_linear_velocity())
+                print("Desired positions: ", desired_state.get_position())
+                print("Desired Velocities: ", desired_state.get_linear_velocity())
+                print("Desired Angular Velocities: ", desired_state.get_angular_velocity())
+
+                # SAVE current state
+                recorded_state[idx, 0] = nIter_time
+                recorded_state[idx, 1:4] = state.ee_state.get_position()
+                recorded_state[idx, 4:7] = state.ee_state.get_linear_velocity()
+                recorded_state[idx, 7:10] = state.ee_state.get_linear_acceleration()
+                recorded_state[idx, 10:13] = X_desired[0:3]
+                recorded_state[idx, 13:16] = X_desired[0:3]
+                recorded_state[idx, 16:19] = U_desired
+                idx+=1
+
+                # Set command torques
+                command_torques = sr.JointTorques(ctrl.compute_command(desired_state, feedback_state, state.jacobian))
+                command.joint_state = state.joint_state
+                command.joint_state.set_torques(command_torques.get_torques())
+
+                print("Command:", command.joint_state.get_torques())
+                if np.any(command_torques.get_torques() > 30):
+                    print("TORQUES TOO BIG !!!")
+                    break
+
+                else:
+                    robot.send_command(command)
+
+        elif flag == 1:
+            # ------------END OF TRAJ-> DO PLOTS ------------------------
+            # remove zeros
+            recorded_state = recorded_state[~np.isnan(recorded_state).any(axis=1)]
+            # save file
+            np.save(save_dir + "_MPC_eeState", recorded_state, allow_pickle=False)
+
+            print("MPC planned trajectory from %s \n to %s" % (start[0:3], target[0:3]))
+            print("Followed traj from %s \n to %s" % (recorded_state[0,1:4], recorded_state[-1,1:4]))
+
+            # call plot function
+            plot_ref_vs_rec(X, U, T, recorded_state)
+
+        # Publish joint states for recording
+        pub.publish(convert_joint_state_msg(state))
+
+        rate.sleep()
+
+
+# Controller to replay demonstrations
+if __name__ == '__main__':
+
+    rospy.init_node("test", anonymous=True)
+
+    # Check passed argument - User number
+    if len(sys.argv) >= 2:
+        user_number = sys.argv[1]
+    else:
+        user_number = 0
+
+    print("Running one_traj MPC Controller for User_", user_number, "\n")
+
+    # Get data
+    data_dir = "/home/ros/ros_ws/src/learning_safety_margin/data/User_"+user_number+"/"
+
+    data = pickle.load(open(data_dir + "vel_data_dict.p", "rb"))
+    params = data["theta"]
+    bias_param = data["bias"]
+    slack_param = data["unsafe_slack"]
+    bias_param = 0.1
+
+    # Initialize RBF Parameters
+    # print(ws_lim, x_dim, n_dim_features, rbf_std)
+    centers, stds = rbf_means_stds(X=None, X_lim=np.array([x_lim, y_lim, z_lim, vdot_lim, vdot_lim, vdot_lim]),
+                                   n=x_dim, k=n_dim_features, fixed_stds=True, std=rbf_std)
+
+
+    # SET PARAMETERS FOR MPC CONTROL
+    freq = 200
+    dt = 0.1  # 1./freq
+    n_steps = 50
+
+
+    # Init MPC controller
+    print("Instantiating MPC Planner, should take around %s seconds..."%(n_steps/2))
+    instantiate_start = time.time()
+    mpc_planner = CBFMPC_Controller(centers, stds, params, bias_param, dt=dt, n_steps=n_steps)
+    print("FINISH INSTANTIATING MPC PLANNER IN %s seconds" % (time.time() - instantiate_start))
+
+    # Set save dir and create folder if needed
+    save_dir = data_dir + "MPC/"
+    if not os.path.isdir(save_dir):
+        os.mkdir(save_dir)
+
+    # count number of MPC trajectories and set name for this traj accordingly
+    count_prev_traj = sum(len(files) for _, _, files in os.walk(save_dir))
+    save_dir += str(count_prev_traj)
+
+    # Connect to robot and start control loop
+    robot_interface = RobotInterface("*:1701", "*:1702")
+    control_loop(mpc_planner, robot_interface, freq)

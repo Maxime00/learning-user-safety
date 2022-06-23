@@ -110,7 +110,6 @@ class CBFMPC_Controller(DoubleIntegrator):
         self.solver = casadi.nlpsol('solver', 'ipopt', self.nlp, self.opts)
 
         # Set Variable Limits
- 
         self.lbx = casadi.DM.zeros((self.n_states*(self.N+1) + self.n_controls*self.N, 1))
         self.ubx = casadi.DM.zeros((self.n_states*(self.N+1) + self.n_controls*self.N, 1))       
 
