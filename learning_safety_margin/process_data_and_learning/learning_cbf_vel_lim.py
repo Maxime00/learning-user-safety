@@ -4,6 +4,7 @@ import jax.numpy as np#jnp
 import sys
 import pickle
 import os
+import time
 from jax import random, vmap, jit, grad, ops, lax, tree_util, device_put, device_get, jacobian, jacfwd, jacrev, jvp
 import cvxpy as cp
 
@@ -15,6 +16,9 @@ import jax
 print(jax.devices())
 
 def vel_learning(user_number):
+
+    # benchmark
+    start_time = time.time()
 
     # Set up data path
     data_dir = "/home/ros/ros_ws/src/learning_safety_margin/data/User_"+user_number+"/"
@@ -274,6 +278,8 @@ def vel_learning(user_number):
     ## Define Constraints
     constraints = []
 
+    start_constraints = time.time()
+
     # Safe Constraints
     print("SAFE CONSTRAINTS")
     phis_safe = [phi(x) for x in x_safe]
@@ -340,7 +346,7 @@ def vel_learning(user_number):
             #     constraints.append((theta.T * (this_Dphixdot.T + this_phi) + bias) >= this_gamma)
             constraints.append((theta.T @ (this_Dphixdot.T) + theta.T @ (this_phi) + bias) >= this_gamma)
     print('All CONSTRAINTS DEFINED')
-
+    print("TIME TO SET CONSTRAINTS : ", time.time() -start_constraints ," seconds \n")
 
     # Add Constraints on parameter values
     for i in range(theta.shape[0]):
@@ -418,6 +424,7 @@ def vel_learning(user_number):
             }
 
     pickle.dump(data, open(data_dir+"vel_data_dict.p", "wb"))
+    print("COMPLETE LEARNING TIME : ", time.time()- start_time, " seconds \n")
     plt.show()
 
 if __name__ == '__main__':

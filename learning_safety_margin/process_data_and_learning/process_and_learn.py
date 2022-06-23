@@ -46,6 +46,7 @@ def parser():
 
     set_up_dir(args.user_number)
 
+
     if bags_need_processing(args.user_number):
         print("Processing rosbags for User_" + args.user_number)
         process_user_rosbags(args.user_number)
