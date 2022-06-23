@@ -20,7 +20,7 @@ def find_closest_time(df, time):
     return df.loc[dist.idxmin()]
 
 
-def process_user_rosbags(user_num='0'):
+def process_user_rosbags(user_num='0', smooth_flag = '1'):
 
 	# Set up data path
 	data_dir = "/home/ros/ros_ws/src/learning_safety_margin/data"
@@ -124,10 +124,14 @@ def process_user_rosbags(user_num='0'):
 
 		# Filter velocities and torques
 		smoothTorques = np.zeros(jointTorq2save.shape)
-		smoothVel = np.zeros(jointVel2save.shape)
+		smoothJointVel = np.zeros(jointVel2save.shape)
+		smoothTwistVel = np.zeros(twist2save.shape)
 		for i in range(0,len(jointTorq2save[0,:])):
 			smoothTorques[:,i] = signal.savgol_filter(x=jointTorq2save[:,i], window_length=100, polyorder = 3)
-			smoothVel[:, i] = signal.savgol_filter(x=jointVel2save[:, i], window_length=100, polyorder=3)
+			smoothJointVel[:, i] = signal.savgol_filter(x=jointVel2save[:, i], window_length=100, polyorder=3)
+
+		for i in range(0, len(twist2save[0, :])):
+			smoothTwistVel[:, i] = signal.savgol_filter(x=twist2save[:, i], window_length=100, polyorder=3)
 
 		# plot velocities
 		# plt.figure()
@@ -142,13 +146,18 @@ def process_user_rosbags(user_num='0'):
 
 
 		# convert to pandas
-		traj_dict = {'time' : time_idx ,'position': jointPositions, 'velocity': smoothVel.tolist(), 'torques': smoothTorques.tolist()}
+		traj_dict = {'time' : time_idx ,'position': jointPositions, 'velocity': smoothJointVel.tolist(), 'torques': smoothTorques.tolist()}
 		trajectory_df = pd.DataFrame.from_dict(data=traj_dict)
 
 		# Save to file
 		print("Saving file " + str(count) + " of  " + str(numberOfFiles) + ": " + save_dir+"_eePosition.txt")
 		np.savetxt(save_dir+"_eePosition.txt", pose2save, delimiter=",")
-		np.savetxt(save_dir+"_eeVelocity.txt", twist2save, delimiter=",")
+
+		if smooth_flag =='1':
+			np.savetxt(save_dir + "_eeVelocity.txt", smoothTwistVel, delimiter=",")
+		elif smooth_flag == '0':
+			np.savetxt(save_dir+"_eeVelocity.txt", twist2save, delimiter=",")
+
 		trajectory_df.to_pickle(path = save_dir+"_jointState.pkl")
 
 		bag.close()
@@ -160,12 +169,13 @@ if __name__ == '__main__':
 
 	if len(sys.argv) >= 2:
 		user_number = sys.argv[1]
+		smooth_flag = sys.argv[2]
 	else:
 		user_number = 0
 
 	if isinstance(user_number, str):
 		print("Processing rosbags for User_"+user_number)
-		process_user_rosbags(user_number)
+		process_user_rosbags(user_number, smooth_flag)
 	else:
 		print("Processing rosbags for User_1 \n")
 		print("To process other user, provide user number as sole argument: python3 bag2csv.py 2")

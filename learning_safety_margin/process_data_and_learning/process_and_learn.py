@@ -44,6 +44,7 @@ def parser():
     parser.add_argument("-p", "--plot", action="store_true", default=False)
     parser.add_argument("-u", "--user_number", type=str, default='0', nargs='?', help="The user data to process")
     parser.add_argument("-l", "--learning_algorithm", type=str, choices=['pos', 'vel'], default = 'pos',  nargs='?', help="The learning algorithm to run")
+    parser.add_argument("-s", "--to_smooth", type=str, choices=['0', '1'], default='1', nargs='?', help="option to smooth cartesian velocities")
 
     args = parser.parse_args()
 
@@ -51,7 +52,7 @@ def parser():
 
     if bags_need_processing(args.user_number):
         print("Processing rosbags for User_" + args.user_number)
-        process_user_rosbags(args.user_number)
+        process_user_rosbags(args.user_number, args.to_smooth)
         print("Finished processing rosbags for User_" + args.user_number)
     else:
         print("Rosbags already processed for User_"+ args.user_number)
