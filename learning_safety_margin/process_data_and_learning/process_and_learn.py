@@ -24,9 +24,12 @@ def bags_need_processing(user_number):
 
     data_dir = "/home/ros/ros_ws/src/learning_safety_margin/data/User_"+user_number
 
-    if len(next(os.walk(data_dir + "/csv"))[2]) >= 3*len(next(os.walk(data_dir + "/rosbags"))[2]):
+    count_csv = sum(len(files) for _, _, files in os.walk(data_dir + "/csv"))
+    count_rosbags= sum(len(files) for _, _, files in os.walk(data_dir + "/rosbags"))
+
+    if count_csv >= 3*count_rosbags:
         return False
-    elif len(next(os.walk(data_dir + "/csv"))[2]) < 3*len(next(os.walk(data_dir + "/rosbags"))[2]):
+    elif count_csv < 3*count_rosbags:
         return True
 
 
@@ -46,12 +49,11 @@ def parser():
 
     set_up_dir(args.user_number)
 
-
     if bags_need_processing(args.user_number):
         print("Processing rosbags for User_" + args.user_number)
         process_user_rosbags(args.user_number)
         print("Finished processing rosbags for User_" + args.user_number)
-    else :
+    else:
         print("Rosbags already processed for User_"+ args.user_number)
 
     if args.learning_algorithm == 'pos':
