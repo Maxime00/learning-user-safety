@@ -45,11 +45,12 @@ def vel_learning(user_number):
     def dynamics(x, u):
         # continuous time: xdot = f(x(t)) + g(x(t))u((t))
         # (xdot=[u1*cos(theta), u1*sin(theta), u2], x = x0 + xdot*dt)
-        return onp.diag(np.array([x[3], x[4], x[5], u[0], u[1], u[2]]))
+        return np.array([x[3], x[4], x[5], u[0], u[1], u[2]])
 
 
     nSafe = len(os.listdir(rosbag_dir+"safe"))
     nUnsafe = len(os.listdir(rosbag_dir+"unsafe"))
+    nDaring = len(os.listdir(rosbag_dir+"daring"))
 
     fig = plt.figure()
     ax = fig.add_subplot(111, projection='3d')
@@ -65,8 +66,19 @@ def vel_learning(user_number):
     for i in range(0, nUnsafe):
         fname = csv_dir + 'unsafe/' + str(i + 1) + '_eePosition.txt'
         pos = onp.loadtxt(fname, delimiter=',')[:,0:3]
+        tte = onp.expand_dims(onp.ones(pos.shape[0]), axis=1)
+        for j in range(pos.shape[0]):
+            tte[j] = float((pos.shape[0] - (j + 1)) / pos.shape[0])
         unsafe_traj.append(pos)
+        tte_list.append(tte)
         ax.plot(pos[:, 0], pos[:, 1], pos[:, 2], 'r')
+
+    daring_traj = []
+    for i in range(0, nDaring):
+        fname = csv_dir + 'daring/' + str(i + 1) + '_eePosition.txt'
+        pos = onp.loadtxt(fname, delimiter=',')[:, 0:3]
+        daring_traj.append(pos)
+        ax.plot(pos[:, 0], pos[:, 1], pos[:, 2], 'b')
 
     ax.set_xlabel('$x$')
     ax.set_ylabel('$y$')
@@ -90,6 +102,24 @@ def vel_learning(user_number):
         vel = onp.loadtxt(fname, delimiter=',')[:,0:3]
         unsafe_vel.append(vel)
         ax.plot(vel[:,0], vel[:,1], vel[:,2], 'r')
+
+    daring_vel = []
+    for i in range(0, nDaring):
+        fname = csv_dir + 'daring/' + str(i+1) + '_eeVelocity.txt'
+        vel = onp.loadtxt(fname, delimiter=',')[:,0:3]
+        daring_vel.append(vel)
+        ax.plot(vel[:,0], vel[:,1], vel[:,2], 'b')
+
+    daring_acc = []
+    for i in range(0, nDaring):
+        vel = daring_vel[i]
+        acc = []
+        for t in range(len(vel)-1):
+            dt = 1./200.#time[t+1]-time[t]
+            acc.append((vel[t+1]-vel[t])/dt)
+        daring_acc.append(acc)
+        # ax.plot(acc[:,0], acc[:,1], acc[:,2], 'b')
+
     ax.set_xlabel('$\dot{x}$')
     ax.set_ylabel('$\dot{y}$')
     ax.set_zlabel('$\dot{z}$')
@@ -104,17 +134,29 @@ def vel_learning(user_number):
 
     xtraj = onp.hstack((unsafe_traj[0], unsafe_vel[0]))
     unsafe_pts = xtraj
+    unsafe_ttelist = tte_list[0]
     for i in range(1, nUnsafe):
         xtraj = onp.hstack((unsafe_traj[i], unsafe_vel[i]))
         unsafe_pts = onp.vstack((unsafe_pts, xtraj))
+        unsafe_ttelist = onp.vstack((unsafe_ttelist, tte_list[i]))
 
-    print(safe_pts.shape, unsafe_pts.shape)
+
+    xtraj = onp.hstack((daring_traj[0], daring_vel[0]))
+    semisafe_pts = xtraj
+    semisafe_u = daring_acc[0]
+    for i in range(1, nDaring):
+        xtraj = onp.hstack((daring_traj[i], daring_vel[i]))
+        semisafe_pts = onp.vstack((semisafe_pts, xtraj))
+        semisafe_u = onp.vstack((semisafe_u, daring_acc[i]))
+
+    print(safe_pts.shape, unsafe_pts.shape, semisafe_pts.shape, semisafe_u.shape)
 
     # Define reward lists
     safe_rewards = onp.ones(len(safe_pts))*2.
     unsafe_rewards = onp.ones(len(unsafe_pts))
+    semisafe_rewards = onp.ones(len(semisafe_pts))* 0.5
 
-    unsafe_ttelist = onp.ones(len(unsafe_pts))
+    # unsafe_ttelist = onp.ones(len(unsafe_pts))
 
     # Define h model (i.e., RBF)
 
@@ -214,11 +256,17 @@ def vel_learning(user_number):
     unsafe_rewards = unsafe_rewards[::n_unsafe_sample]
     unsafe_tte = unsafe_ttelist[::n_unsafe_sample]
 
-    print(x_safe.shape, safe_rewards.shape, x_unsafe.shape, unsafe_rewards.shape, unsafe_tte.shape)
+    n_semisafe_sample = 200#10
+    x_semisafe = semisafe_pts[::n_semisafe_sample]
+    u_semisafe = semisafe_u[::n_semisafe_sample]
+    semisafe_rewards = semisafe_rewards[::n_semisafe_sample]
+
+    print(x_safe.shape, safe_rewards.shape, x_unsafe.shape, unsafe_rewards.shape, unsafe_tte.shape, x_semisafe.shape, u_semisafe.shape, semisafe_rewards.shape)
 
     # Initialize Data
     n_safe = len(x_safe)
     n_unsafe = len(x_unsafe)
+    n_semisafe = len(x_semisafe)
 
     # Initialize RBF Parameters
     n_dim_features = 3
@@ -240,7 +288,7 @@ def vel_learning(user_number):
     is_bias = False
     is_slack_both = False
     is_slack_safe = False
-    is_semisafe = False
+    is_semisafe = True
     is_artificial = False
     theta = cp.Variable(n_features)  # , nonneg=True)
     assert not (is_slack_both and is_slack_safe), "Slack bool cannot be both and safe only"
@@ -259,15 +307,15 @@ def vel_learning(user_number):
 
     # Initialize reward parameters
     r_scaling = 1.
-    safe_val = np.ones(n_safe) * 2.  # np.array(onp.squeeze(safe_rewards)*r_scaling)#np.ones(n_safe)*0.3
-    unsafe_val = np.ones(n_unsafe) * -1.0  # *-0.5#*-0.1
+    safe_val = safe_rewards#np.ones(n_safe) * 2.  # np.array(onp.squeeze(safe_rewards)*r_scaling)#np.ones(n_safe)*0.3
+    unsafe_val = unsafe_rewards#np.ones(n_unsafe) * -1.0  # *-0.5#*-0.1
     if is_semisafe:
-        semisafe_val = np.ones(n_semisafe) * 0.5  # np.array(onp.squeeze(semisafe_rewards)*r_scaling)#np.ones(n_semisafe)*0.
+        semisafe_val = semisafe_rewards#np.ones(n_semisafe) * 0.5  # np.array(onp.squeeze(semisafe_rewards)*r_scaling)#np.ones(n_semisafe)*0.
         gamma_dyn = np.ones(n_semisafe) * 0.1
     unsafe_tte = unsafe_ttelist ** 3
 
     if is_artificial: art_safe_val = np.ones(len(art_safe_pts)) * 0.1  # *0.5
-    print(safe_val.shape, unsafe_val.shape)  # , semisafe_val.shape)#, art_safe_val.shape)
+    print(safe_val.shape, unsafe_val.shape , semisafe_val.shape)#, art_safe_val.shape)
     print(unsafe_val[0])
 
     # Initialize cost
@@ -390,6 +438,8 @@ def vel_learning(user_number):
             "bias": bias_param,
             "safe_slack": safe_slack_param,
             "unsafe_slack": unsafe_slack_param,
+            "rbf_centers": centers,
+            "rbf_stds": stds,
             "x_safe": x_safe,
             "x_unsafe": x_unsafe,
             "x_semisafe": x_semisafe,
@@ -397,16 +447,11 @@ def vel_learning(user_number):
             "is_bias": is_bias,
             "is_semisafe": is_semisafe,
             "is_slack_safe": is_slack_safe,
-            "pos_demos": safe_demos,
-            "pos_demos_u": safe_u,
-            "neg_demos": unsafe_demos,
-            "unsafe_demos_u": unsafe_u,
-            "semisafe_demos": semisafe_demos,
             "semisafe_demos_u": semisafe_u,
             "safe_reward_values": safe_val,
             "unsafe_reward_values": unsafe_val,
             "semisafe_reward_values": semisafe_val,
-            "gamma_dyn": gamma_dyn
+            "gamma_dyn": gamma_dyn,
         }
     else:
         data = {
@@ -414,6 +459,8 @@ def vel_learning(user_number):
             "bias": bias_param,
             "safe_slack": safe_slack_param,
             "unsafe_slack": unsafe_slack_param,
+            "rbf_centers": centers,
+            "rbf_stds": stds,
             "x_safe": x_safe,
             "x_unsafe": x_unsafe,
             "is_bias": is_bias,
