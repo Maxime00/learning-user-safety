@@ -125,7 +125,8 @@ aica-docker interactive learning-safety-margin:noetic -u ros --net host --no-hos
 roslaunch learning_safety_margin demo.launch demo:=cartesian_impedance_MPC_control user_number:=1
 roslaunch learning_safety_margin demo.launch demo:=joint_torque_control
 roslaunch learning_safety_margin demo.launch demo:=joint_torque_traj_follow_control args_for_control:="test 1"
-roslaunch learning_safety_margin demo.launch demo:=joint_torque_one_traj_MPC_control robot_name:=franka
+roslaunch learning_safety_margin demo.launch demo:=joint_torque_one_traj_MPC_control
+ robot_name:=franka
 roslaunch learning_safety_margin demo.launch demo:=cartesian_twist_traj_follow_control
 roslaunch learning_safety_margin demo.launch demo:=joint_space_velocity_control
 ```

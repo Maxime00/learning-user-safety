@@ -7,4 +7,4 @@
 *.bag
 *.txt
 *.pkl
-
+*.npy
