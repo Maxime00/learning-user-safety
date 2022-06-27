@@ -172,8 +172,8 @@ def control_loop(planner, robot, freq):
     ctrl = create_cartesian_controller(CONTROLLER_TYPE.IMPEDANCE)
 
     ctrl.set_parameter_value("stiffness", [150, 150, 150, 10, 10, 10], sr.ParameterType.DOUBLE_ARRAY) # 100 100 5 5 - good: 80 80 5 5
-    ctrl.set_parameter_value("damping", [25, 25, 25, 6, 6, 6], sr.ParameterType.DOUBLE_ARRAY) # 35 35 2. 2.5
-    # ctrl.set_parameter_value("inertia", .1, sr.ParameterType.DOUBLE)
+    ctrl.set_parameter_value("damping", [25, 25, 25, 4, 4, 4], sr.ParameterType.DOUBLE_ARRAY) # 35 35 2. 2.5
+    ctrl.set_parameter_value("inertia", [.25, .25, .25, .1, .1, .1], sr.ParameterType.DOUBLE_ARRAY)
 
     # DS for orientation control
     ds = create_cartesian_ds(DYNAMICAL_SYSTEM_TYPE.POINT_ATTRACTOR)
@@ -203,6 +203,7 @@ def control_loop(planner, robot, freq):
 
     n_dim = 3  # cartesian space[x,y,z]]
     alpha = 0.8
+    alpha_ang = 0.2
     dq_filtered = np.zeros(n_dim)
     dq_filtered_ang = np.zeros(n_dim)
 
@@ -277,7 +278,7 @@ def control_loop(planner, robot, freq):
 
                 # wait loop to read terminal
                 print("WAIT a sec...")
-                rospy.sleep(2.0)
+                rospy.sleep(3.0)
 
                 computed_traj = True
                 timeZero = time.time()
@@ -313,9 +314,9 @@ def control_loop(planner, robot, freq):
                 feedback_state.set_linear_velocity(dq_filtered)
 
                 # orientation
-                # feedback_state.set_orientation(state.ee_state.get_orientation())
-                # dq_filtered_ang= (1 - alpha) * dq_filtered_ang + alpha * state.ee_state.get_angular_velocity()
-                # feedback_state.set_angular_velocity(dq_filtered_ang)
+                feedback_state.set_orientation(state.ee_state.get_orientation())
+                dq_filtered_ang= (1 - alpha_ang) * dq_filtered_ang + alpha_ang * state.ee_state.get_angular_velocity()
+                feedback_state.set_angular_velocity(dq_filtered_ang)
 
                 ## Get desired state from traj
                 X_desired = f_X(nIter_time)
@@ -323,23 +324,23 @@ def control_loop(planner, robot, freq):
 
                 desired_state.set_position(X_desired[0:3])
                 desired_state.set_linear_velocity(X_desired[3:6])
-                # desired_state.set_linear_acceleration(U_desired)
+                desired_state.set_linear_acceleration(U_desired)
 
                 # Set desired angular velocity
-                # ds_twist = sr.CartesianTwist(ds.evaluate(feedback_state))
-                # ds_twist.clamp(.25, .15)
-                # desired_state.set_angular_velocity(ds_twist.data()[3:6])
-                #
-                # # integrate angular vel and add to quaternion ??
-                # orientation = feedback_state.get_orientation()
-                # angVel = ds_twist.data()[3:6]
-                # orient_dt = 0.5 * angVel * time_period
-                # quat_dt = Quaternion(1.0, orient_dt[0],orient_dt[1], orient_dt[2])
-                # # print(quat_dt)
-                # orientation.__add__(quat_dt)
-                # # print(orientation)
-                # # print(type(orientation))
-                # desired_state.set_orientation(orientation)
+                ds_twist = sr.CartesianTwist(ds.evaluate(feedback_state))
+                ds_twist.clamp(.25, .15)
+                desired_state.set_angular_velocity(ds_twist.data()[3:6])
+
+                # integrate angular vel and add to quaternion ??
+                orientation = feedback_state.get_orientation()
+                angVel = ds_twist.data()[3:6]
+                orient_dt = 0.5 * angVel * time_period
+                quat_dt = Quaternion(1.0, orient_dt[0],orient_dt[1], orient_dt[2])
+                # print(quat_dt)
+                orientation.__add__(quat_dt)
+                # print(orientation)
+                # print(type(orientation))
+                desired_state.set_orientation(orientation)
 
                 #compute linear acceleration
                 if not np.isnan(recorded_state[idx-1, 0]):

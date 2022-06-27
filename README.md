@@ -141,6 +141,13 @@ roslaunch learning_safety_margin demo.launch demo:=joint_torque_traj_follow_cont
 to add to pycharm environment variable PYTHONPATH : 
 $PYTHONPATH:/opt/ros/noetic/lib/python3/dist-packages:/home/ros/ros_ws/devel/lib/python3/dist-packages:/home/ros/.local/lib/python3.8/site-packages
 
+current working scripts : 
+- idle_control ( recording) 
+- joint_torque_traj_follow (replays)
+- cartesian twist control (demo script)
+- joint space velocity control (demo script)
+
+
 
 # TODO 
 - add replays folder in User_ dir to store 
