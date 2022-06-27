@@ -160,7 +160,7 @@ def vel_learning(user_number):
 
     # Define h model (i.e., RBF)
 
-    def rbf_means_stds(X, X_lim, n, k, set_means='uniform', fixed_stds=True, std=0.1):
+    def rbf_means_stds(X, X_lim, n, k, set_means='uniform', fixed_stds=True, std=0.1, nCenters=None):
         """ Generates means and standard deviations for Gaussian RBF kernel
 
         Arguments:
@@ -206,7 +206,8 @@ def vel_learning(user_number):
                 means = np.array([D[i].flatten() for i in range(len(D))]).T
 
         if set_means == 'random':
-            means = np.random.uniform(low=X_lim[:, 0], high=X_lim[:, 1], size=(k ** (1 / 2), n))
+            # key = random.PRNGKey(0)
+            means = onp.random.uniform(low=X_lim[:, 0], high=X_lim[:, 1], size=(nCenters, X_lim.shape[0]))
         if set_means == 'inputs':
             assert X is not None, 'X invalid data input. Cannot be None-type'
             assert k == X.shape[0], 'Set_means inputs, num kernels must equal num of data points'
@@ -214,7 +215,7 @@ def vel_learning(user_number):
 
         # Generate stds
         if fixed_stds == True:
-            stds = np.ones((k ** n, 1)) * std
+            stds = onp.ones(means.shape[0]) * std
         else:
             #         stds = np.random.uniform(low = 0.0001, high = std, size=(k**n,1))
             stds = random.uniform(rng.next(), minval=0.0001, maxval=std, shape=(k ** n, 1))
@@ -229,16 +230,12 @@ def vel_learning(user_number):
     def rbf(x, c, s):
         return np.exp(-1 / (2 * s ** 2) * np.linalg.norm(x - c) ** 2)
 
-
+    @vmap
     def phi(X):
-        #     y = []
-        #     for i in range(X.shape[0]):
         a = np.array([rbf(X, c, s) for c, s, in zip(centers, stds)])
-
-        #         y.append(a)
         return a  # np.array(y)
 
-
+    @jax.jit
     def h_model(x, theta, bias):
         #     print(x.shape, phi(x).shape, theta.shape, phi(x).dot(theta).shape, bias.shape)
         #     print(x.type, theta.type, bias.type)
@@ -269,9 +266,9 @@ def vel_learning(user_number):
     n_semisafe = len(x_semisafe)
 
     # Initialize RBF Parameters
-    n_dim_features = 3
+    n_dim_features = 5
     x_dim = 6
-    n_features = n_dim_features**x_dim
+    n_features = 2000#n_dim_features**x_dim
     u_dim = 2
     psi = 1.0
     dt = 0.1
@@ -281,7 +278,7 @@ def vel_learning(user_number):
     print(rbf_std)
     # rbf_std = 0.5
     centers, stds = rbf_means_stds(X=None, X_lim = np.array([x_lim,y_lim,z_lim, vdot_lim, vdot_lim, vdot_lim]),
-                                   n=x_dim, k=n_dim_features, fixed_stds=True, std=rbf_std)
+                                   n=x_dim, k=n_dim_features, set_means='random',fixed_stds=True, std=rbf_std, nCenters=n_features)
     print("rbf shapes", centers.shape, stds.shape)
 
     # Initialize variables
@@ -330,7 +327,7 @@ def vel_learning(user_number):
 
     # Safe Constraints
     print("SAFE CONSTRAINTS")
-    phis_safe = [phi(x) for x in x_safe]
+    phis_safe = phi(x_safe)#[phi(x) for x in x_safe]
     if is_slack_both or is_slack_safe:
         print("Adding safe slack constraints")
         for i in range(n_safe):
@@ -345,14 +342,14 @@ def vel_learning(user_number):
 
     if is_artificial:
         print("ADDING ARTIFICIAL SAFE PTS")
-        phis_artificial = [phi(x) for x in art_safe_pts]
+        phis_artificial = phi(art_safe_pts)#[phi(x) for x in art_safe_pts]
         for i in range(len(art_safe_pts)):
             h_cost += cp.sum_squares(
                 theta.T @ np.squeeze(phis_artificial[i]) + bias)  # cost of norm(alpha_i * phi(x,xi) + b)
             constraints.append((theta.T @ np.squeeze(phis_artificial[i]) + bias) >= art_safe_val[i])
     # Unsafe Constraints
     print("UNSAFE CONSTRAINTS")
-    phis_unsafe = [phi(x) for x in x_unsafe]
+    phis_unsafe = phi(x_unsafe)#[phi(x) for x in x_unsafe]
     if is_slack_both or not is_slack_safe:
         print("Adding unsafe slack constraints")
         for i in range(n_unsafe):
@@ -370,7 +367,7 @@ def vel_learning(user_number):
         # Boundary Constraints: TODO: need to include semisafe control u values
         print("BOUNDARY CONSTRAINTS")
 
-        phis_semisafe = [phi(x) for x in x_semisafe]
+        phis_semisafe = phi(x_semisafe)#[phi(x) for x in x_semisafe]
         print("SEMISAFE H CONSTRAINTS")
         for i in range(n_semisafe):
             h_cost += cp.sum_squares(theta.T @ np.squeeze(phis_semisafe[i]) + bias)  # cost of norm(alpha_i * phi(x,xi) + b)
@@ -416,7 +413,7 @@ def vel_learning(user_number):
     params = None
     bias_param = None
     prob = cp.Problem(obj, constraints)
-    result = prob.solve(solver=cp.MOSEK, verbose=True)
+    result = prob.solve(solver=cp.MOSEK, verbose=True, enforce_dpp=True)
 
     params = theta.value
     if is_bias: bias_param = bias.value
