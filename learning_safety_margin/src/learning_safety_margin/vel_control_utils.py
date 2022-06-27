@@ -5,7 +5,7 @@ dt = 0.01
 
 x_lim = [0., 1.]
 y_lim = [-0.5, 0.5]
-z_lim = [0., 0.5]
+z_lim = [0., 1.]
 vdot_lim = [-1., 1.]
 
 ws_lim = np.vstack((x_lim, y_lim, z_lim, vdot_lim, vdot_lim, vdot_lim))

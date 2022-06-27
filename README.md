@@ -135,7 +135,10 @@ future
 bash build-server.sh
 aica-docker interactive learning-safety-margin:noetic -u ros --net host --no-hostname -v /home/lasa/Workspace/learning_safety_DS/learning_safety_margin/data:/home/ros/ros_ws/src/learning_safety_margin/data
 roslaunch learning_safety_margin demo.launch demo:=joint_torque_traj_follow_control user_number:=1 safety:=safe
+roslaunch learning_safety_margin mpc_control.launch robot_name:=franka args_for_planner:=0
 ```
+
+
 
 # Notes 
 to add to pycharm environment variable PYTHONPATH : 

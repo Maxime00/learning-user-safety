@@ -5,14 +5,27 @@ find_package(catkin REQUIRED COMPONENTS
   rospy
   std_msgs
   sensor_msgs
+  message_generation
+)
+
+add_message_files(
+  FILES
+  mpcCommand.msg
+  mpcTraj.msg
 )
 
 catkin_python_setup()
+
+generate_messages(
+   DEPENDENCIES
+   std_msgs
+)
 
 catkin_package(
     CATKIN_DEPENDS
     std_msgs
     sensor_msgs
+    message_runtime
 )
 
 include_directories(${catkin_INCLUDE_DIRS})
@@ -27,6 +40,8 @@ set(DEMOS_SCRIPTS
     joint_torque_one_traj_MPC_control
     cartesian_twist_traj_follow_control
     cartesian_impedance_cbfvel_control
+    MPC_velocity_planner
+    MPC_velocity_control
 )
 
 foreach(SCRIPT ${DEMOS_SCRIPTS})

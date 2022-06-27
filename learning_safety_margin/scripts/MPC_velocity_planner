@@ -7,64 +7,94 @@ import rospy
 import time
 import sys
 import os
-import matplotlib.pyplot as plt
-import state_representation as sr
-from controllers import create_joint_controller, create_cartesian_controller, CONTROLLER_TYPE
-from dynamical_systems import create_cartesian_ds, DYNAMICAL_SYSTEM_TYPE
-from network_interfaces.control_type import ControlType
-from network_interfaces.zmq.network import CommandMessage
 from learning_safety_margin.robot_interface import RobotInterface
-from ruckig import InputParameter, Ruckig, Trajectory, Result, OutputParameter
 
 from sensor_msgs.msg import JointState
 from std_msgs.msg import Header
-from std_msgs.msg import Float64MultiArray
 
 from learning_safety_margin.cbf_mpc_vel_planner import *
 from learning_safety_margin.vel_control_utils import *
-from scipy import interpolate
-from pyquaternion import Quaternion
+from learning_safety_margin.msg import mpcCommand, mpcTraj
 
-def convert_joint_state_msg(state):
-    # Convert sr.joint_state msg to ros JointState msg
-    header = Header()
-    header.stamp = rospy.get_rostime()
-    #header.frame_id = state.get_reference_frame() # is this important ??
-    names = state.joint_state.get_names()
-    pos = state.joint_state.get_positions()
-    vel = state.joint_state.get_velocities()
-    effort = state.joint_state.get_torques()
-    msg = JointState(header, names, pos, vel, effort)
+class MPC_vel_planner(object):
 
-    return msg
+    def __init__(self):
 
+        # create publisher and subscrber
+        self.pub = rospy.Publisher("/cmd_mpc", mpcTraj, queue_size=10) # what should queue size be
+        rospy.Subscriber("/ee_state", JointState, self.state_callback, queue_size=1)
 
-def control_loop(planner, robot, freq):
+        self.state = np.zeros(6)* np.nan
 
-    # create publisher
-    pub = rospy.Publisher('/cmd_mpc', Float64MultiArray, queue_size=10)
+    def convert_cmd_msg(self, X,U,T):
+        # convert data to custom cmd message for MPC control
+        traj_msg = mpcTraj()
 
-    rate = rospy.Rate(freq)
-    while not rospy.is_shutdown():
+        for i in range(len(X[:, 0])):
+            # Convert mpc X, U, T command to custom mpcCommand.msg format
+            cmd = mpcCommand()
+            cmd.time = T[i]
+            cmd.position = X[i, 0:3]
+            cmd.velocity = X[i, 3:6]
 
-        state = robot.get_state()
+            # one less U than X due to forward sim
+            if i < len(U[:, 0]):
+                cmd.acceleration = U[i, 0:3]
+            traj_msg.commands += [cmd]
 
-        if not state:
-            continue
+        traj_msg.header.stamp = rospy.get_rostime()
 
-        ## TODO : plan trajectory and publish cmd_mpc
+        return traj_msg
 
+    def state_callback(self, msg):
 
-        # Publish joint states for recording
-        pub.publish(convert_joint_state_msg(state))
+        # read current ee state of robot
+        rospy.loginfo(rospy.get_caller_id() + "I heard %s \n", [msg.position, msg.velocity])
 
-        rate.sleep()
+        # TODO : gonna need to convert/extract data somehow
+        # self.raw_cmd = msg.data
+        self.state[0:3] = np.asarray(msg.position)
+        self.state[3:6] = np.asarray(msg.velocity)
+
+    def planner_loop(self, planner, freq):
+
+        rate = rospy.Rate(freq)
+
+        while not rospy.is_shutdown():
+
+            # wait until state is published
+            if np.isnan(self.state).all():
+                continue
+
+            ## TODO : plan trajectory and publish cmd_mpc
+            ## TODO : how to set target ??
+
+            else :
+
+                # Set target
+                target = np.zeros(6)
+                target[0:3] = [5., 0., 5.]
+
+                # Set initial pose
+                start = np.zeros(6)
+                start[0:3] = self.state[0:3]
+
+                # Calculate trajectory using MPC planner
+                # print("MPC planning trajectory from %s \n to %s" % (start[0:3], target[0:3]))
+                # start_time = time.time()
+                X, U, T = planner.control(start, target)
+                # print("Finished planning trajectory in %s seconds \n" % (time.time() - start_time))
+
+                # Publish joint states for recording
+                self.pub.publish(self.convert_cmd_msg(np.array(X), np.array(U), np.array(T)))
+
+            rate.sleep()
 
 
 # Controller to replay demonstrations
 if __name__ == '__main__':
 
-    rospy.init_node("test", anonymous=True)
+    rospy.init_node("plan", anonymous=True)
 
     # Check passed argument - User number
     if len(sys.argv) >= 2:
@@ -91,9 +121,9 @@ if __name__ == '__main__':
                                    n=x_dim, k=n_dim_features, fixed_stds=True, std=rbf_std)
 
     # SET PARAMETERS FOR MPC CONTROL
-    freq = 100
+    freq = 500
     dt = 0.1  # 1./freq
-    n_steps = 40
+    n_steps = 10
 
     # Init MPC controller
     print("Instantiating MPC Planner, should take around %s seconds... \n"%(n_steps/2))
@@ -106,6 +136,7 @@ if __name__ == '__main__':
     if not os.path.isdir(save_dir):
         os.mkdir(save_dir)
 
-    # Connect to robot and start control loop
-    robot_interface = RobotInterface("*:1701", "*:1702")
-    control_loop(mpc_planner, robot_interface, freq)
+    # Create planer object and start planning loop
+    planner = MPC_vel_planner()
+
+    planner.planner_loop(mpc_planner, freq)
