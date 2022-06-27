@@ -1,0 +1,45 @@
+#!/usr/bin/env python3
+
+import numpy as np
+import rospy
+import state_representation as sr
+from dynamical_systems import create_cartesian_ds, DYNAMICAL_SYSTEM_TYPE
+from network_interfaces.control_type import ControlType
+from network_interfaces.zmq.network import CommandMessage
+from learning_safety_margin.robot_interface import RobotInterface
+
+
+def control_loop(robot, freq):
+    target_set = False
+    command = CommandMessage()
+    command.control_type = [ControlType.VELOCITY.value]
+
+    ds = create_cartesian_ds(DYNAMICAL_SYSTEM_TYPE.POINT_ATTRACTOR)
+    ds.set_parameter_value("gain", [50., 50., 50., 10., 10., 10.], sr.ParameterType.DOUBLE_ARRAY)
+
+    rate = rospy.Rate(freq)
+    while not rospy.is_shutdown():
+        state = robot.get_state()
+        if not state:
+            continue
+        if not target_set:
+            target = sr.CartesianPose(state.ee_state.get_name(), np.array([.5, 0., .5]), np.array([0., 1., 0., 0.]),
+                                      state.ee_state.get_reference_frame())
+
+            ds.set_parameter_value("attractor", target, sr.ParameterType.STATE, sr.StateType.CARTESIAN_POSE)
+            target_set = True
+        else:
+            twist = sr.CartesianTwist(ds.evaluate(state.ee_state))
+            twist.clamp(.25, .5)
+            command.joint_state = state.joint_state
+            command.joint_state.set_velocities(np.linalg.lstsq(state.jacobian.data(), twist.get_twist())[0])
+            robot.send_command(command)
+            print("Command Vel:", command.joint_state.get_velocities())
+        rate.sleep()
+
+
+if __name__ == '__main__':
+    rospy.init_node("test", anonymous=True)
+
+    robot_interface = RobotInterface("*:1701", "*:1702")
+    control_loop(robot_interface, 500)
