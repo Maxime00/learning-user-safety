@@ -153,6 +153,8 @@ current working scripts :
 
 
 # TODO 
+- add second mpc planner for initial traj -> used to set target 
+- impedance cartesian controller instead of velocity control
 - add replays folder in User_ dir to store 
 - replays must output safety and traj_number
 - add arguments for user_specific and safety 

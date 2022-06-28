@@ -24,22 +24,23 @@ class MPC_vel_planner(object):
         self.pub = rospy.Publisher("/cmd_mpc", mpcTraj, queue_size=10) # what should queue size be
         rospy.Subscriber("/ee_state", JointState, self.state_callback, queue_size=1)
 
-        self.state = np.zeros(6)* np.nan
+        self.state = np.zeros(6) * np.nan
 
-    def convert_cmd_msg(self, X,U,T):
+    def convert_cmd_msg(self, x, u, t):
         # convert data to custom cmd message for MPC control
         traj_msg = mpcTraj()
 
-        for i in range(len(X[:, 0])):
+        for i in range(len(x[:, 0])):
             # Convert mpc X, U, T command to custom mpcCommand.msg format
             cmd = mpcCommand()
-            cmd.time = T[i]
-            cmd.position = X[i, 0:3]
-            cmd.velocity = X[i, 3:6]
+            cmd.time = t[i]
+            cmd.position = x[i, 0:3]
+            cmd.velocity = x[i, 3:6]
 
             # one less U than X due to forward sim
-            if i < len(U[:, 0]):
-                cmd.acceleration = U[i, 0:3]
+            if i < len(u[:, 0]):
+                cmd.acceleration = u[i, 0:3]
+
             traj_msg.commands += [cmd]
 
         traj_msg.header.stamp = rospy.get_rostime()
@@ -66,7 +67,6 @@ class MPC_vel_planner(object):
             if np.isnan(self.state).all():
                 continue
 
-            ## TODO : plan trajectory and publish cmd_mpc
             ## TODO : how to set target ??
 
             else :
