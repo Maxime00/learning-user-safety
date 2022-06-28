@@ -60,9 +60,10 @@ def control_loop(robot, freq):
         else:
             twist = sr.CartesianTwist(ds.evaluate(state.ee_state))
             twist.clamp(.25, .5)
+            # print("Desired Angular Velocities: ", twist.data()[3:6])
             command_torques = sr.JointTorques(ctrl.compute_command(twist, state.ee_state, state.jacobian))
             command.joint_state = state.joint_state
-
+            # print("Command:", command.joint_state.get_torques())
             command.joint_state.set_torques(command_torques.get_torques())
             robot.send_command(command)
             #print("Command:", command)

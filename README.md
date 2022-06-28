@@ -125,7 +125,8 @@ aica-docker interactive learning-safety-margin:noetic -u ros --net host --no-hos
 roslaunch learning_safety_margin demo.launch demo:=cartesian_impedance_MPC_control user_number:=1
 roslaunch learning_safety_margin demo.launch demo:=joint_torque_control
 roslaunch learning_safety_margin demo.launch demo:=joint_torque_traj_follow_control args_for_control:="test 1"
-roslaunch learning_safety_margin demo.launch demo:=joint_torque_traj_follow_control robot_name:=franka
+roslaunch learning_safety_margin demo.launch demo:=joint_torque_one_traj_MPC_control
+ robot_name:=franka
 roslaunch learning_safety_margin demo.launch demo:=cartesian_twist_traj_follow_control
 roslaunch learning_safety_margin demo.launch demo:=joint_space_velocity_control
 ```
@@ -134,14 +135,26 @@ future
 bash build-server.sh
 aica-docker interactive learning-safety-margin:noetic -u ros --net host --no-hostname -v /home/lasa/Workspace/learning_safety_DS/learning_safety_margin/data:/home/ros/ros_ws/src/learning_safety_margin/data
 roslaunch learning_safety_margin demo.launch demo:=joint_torque_traj_follow_control user_number:=1 safety:=safe
+roslaunch learning_safety_margin mpc_control.launch robot_name:=franka args_for_planner:=0
 ```
+
+
 
 # Notes 
 to add to pycharm environment variable PYTHONPATH : 
 $PYTHONPATH:/opt/ros/noetic/lib/python3/dist-packages:/home/ros/ros_ws/devel/lib/python3/dist-packages:/home/ros/.local/lib/python3.8/site-packages
 
+current working scripts : 
+- idle_control ( recording) 
+- joint_torque_traj_follow (replays)
+- cartesian twist control (demo script)
+- joint space velocity control (demo script)
+
+
 
 # TODO 
+- add second mpc planner for initial traj -> used to set target 
+- impedance cartesian controller instead of velocity control
 - add replays folder in User_ dir to store 
 - replays must output safety and traj_number
 - add arguments for user_specific and safety 

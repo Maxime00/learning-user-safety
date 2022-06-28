@@ -1,0 +1,10 @@
+<launch>
+    <arg name="robot_name" default="franka"/>
+    <arg name="args_for_planner" default="0"/>
+
+    <group ns="$(arg robot_name)">
+        <node type="MPC_velocity_control" name="MPC_velocity_control" pkg="learning_safety_margin" output="screen"/>
+        <node type="MPC_velocity_planner" name="MPC_velocity_planner" pkg="learning_safety_margin" output="screen" args="$(arg args_for_planner)"/>
+    </group>
+
+</launch>

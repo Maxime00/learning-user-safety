@@ -41,8 +41,18 @@ BUILD_FLAGS+=(-t "${IMAGE_NAME}:${BASE_IMAGE_TAG}")
 
 DOCKER_BUILDKIT=1 docker build "${BUILD_FLAGS[@]}" .
 
+# mount volume
+docker volume rm data_vol
+    docker volume create --driver local \
+        --opt type="none" \
+        --opt device="${PWD}/learning_safety_margin/data" \
+        --opt o="bind" \
+        "data_vol"
+    FWD_ARGS+=(--volume="data_vol:/home/${USERNAME}/ros_ws/src/learning_safety_margin/data")
+
+
 if [ "${SERVE_REMOTE}" = true ]; then
   aica-docker server "${IMAGE_NAME}:${BASE_IMAGE_TAG}" -u ros -p "${REMOTE_SSH_PORT}" \
-  -v /home/lasa/Workspace/learning_safety_DS/learning_safety_margin/data:/home/ros/ros_ws/src/learning_safety_margin/data \
-  -p1601:1601 -p1602:1602
+  -p1601:1701 -p1602:1702 \
+  "${FWD_ARGS[@]}"
 fi

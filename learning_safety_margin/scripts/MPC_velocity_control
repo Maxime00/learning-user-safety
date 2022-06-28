@@ -1,0 +1,138 @@
+#!/usr/bin/env python3
+
+import numpy as np
+import rospy
+import state_representation as sr
+from dynamical_systems import create_cartesian_ds, DYNAMICAL_SYSTEM_TYPE
+from network_interfaces.control_type import ControlType
+from network_interfaces.zmq.network import CommandMessage
+from learning_safety_margin.robot_interface import RobotInterface
+from sensor_msgs.msg import JointState
+from std_msgs.msg import Header
+from learning_safety_margin.msg import mpcCommand, mpcTraj
+
+
+
+class MPC_vel_controller(object):
+    def __init__(self, robot):
+        self.robot = robot
+
+        rospy.Subscriber("/cmd_mpc", mpcTraj, self.cmd_callback, queue_size=1)
+        self.pub = rospy.Publisher('/ee_state', JointState, queue_size=1)
+
+        self.read_message = False
+        self.planner_ready = False
+        self.elapsed_time = rospy.Duration()
+        self.prev_loop_time = rospy.Time()
+
+        self.decay_rate = 0.99
+        self.alpha = 0.995
+        self.max_time_before_decay = 0.2  # seconds
+
+        self.raw_cmd = np.zeros(6)
+        self.filtered_cmd = np.zeros(6)
+
+    def convert_joint_state_msg(self, state):
+        # Convert sr.joint_state msg to ros JointState msg -> ACTUALLY input cartesian pos and vel for MPC planner
+        header = Header()
+        header.stamp = rospy.get_rostime()
+        # header.frame_id = state.get_reference_frame() # is this important ??
+        names = [state.ee_state.get_name()]
+        pos = state.ee_state.get_position()
+        vel = state.ee_state.get_linear_velocity()
+        effort = state.ee_state.get_linear_acceleration()
+        msg = JointState(header, names, pos, vel, effort)
+
+        return msg
+
+    def cmd_callback(self, msg):
+
+        # grab cmd and set read_msg flag to true
+        rospy.loginfo(rospy.get_caller_id() + "I heard %s", msg.commands[0])
+
+        # TODO : gonna need to convert/extract data somehow
+        self.raw_cmd[0:3] = np.asarray(msg.commands[0].velocity)
+        self.read_message = True
+
+
+    def control_loop(self, freq):
+        target_set = False
+        command = CommandMessage()
+        command.control_type = [ControlType.VELOCITY.value]
+
+        # Keep for orientation control
+        ds = create_cartesian_ds(DYNAMICAL_SYSTEM_TYPE.POINT_ATTRACTOR)
+        ds.set_parameter_value("gain", [50., 50., 50., 10., 10., 10.], sr.ParameterType.DOUBLE_ARRAY)
+
+        rate = rospy.Rate(freq)
+        while not rospy.is_shutdown():
+            state = self.robot.get_state()
+
+            # measure time since last loop
+            period = rospy.Time.now() - self.prev_loop_time
+            self.prev_loop_time = rospy.Time.now()
+
+            if not state:
+                continue
+
+            # print("EEF position: ", state.ee_state.get_position())
+            # print("EEF orientation: ", state.ee_state.get_orientation())
+
+            if not target_set:
+                target = sr.CartesianPose(state.ee_state.get_name(), np.array([.5, 0., .5]), np.array([0., 1., 0., 0.]),
+                                          state.ee_state.get_reference_frame())
+
+                ds.set_parameter_value("attractor", target, sr.ParameterType.STATE, sr.StateType.CARTESIAN_POSE)
+                target_set = True
+
+            # Wait to receive first message from planner
+            # if not self.planner_ready and not self.read_message:
+            #     continue
+            # elif not self.planner_ready and self.read_message:
+            #     self.planner_ready = True
+            #     continue
+
+            if not self.planner_ready and self.read_message:
+                self.planner_ready = True
+
+            # Main loop
+            if self.planner_ready:
+
+                # Check if we have received new planned cmd and update elapsed time accordingly
+                if self.read_message:
+                    self.elapsed_time = rospy.Duration(0.0)
+                    self.read_message = False
+                elif not self.read_message:
+                    self.elapsed_time += period
+
+                # Check how long since last planned cmd and update command accordingly
+                if self.elapsed_time.to_sec() < self.max_time_before_decay:
+                    self.filtered_cmd = self.alpha * self.filtered_cmd + (1-self.alpha)* self.raw_cmd
+                else :
+                    self.filtered_cmd = self.alpha * self.filtered_cmd + (1 - self.alpha) * 0
+
+                # TODO : add orientation control from DS here
+                # twist = sr.CartesianTwist(ds.evaluate(state.ee_state))
+                # twist.clamp(.25, .5)
+
+                # convert cartesian twist into joint velocities
+                command.joint_state = state.joint_state
+                command.joint_state.set_velocities(np.linalg.lstsq(state.jacobian.data(), self.filtered_cmd)[0])
+                # Send desired velocities directly
+                # self.robot.send_command(command)
+                # print("Command Vel:", command.joint_state.get_velocities())
+
+            self.pub.publish(self.convert_joint_state_msg(state))
+            rate.sleep()
+
+
+if __name__ == '__main__':
+
+    rospy.init_node("ctrl", anonymous=True)
+
+    robot_interface = RobotInterface("*:1701", "*:1702")
+    controller = MPC_vel_controller(robot_interface)
+
+    freq = 500
+
+    controller.control_loop(freq)

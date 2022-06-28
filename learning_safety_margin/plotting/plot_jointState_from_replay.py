@@ -110,7 +110,7 @@ if __name__ == "__main__":
     user_nbr, safety, traj_nbr = parser()
 
     # Check directories and create them if needed
-    data_dir = "/home/ros/ros_ws/src/learning_safety_margin/data/User_" + user_nbr + "/csv/" + safety +"/"
+    data_dir = "/home/ros/ros_ws/src/learning_safety_margin/data/User_" + user_nbr + "/replays/" + safety +"/"
     fn = data_dir + traj_nbr+"_replay_jointState.npy"
 
     # data_dir = "/home/ros/ros_ws/src/learning_safety_margin/data/example_traj_to_replay/csv/"
