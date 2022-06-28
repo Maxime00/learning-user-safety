@@ -7,7 +7,7 @@ import rospy
 import time
 import sys
 import os
-from learning_safety_margin.robot_interface import RobotInterface
+from scipy import interpolate
 
 from sensor_msgs.msg import JointState
 from std_msgs.msg import Header
@@ -25,6 +25,11 @@ class MPC_vel_planner(object):
         rospy.Subscriber("/ee_state", JointState, self.state_callback, queue_size=1)
 
         self.state = np.zeros(6) * np.nan
+        self.time = None
+        self.ref_X = None
+        self.ref_U = None
+        self.max_time = None
+
 
     def convert_cmd_msg(self, x, u, t):
         # convert data to custom cmd message for MPC control
@@ -48,16 +53,20 @@ class MPC_vel_planner(object):
         return traj_msg
 
     def state_callback(self, msg):
+        # read current ee state of robot using JointState sensor_msgs from ROS
 
-        # read current ee state of robot
-        rospy.loginfo(rospy.get_caller_id() + "I heard %s \n", [msg.position, msg.velocity])
+        # rospy.loginfo(rospy.get_caller_id() + "I heard %s \n", [msg.position, msg.velocity])
 
         # TODO : gonna need to convert/extract data somehow
-        # self.raw_cmd = msg.data
+        self.time = msg.header.stamp.to_sec()
+        print("received time : ", self.time)
         self.state[0:3] = np.asarray(msg.position)
         self.state[3:6] = np.asarray(msg.velocity)
 
-    def planner_loop(self, planner, freq):
+    def planner_loop(self, init_planner, mpc_planner, freq):
+
+        initial_traj_ready = False
+        target_y_lim = 0.3
 
         rate = rospy.Rate(freq)
 
@@ -67,24 +76,71 @@ class MPC_vel_planner(object):
             if np.isnan(self.state).all():
                 continue
 
-            ## TODO : how to set target ??
+            ## TODO : how to set end of trajectory target ??
 
-            else :
+            if not initial_traj_ready:
+                ## Compute initial trajectory
 
-                # Set target
+                ## Set start and target depending on starting position
                 target = np.zeros(6)
-                target[0:3] = [5., 0., 5.]
+                target[0:3] = self.state[0:3]
 
-                # Set initial pose
+                # simply invert y coordinate for target, set to target_y_lim if too small
+                if abs(target[1]) > target_y_lim:
+                    target[1] = -target[1]
+                elif (abs(target[1]) < target_y_lim) and (target[1] > 0):
+                    target[1] = - target_y_lim
+                elif (abs(target[1]) < target_y_lim) and (target[1] < 0):
+                    target[1] = target_y_lim
+
                 start = np.zeros(6)
                 start[0:3] = self.state[0:3]
 
                 # Calculate trajectory using MPC planner
-                # print("MPC planning trajectory from %s \n to %s" % (start[0:3], target[0:3]))
-                # start_time = time.time()
-                X, U, T = planner.control(start, target)
-                # print("Finished planning trajectory in %s seconds \n" % (time.time() - start_time))
+                print("MPC planning initial trajectory from %s \n \t to %s" % (start[0:3], target[0:3]))
+                start_time = time.time()
+                X, U, T = init_planner.control(start, target)
+                print("Finished planning initial trajectory in %s seconds \n" % (time.time() - start_time))
 
+                # convert into np arrays for reading ease
+                X = np.array(X)  # pos + vel  (n_steps, 6)
+                U = np.array(U)  # accel (n_steps, 3)
+                self.max_time = T[-1]
+                # print("FINAl POS OF PLANNER : ", X[-1, 0:3], "\n")
+
+                # append 0 accelerations to U to match size of other variables
+                U = np.append(U, [[0, 0, 0]], axis=0)
+
+                # Create interpolation functions
+                self.ref_X = interpolate.interp1d(T, X, axis=0)
+                self.ref_U = interpolate.interp1d(T, U, axis=0)
+
+                initial_traj_ready = True
+                continue
+
+            elif initial_traj_ready:
+                ## Compute one step traj along reference
+
+                # Take time and state here to avoid them changing between checks and computation
+                curr_time = self.time
+                curr_state = self.state
+
+                # Avoid errors
+                if curr_time+dt_init > self.max_time:
+                    curr_time = self.max_time - dt_init
+                    print("REACHED END OF COMMAND !!! \n")
+
+                # Set target using time interpolation : position on reference traj at time : now + dt_init
+                target = self.ref_X(curr_time+dt_init)
+                # Set initial pose
+                start = curr_state
+
+                # Calculate trajectory using MPC planner
+                print("MPC planning trajectory from %s \n to %s" % (start[0:3], target[0:3]))
+                start_time = time.time()
+                X, U, T = mpc_planner.control(start, target)
+                print("Finished planning trajectory in %s seconds \n" % (time.time() - start_time))
+                print("FINAl POS OF PLANNER : ", X[-1, 0:3], "\n")
                 # Publish joint states for recording
                 self.pub.publish(self.convert_cmd_msg(np.array(X), np.array(U), np.array(T)))
 
@@ -102,7 +158,7 @@ if __name__ == '__main__':
     else:
         user_number = '0'
 
-    print("Running one_traj MPC Controller for User_"+user_number+"\n")
+    print("Running MPC Controller for User_"+user_number+"\n")
 
     # Get data
     data_dir = "/home/ros/ros_ws/src/learning_safety_margin/data/User_"+user_number+"/"
@@ -121,12 +177,22 @@ if __name__ == '__main__':
                                    n=x_dim, k=n_dim_features, fixed_stds=True, std=rbf_std)
 
     # SET PARAMETERS FOR MPC CONTROL
-    freq = 500
-    dt = 0.1  # 1./freq
-    n_steps = 10
+    freq = 50
+    dt = 0.1  # 1./freq  # 0.1  #
+    n_steps = 1
 
-    # Init MPC controller
-    print("Instantiating MPC Planner, should take around %s seconds... \n"%(n_steps/2))
+    dt_init = 0.1  # 1./freq  should be same as dt ???
+    n_steps_init = 30
+
+    # Instantiate 1st MPC controller -> FOR INITIAL TRAJECTORY
+    print("Instantiating 1st MPC Planner, should take around %s seconds... \n" % (n_steps_init / 2))
+    instantiate_start = time.time()
+    init_traj_planner = CBFMPC_Controller(centers, stds, params, bias_param, dt=dt_init, n_steps=n_steps_init)
+    print("FINISH INSTANTIATING MPC PLANNER IN %s seconds \n" % (time.time() - instantiate_start))
+
+
+    # Instantiate actual MPC controller
+    print("Instantiating 2nd MPC Planner, should take around %s seconds... \n"%(n_steps/2))
     instantiate_start = time.time()
     mpc_planner = CBFMPC_Controller(centers, stds, params, bias_param, dt=dt, n_steps=n_steps)
     print("FINISH INSTANTIATING MPC PLANNER IN %s seconds \n" % (time.time() - instantiate_start))
@@ -139,4 +205,4 @@ if __name__ == '__main__':
     # Create planer object and start planning loop
     planner = MPC_vel_planner()
 
-    planner.planner_loop(mpc_planner, freq)
+    planner.planner_loop(init_traj_planner, mpc_planner, freq)

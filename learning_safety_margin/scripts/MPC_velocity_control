@@ -6,6 +6,7 @@ import state_representation as sr
 from dynamical_systems import create_cartesian_ds, DYNAMICAL_SYSTEM_TYPE
 from network_interfaces.control_type import ControlType
 from network_interfaces.zmq.network import CommandMessage
+from controllers import create_cartesian_controller, CONTROLLER_TYPE
 from learning_safety_margin.robot_interface import RobotInterface
 from sensor_msgs.msg import JointState
 from std_msgs.msg import Header
@@ -26,43 +27,74 @@ class MPC_vel_controller(object):
         self.prev_loop_time = rospy.Time()
 
         self.decay_rate = 0.99
-        self.alpha = 0.995
+        self.alpha_cmd = 0.1995
+        self.alpha_feedback = 0.2
         self.max_time_before_decay = 0.2  # seconds
 
-        self.raw_cmd = np.zeros(6)
-        self.filtered_cmd = np.zeros(6)
+        self.cmd_pos = np.zeros(3)
+
+        self.raw_vel = np.zeros(6)
+        self.filtered_vel = np.zeros(6)
+
+        self.raw_acc = np.zeros(6)
+        self.filtered_acc = np.zeros(6)
+
+        self.timeZero = rospy.get_rostime()
 
     def convert_joint_state_msg(self, state):
         # Convert sr.joint_state msg to ros JointState msg -> ACTUALLY input cartesian pos and vel for MPC planner
         header = Header()
-        header.stamp = rospy.get_rostime()
+
+        # reset timeZero until planner is ready
+        if not self.planner_ready:
+            self.timeZero = rospy.get_rostime()
+        header.stamp = rospy.get_rostime() - self.timeZero
+
         # header.frame_id = state.get_reference_frame() # is this important ??
         names = [state.ee_state.get_name()]
         pos = state.ee_state.get_position()
         vel = state.ee_state.get_linear_velocity()
         effort = state.ee_state.get_linear_acceleration()
         msg = JointState(header, names, pos, vel, effort)
-
         return msg
 
     def cmd_callback(self, msg):
 
         # grab cmd and set read_msg flag to true
-        rospy.loginfo(rospy.get_caller_id() + "I heard %s", msg.commands[0])
+        # rospy.loginfo(rospy.get_caller_id() + "I heard %s", msg.commands[-1])
+
+        print("DESIRED POSITION : ", np.asarray(msg.commands[0].position), np.asarray(msg.commands[-1].position))
+        print("DESIRED VELOCITY : ", np.asarray(msg.commands[0].velocity), np.asarray(msg.commands[-1].velocity))
+        print("DESIRED ACCELERATION : ", np.asarray(msg.commands[0].acceleration), np.asarray(msg.commands[-1].acceleration))
+        print("TIME SINCE LAST MESSAGE : ", self.elapsed_time.to_sec())
 
         # TODO : gonna need to convert/extract data somehow
-        self.raw_cmd[0:3] = np.asarray(msg.commands[0].velocity)
+        self.cmd_pos = np.asarray(msg.commands[-1].position)
+        self.raw_vel[0:3] = np.asarray(msg.commands[-1].velocity)
+        self.raw_acc[0:3] = np.asarray(msg.commands[0].acceleration)
         self.read_message = True
-
 
     def control_loop(self, freq):
         target_set = False
+
         command = CommandMessage()
-        command.control_type = [ControlType.VELOCITY.value]
+        command.control_type = [ControlType.EFFORT.value]
+
+        # SET UP CARTESIAN CTRL
+        ctrl = create_cartesian_controller(CONTROLLER_TYPE.IMPEDANCE)
+
+        ctrl.set_parameter_value("stiffness", [150, 150, 150, 10, 10, 10], sr.ParameterType.DOUBLE_ARRAY)  # 100 100 5 5 - good: 80 80 5 5
+        ctrl.set_parameter_value("damping", [25, 25, 25, 4, 4, 4], sr.ParameterType.DOUBLE_ARRAY)  # 35 35 2. 2.5
+        ctrl.set_parameter_value("inertia", [.25, .25, .25, .1, .1, .1], sr.ParameterType.DOUBLE_ARRAY)
+
+        desired_state = sr.CartesianState('panda_ee', 'panda_base')
+        feedback_state = sr.CartesianState('panda_ee', 'panda_base')
+
+        dq_filtered = np.zeros(3)
 
         # Keep for orientation control
         ds = create_cartesian_ds(DYNAMICAL_SYSTEM_TYPE.POINT_ATTRACTOR)
-        ds.set_parameter_value("gain", [50., 50., 50., 10., 10., 10.], sr.ParameterType.DOUBLE_ARRAY)
+        ds.set_parameter_value("gain", [0., 0., 0., 10., 10., 10.], sr.ParameterType.DOUBLE_ARRAY)
 
         rate = rospy.Rate(freq)
         while not rospy.is_shutdown():
@@ -85,19 +117,15 @@ class MPC_vel_controller(object):
                 ds.set_parameter_value("attractor", target, sr.ParameterType.STATE, sr.StateType.CARTESIAN_POSE)
                 target_set = True
 
-            # Wait to receive first message from planner
-            # if not self.planner_ready and not self.read_message:
-            #     continue
-            # elif not self.planner_ready and self.read_message:
-            #     self.planner_ready = True
-            #     continue
-
+            # Received first command, set timeZero here
             if not self.planner_ready and self.read_message:
+                self.timeZero = rospy.get_rostime()
                 self.planner_ready = True
 
             # Main loop
             if self.planner_ready:
 
+                ## Logic to set and filter command
                 # Check if we have received new planned cmd and update elapsed time accordingly
                 if self.read_message:
                     self.elapsed_time = rospy.Duration(0.0)
@@ -107,20 +135,34 @@ class MPC_vel_controller(object):
 
                 # Check how long since last planned cmd and update command accordingly
                 if self.elapsed_time.to_sec() < self.max_time_before_decay:
-                    self.filtered_cmd = self.alpha * self.filtered_cmd + (1-self.alpha)* self.raw_cmd
-                else :
-                    self.filtered_cmd = self.alpha * self.filtered_cmd + (1 - self.alpha) * 0
+                    self.filtered_vel = self.alpha_cmd * self.filtered_vel + (1 - self.alpha_cmd) * self.raw_vel
+                    self.filtered_acc = self.alpha_cmd * self.filtered_acc + (1 - self.alpha_cmd) * self.raw_acc
+                else:
+                    self.filtered_vel = self.alpha_cmd * self.filtered_vel + (1 - self.alpha_cmd) * 0
+                    self.filtered_acc = self.alpha_cmd * self.filtered_acc + (1 - self.alpha_cmd) * 0
+
+                ## SET and filter FEEDBACK state for controller
+                feedback_state.set_position(state.ee_state.get_position())
+                # filter velocities
+                dq_filtered = (1 - self.alpha_feedback) * dq_filtered + self.alpha_feedback * state.ee_state.get_linear_velocity()
+                feedback_state.set_linear_velocity(dq_filtered)
+
+                ## SET DESIRED state
+                desired_state.set_position(self.cmd_pos[0:3])
+                desired_state.set_linear_velocity(self.filtered_vel[0:3])
+                desired_state.set_linear_acceleration(self.filtered_acc[0:3])
 
                 # TODO : add orientation control from DS here
                 # twist = sr.CartesianTwist(ds.evaluate(state.ee_state))
                 # twist.clamp(.25, .5)
 
-                # convert cartesian twist into joint velocities
+                # Set command torques
+                command_torques = sr.JointTorques(ctrl.compute_command(desired_state, feedback_state, state.jacobian))
                 command.joint_state = state.joint_state
-                command.joint_state.set_velocities(np.linalg.lstsq(state.jacobian.data(), self.filtered_cmd)[0])
-                # Send desired velocities directly
-                # self.robot.send_command(command)
-                # print("Command Vel:", command.joint_state.get_velocities())
+                command.joint_state.set_torques(command_torques.get_torques())
+
+                self.robot.send_command(command)
+                # print("Command:", command.joint_state.get_torques())
 
             self.pub.publish(self.convert_joint_state_msg(state))
             rate.sleep()
@@ -133,6 +175,6 @@ if __name__ == '__main__':
     robot_interface = RobotInterface("*:1701", "*:1702")
     controller = MPC_vel_controller(robot_interface)
 
-    freq = 500
+    freq = 100
 
     controller.control_loop(freq)

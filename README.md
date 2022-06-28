@@ -155,12 +155,11 @@ current working scripts :
 # TODO 
 - add second mpc planner for initial traj -> used to set target 
 - impedance cartesian controller instead of velocity control
-- add replays folder in User_ dir to store 
-- replays must output safety and traj_number
+- add logic to play several trajectories of varying safety in planner
+- add integrator to replays
+- replays must choose and output safety and traj_number
 - add arguments for user_specific and safety 
 - Tune gains
-- test controller that uses mpc
-- need logic to get target ? fom demos? or hardset it because all demos end in same point ?
 - add data_recording in mpc controller
 
 

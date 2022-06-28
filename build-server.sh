@@ -43,12 +43,12 @@ DOCKER_BUILDKIT=1 docker build "${BUILD_FLAGS[@]}" .
 
 # mount volume
 docker volume rm data_vol
-    docker volume create --driver local \
-        --opt type="none" \
-        --opt device="${PWD}/learning_safety_margin/data" \
-        --opt o="bind" \
-        "data_vol"
-    FWD_ARGS+=(--volume="data_vol:/home/${USERNAME}/ros_ws/src/learning_safety_margin/data")
+docker volume create --driver local \
+    --opt type="none" \
+    --opt device="${PWD}/learning_safety_margin/data" \
+    --opt o="bind" \
+    "data_vol"
+FWD_ARGS+=(--volume="data_vol:/home/${USERNAME}/ros_ws/src/learning_safety_margin/data")
 
 
 if [ "${SERVE_REMOTE}" = true ]; then
