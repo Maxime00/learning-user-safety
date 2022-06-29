@@ -59,7 +59,7 @@ class MPC_vel_planner(object):
 
         # TODO : gonna need to convert/extract data somehow
         self.time = msg.header.stamp.to_sec()
-        print("received time : ", self.time)
+        # print("received time : ", self.time)
         self.state[0:3] = np.asarray(msg.position)
         self.state[3:6] = np.asarray(msg.velocity)
 
@@ -106,7 +106,7 @@ class MPC_vel_planner(object):
                 X = np.array(X)  # pos + vel  (n_steps, 6)
                 U = np.array(U)  # accel (n_steps, 3)
                 self.max_time = T[-1]
-                # print("FINAl POS OF PLANNER : ", X[-1, 0:3], "\n")
+                print("FINAl POS OF INITIAL PLANNER : ", X[-1, 0:3], "\n")
 
                 # append 0 accelerations to U to match size of other variables
                 U = np.append(U, [[0, 0, 0]], axis=0)
@@ -124,19 +124,24 @@ class MPC_vel_planner(object):
                 # Take time and state here to avoid them changing between checks and computation
                 curr_time = self.time
                 curr_state = self.state
+                target_time = curr_time+dt_init*n_steps
 
                 # Avoid errors
-                if curr_time+dt_init > self.max_time:
-                    curr_time = self.max_time - dt_init
+                if target_time > self.max_time:
+                    target_time = self.max_time
                     print("REACHED END OF COMMAND !!! \n")
 
                 # Set target using time interpolation : position on reference traj at time : now + dt_init
-                target = self.ref_X(curr_time+dt_init)
+                target = self.ref_X(target_time)
                 # Set initial pose
                 start = curr_state
 
-                # Calculate trajectory using MPC planner
-                print("MPC planning trajectory from %s \n to %s" % (start[0:3], target[0:3]))
+                if np.linalg.norm(start[0:3] - target[0:3]) < 0.001:
+                    print("CLOSE ENOUGH TO TARGET !!! \n")
+                    break
+
+                       # Calculate trajectory using MPC planner
+                print("MPC planning trajectory from %s \n to %s \n" % (start[0:3], target[0:3]))
                 start_time = time.time()
                 X, U, T = mpc_planner.control(start, target)
                 print("Finished planning trajectory in %s seconds \n" % (time.time() - start_time))
@@ -144,6 +149,7 @@ class MPC_vel_planner(object):
                 # Publish joint states for recording
                 self.pub.publish(self.convert_cmd_msg(np.array(X), np.array(U), np.array(T)))
 
+            print("TIME REMAINING IN PLANNER LOOP :", rate.remaining().to_sec(), " seconds \n")
             rate.sleep()
 
 
@@ -177,12 +183,12 @@ if __name__ == '__main__':
                                    n=x_dim, k=n_dim_features, fixed_stds=True, std=rbf_std)
 
     # SET PARAMETERS FOR MPC CONTROL
-    freq = 50
-    dt = 0.1  # 1./freq  # 0.1  #
-    n_steps = 1
+    freq = 5
+    dt = 0.1 # 1./freq  # 0.1  #
+    n_steps = 5
 
     dt_init = 0.1  # 1./freq  should be same as dt ???
-    n_steps_init = 30
+    n_steps_init = 50
 
     # Instantiate 1st MPC controller -> FOR INITIAL TRAJECTORY
     print("Instantiating 1st MPC Planner, should take around %s seconds... \n" % (n_steps_init / 2))

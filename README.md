@@ -161,7 +161,8 @@ current working scripts :
 - add arguments for user_specific and safety 
 - Tune gains
 - add data_recording in mpc controller
-
+- add script to handle several MPC trajectories and pause between each until next input 
+- save reference traj to plot against recorded later 
 
 ## Development
 

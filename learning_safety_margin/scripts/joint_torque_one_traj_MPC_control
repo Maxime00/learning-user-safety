@@ -342,7 +342,7 @@ def control_loop(planner, robot, freq):
                 # print(type(orientation))
                 desired_state.set_orientation(orientation)
 
-                # compute linear acceleration
+                # compute linear acceleration for data_recording
                 if not np.isnan(recorded_state[idx-1, 0]):
                     acc = (feedback_state.get_linear_velocity() - recorded_state[idx-1, 4:7])/(nIter_time - recorded_state[idx-1, 0])
                     ddq_filtered = (1 - beta) * ddq_filtered + beta* acc
