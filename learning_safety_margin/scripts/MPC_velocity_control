@@ -44,6 +44,12 @@ class MPC_vel_controller(object):
         self.timeZero = rospy.get_rostime()
         self.nIterTime = rospy.Duration()
 
+        self.full_time_idx = np.zeros(6)
+        self.full_pos = np.zeros((6, 3))
+        self.full_vel = np.zeros((6, 3))
+        self.full_acc = np.zeros((6, 3))
+        self.curr_idx = 0
+
         # data for plots
         self.recorded_state = np.zeros((15000, 1 + 3 * 6 + 7)) * np.nan
         self.idx = 0
@@ -53,22 +59,31 @@ class MPC_vel_controller(object):
         traj_name = "test"
 
         # clean recorded data
-        recorded_state = self.recorded_state[~np.isnan(self.recorded_state).any(axis=1)]
+        self.recorded_state = self.recorded_state[~np.isnan(self.recorded_state).any(axis=1)]
         # save file -> set save dir somewhere
         # np.save(save_dir + "_MPC_eeState", recorded_state, allow_pickle=False)
 
+        # grab ref traj
+        save_dir = "/home/ros/ros_ws/src/learning_safety_margin/data/User_0/MPC/ref_traj/"
+        fn = save_dir + "raw_for_plot.npy"
+        raw_ref = np.load(fn)
+
         # Formatting for ease
         rec_time = self.recorded_state[:, 0]
+        ref_time = raw_ref[:,0]
 
         rec_pos = self.recorded_state[:, 1:4]
+        ref_pos = raw_ref[:,1:4]
         rec_ref_pos = self.recorded_state[:, 10:13]
         error_pos = rec_pos - rec_ref_pos
 
         rec_vel = self.recorded_state[:, 4:7]
+        ref_vel = raw_ref[:,4:7]
         rec_ref_vel = self.recorded_state[:, 13:16]
         error_vel = rec_vel - rec_ref_vel
 
         rec_acc = self.recorded_state[:, 7:10]
+        ref_acc = raw_ref[:,7:10]
         rec_ref_acc = self.recorded_state[:, 16:19]
         error_acc = rec_acc - rec_ref_acc
 
@@ -81,22 +96,24 @@ class MPC_vel_controller(object):
         ax = plt.axes(projection='3d')
         plt.plot(rec_pos[:, 0], rec_pos[:, 1], rec_pos[:, 2])
         plt.plot(rec_ref_pos[:, 0], rec_ref_pos[:, 1], rec_ref_pos[:, 2])
+        plt.plot(ref_pos[:, 0], ref_pos[:, 1], ref_pos[:, 2])
         plt.xlim(ws_lim[0])
         plt.ylim(ws_lim[1])
         ax.set_zlim(ws_lim[2])
         fig.suptitle("EE pos vs ref of '{}'".format(traj_name))
-        fig.legend(labels=['Recorded', 'Reference'])
+        fig.legend(labels=['Recorded', 'Reference', 'Initial Ref'])
 
         # 3D velocity plot
         fig = plt.figure(figsize=(10, 10))
         ax = plt.axes(projection='3d')
         plt.plot(rec_vel[:, 0], rec_vel[:, 1], rec_vel[:, 2])
         plt.plot(rec_ref_vel[:, 0], rec_ref_vel[:, 1], rec_ref_vel[:, 2])
+        plt.plot(ref_vel[:, 0], ref_vel[:, 1], ref_vel[:, 2])
         plt.xlim(np.array(vdot_lim) / 2)
         plt.ylim(np.array(vdot_lim) / 2)
         ax.set_zlim(np.array(vdot_lim) / 2)
         fig.suptitle("EE vel vs ref of '{}'".format(traj_name))
-        fig.legend(labels=['Recorded', 'Reference'])
+        fig.legend(labels=['Recorded', 'Reference', 'Initial Ref'])
 
         # Plot reference and state
         fig, axs = plt.subplots(3, 1)
@@ -105,9 +122,10 @@ class MPC_vel_controller(object):
         for i, ax in enumerate(axs.ravel()):
             ax.plot(rec_time[:], rec_pos[:, i])
             ax.plot(rec_time[:], rec_ref_pos[:, i])
+            ax.plot(ref_time[:], ref_pos[:, i])
             ax.set(ylabel="Dim {}".format(i))
             ax.set(xlabel="Time [sec]")
-        fig.legend(labels=['Recorded', 'Reference'])
+        fig.legend(labels=['Recorded', 'Reference', 'Initial Ref'])
 
         # Plot position error
         # fig, axs = plt.subplots(3, 1)
@@ -125,9 +143,10 @@ class MPC_vel_controller(object):
         for i, ax in enumerate(axs.ravel()):
             ax.plot(rec_time, rec_vel[:, i])
             ax.plot(rec_time, rec_ref_vel[:, i])
+            ax.plot(ref_time[:], ref_vel[:, i])
             ax.set(ylabel="Dim {}".format(i))
             ax.set(xlabel="Time [sec]")
-        fig.legend(labels=['Recorded', 'Reference'])
+        fig.legend(labels=['Recorded', 'Reference', 'Initial Ref'])
 
         # Plot velocity error
         # fig, axs = plt.subplots(3, 1)
@@ -145,9 +164,10 @@ class MPC_vel_controller(object):
         for i, ax in enumerate(axs.ravel()):
             ax.plot(rec_time, rec_acc[:, i])
             ax.plot(rec_time, rec_ref_acc[:, i])
+            ax.plot(ref_time[:], ref_acc[:, i])
             ax.set(ylabel="Dim {}".format(i))
             ax.set(xlabel="Time [sec]")
-        fig.legend(labels=['Recorded', 'Reference'])
+        fig.legend(labels=['Recorded', 'Reference', 'Initial Ref'])
 
         # Plot torque error
         # fig, axs = plt.subplots(3, 1)
@@ -197,6 +217,14 @@ class MPC_vel_controller(object):
         print("TIME SINCE LAST MESSAGE : ", self.elapsed_time.to_sec())
 
         # TODO : gonna need to convert/extract data somehow
+
+        ## TODO : should not overwrite those probably
+        # for i in range(0,len(msg.commands)-1):
+        #     self.full_time_idx[i] = msg.commands[i].time
+        #     self.full_pos[i, :] = msg.commands[i].position
+        #     self.full_vel[i, :] = msg.commands[i].velocity
+        #     self.full_acc[i, :] = msg.commands[i].acceleration
+
         self.cmd_pos = np.asarray(msg.commands[1].position)
         self.raw_vel[0:3] = np.asarray(msg.commands[1].velocity)
         self.raw_acc[0:3] = np.asarray(msg.commands[0].acceleration)
@@ -258,6 +286,12 @@ class MPC_vel_controller(object):
 
                 self.nIterTime = rospy.get_rostime() - self.timeZero
 
+                # Use time index to find cmd in full_cmd
+                # self.curr_idx = np.abs(self.full_time_idx - self.nIterTime.to_sec()).argmin()
+                # self.cmd_pos = self.full_pos[self.curr_idx, :]
+                # self.raw_vel[0:3] = self.full_vel[self.curr_idx, :]
+                # self.raw_acc[0:3] = self.full_acc[self.curr_idx, :]
+
                 ## Logic to set and filter command
                 # Check if we have received new planned cmd and update elapsed time accordingly
                 if self.read_message:
@@ -275,8 +309,9 @@ class MPC_vel_controller(object):
                     self.filtered_acc = self.alpha_cmd * self.filtered_acc + (1 - self.alpha_cmd) * 0
 
                 # END OF LOOP
-                if self.nIterTime.to_sec() > 30:
+                if self.nIterTime.to_sec() > 20:
                     self.plot_ref_vs_rec()
+                    break
 
                 ## SET and filter FEEDBACK state for controller
                 feedback_state.set_position(state.ee_state.get_position())

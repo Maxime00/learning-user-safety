@@ -64,7 +64,7 @@ Launch idle controller, use rosbags to record
 ```console
 ./build-server.sh
 aica-docker interactive learning-safety-margin:noetic -u ros --net host --no-hostname 
-aica-docker interactive learning-safety-margin:noetic -u ros --net host --no-hostname -v /home/lasa/Workspace/learning_safety_DS/learning_safety_margin/data:/home/ros/ros_ws/src/learning_safety_margin/data
+aica-docker interactive learning-safety-margin:noetic -u ros --net host --no-hostname -v data_vol:/home/ros/ros_ws/src/learning_safety_margin/data
 roslaunch learning_safety_margin demo.launch demo:=idle_control
 ```
 
@@ -106,7 +106,7 @@ Connect to either the real robot or simulator as shown [above](#connect-to-robot
 ```console
 cd Workspace/franka-lightweight-interface
 bash run-rt.sh
-franka_lightweight_interface 17 panda_ --sensitivity low --damping off
+franka_lightweight_interface 17 panda_ --sensitivity low --joint-damping off
 ```
 
 ### Terminal #2
@@ -121,7 +121,7 @@ TODO : add arguments to chose user_number and safety of replayed traj
 currently
 ```console
 bash build-server.sh
-aica-docker interactive learning-safety-margin:noetic -u ros --net host --no-hostname -v /home/lasa/Workspace/learning_safety_DS/learning_safety_margin/data:/home/ros/ros_ws/src/learning_safety_margin/data
+aica-docker interactive learning-safety-margin:noetic -u ros --net host --no-hostname -v data_vol:/home/ros/ros_ws/src/learning_safety_margin/data
 roslaunch learning_safety_margin demo.launch demo:=cartesian_impedance_MPC_control user_number:=1
 roslaunch learning_safety_margin demo.launch demo:=joint_torque_control
 roslaunch learning_safety_margin demo.launch demo:=joint_torque_traj_follow_control args_for_control:="test 1"
@@ -133,7 +133,7 @@ roslaunch learning_safety_margin demo.launch demo:=joint_space_velocity_control
 future 
 ```console
 bash build-server.sh
-aica-docker interactive learning-safety-margin:noetic -u ros --net host --no-hostname -v /home/lasa/Workspace/learning_safety_DS/learning_safety_margin/data:/home/ros/ros_ws/src/learning_safety_margin/data
+aica-docker interactive learning-safety-margin:noetic -u ros --net host --no-hostname -v data_vol:/home/ros/ros_ws/src/learning_safety_margin/data
 roslaunch learning_safety_margin demo.launch demo:=joint_torque_traj_follow_control user_number:=1 safety:=safe
 roslaunch learning_safety_margin mpc_control.launch robot_name:=franka args_for_planner:=0
 ```
@@ -163,6 +163,9 @@ current working scripts :
 - add data_recording in mpc controller
 - add script to handle several MPC trajectories and pause between each until next input 
 - save reference traj to plot against recorded later 
+
+tried updating using state instead of time -> no improvment
+tried using 5 steps of online mpc-> jittery traj
 
 ## Development
 
