@@ -153,9 +153,8 @@ current working scripts :
 
 
 # TODO 
-- add second mpc planner for initial traj -> used to set target 
-- impedance cartesian controller instead of velocity control
-- add logic to play several trajectories of varying safety in planner
+- 
+- add logic to play several trajectories of varying safety in planner - > check ahalya' scode, make somethi nto match that
 - add integrator to replays
 - replays must choose and output safety and traj_number
 - add arguments for user_specific and safety 
