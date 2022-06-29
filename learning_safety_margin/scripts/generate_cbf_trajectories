@@ -11,7 +11,6 @@ import casadi
 from learning_safety_margin.cbf_mpc_vel_planner import *
 from learning_safety_margin.vel_control_utils import *
 
-# Generate Casadi Functions for h(x) functions
 class trajGenerator():
 
     def __init__(self, centers, stds, theta, bias, daring_offset=0.1, unsafe_offset=0.3, dt=0.1, n_steps=50):
@@ -31,6 +30,10 @@ class trajGenerator():
 
 
         # Generate H function(s) for Casadi
+
+        # Set up variables
+        self.x = casadi.SX.sym('x', 6)
+
         c = self.centers[0]
         s = self.stds[0]
         self.phi = casadi.exp(-1 / (2 * s ** 2) * casadi.norm_2(self.x - c) ** 2)
@@ -67,7 +70,7 @@ class trajGenerator():
         if np.any(hvals < 0.):
             print('Unsafe Trajectory')
             pass
-        elif np.any( 0. <=hvals <= 0.1)
+        elif np.any(0. <= hvals <= 0.1):
             print('Daring Trajectory')
             return X,U,T
         else:
@@ -91,21 +94,24 @@ user_number = '0'
 data_dir = "/home/ros/ros_ws/src/learning_safety_margin/data/User_"+user_number+"/"
 
 data = pickle.load(open(data_dir + "vel_data_dict.p", "rb"))
+print(data.keys())
 params = data["theta"]
 bias_param = data["bias"]
 slack_param = data["unsafe_slack"]
-bias_param = data['bias']#0.1
-centers = data['rbf_centers']
-stds = data['rbf_stds']
+bias_param = 0.1# data['bias']#0.1
+# centers = data['rbf_centers']
+# stds = data['rbf_stds']
+centers, stds = rbf_means_stds(X=None, X_lim=np.array([x_lim, y_lim, z_lim, vdot_lim, vdot_lim, vdot_lim]),
+                                   n=x_dim, k=n_dim_features, fixed_stds=True, std=rbf_std)
 
 # SET PARAMETERS FOR MPC CONTROL
 dt = 0.1  # 1./freq
 n_steps = 50
 
 # Init Trajectory Generation
-print("Instantiating MPC Planner, should take around %s seconds... \n"%(n_steps/2))
+print("Instantiating Traj Planner, should take around %s seconds... \n"%(n_steps/2))
 instantiate_start = time.time()
 traj_generator = trajGenerator(centers, stds, params, bias_param, dt=dt, n_steps=n_steps)
-print("FINISH INSTANTIATING MPC PLANNER IN %s seconds \n" % (time.time() - instantiate_start))
+print("FINISH INSTANTIATING TRAJ PLANNER IN %s seconds \n" % (time.time() - instantiate_start))
 
 
