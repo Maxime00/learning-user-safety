@@ -6,14 +6,14 @@ import sys
 import os
 import matplotlib.pyplot as plt
 import casadi
-
+import random
 
 from learning_safety_margin.cbf_mpc_vel_planner import *
 from learning_safety_margin.vel_control_utils import *
 
 class trajGenerator():
 
-    def __init__(self, centers, stds, theta, bias, daring_offset=0.1, unsafe_offset=0.3, dt=0.1, n_steps=50):
+    def __init__(self, centers, stds, theta, bias, daring_offset=0.1, unsafe_offset=30., dt=0.1, n_steps=50):
 
         self.centers = centers
         self.stds = stds
@@ -60,33 +60,164 @@ class trajGenerator():
 
     def generate_safe_traj(self, start, target):
         X, U, T = self.safe_mpc_planner.control(start, target)
-        return X,U,T
+        # convert into np arrays for reading ease
+        X = np.array(X)  # pos + vel  (n_steps, 6)
+        U = np.array(U)  # accel (n_steps, 3)
+        T = np.array(T)
+        # check if safe
+        hvals = np.zeros(X.shape[0])
+        for i in range(len(X)):
+            hvals[i] = self.h_fun(X[i])
+        # hvals = self.h_fun.map(X.T)
+        if np.any(hvals <= 0.):
+            print('Unsafe Trajectory')
+            return None
+        else:
+            return [X,U,T]
 
     def generate_daring_traj(self, start, target):
         X, U, T = self.daring_mpc_planner.control(start, target)
+        # convert into np arrays for reading ease
+        X = np.array(X)  # pos + vel  (n_steps, 6)
+        U = np.array(U)  # accel (n_steps, 3)
+        T = np.array(T)
 
         #check if daring
-        hvals = self.h.map(X.T)
+        hvals = np.zeros(X.shape[0])
+        for i in range(len(X)):
+            hvals[i] = self.h_fun(X[i])
+        print(hvals)
+        print(hvals >= 0. and hvals <= 0.1)
+        print(0. <= hvals <= 0.1)
+        # hvals = self.h.map(X.T)
         if np.any(hvals < 0.):
             print('Unsafe Trajectory')
-            pass
-        elif np.any(0. <= hvals <= 0.1):
+            return None
+        elif np.all(hvals >= 0.) and np.any(hvals <= 0.1):
             print('Daring Trajectory')
-            return X,U,T
+            return [X,U,T]
         else:
             print('Safe Trajectory')
-            pass
+            return None
+
 
     def generate_unsafe_traj(self, start, target):
         X, U, T = self.unsafe_mpc_planner.control(start, target)
+        # convert into np arrays for reading ease
+        X = np.array(X)  # pos + vel  (n_steps, 6)
+        U = np.array(U)  # accel (n_steps, 3)
+        T = np.array(T)
+
         # Check if unsafe
-        hvals = self.h.map(X.T)
-        if np.any(hvals < 0.):
+        hvals = np.zeros(X.shape[0])
+        for i in range(len(X)):
+            hvals[i] = self.h_fun(X[i])
+
+        # hvals = self.h.map(X.T)
+        if np.any((hvals < 0.)):
             print('Unsafe Trajectory')
-            return X, U, T
+            return [X, U, T]
         else:
             print('Safe Trajectory')
-            pass
+            return None
+
+    def make_trial_conditions(self):
+        # Generate starting pose
+
+        x = np.random.uniform(x_lim[0], x_lim[1])
+        if 0.3 <= x <= 0.7:
+            if random.random() < 0.5:
+                sign = 1
+            else:
+                sign = -1
+            y = np.random.uniform(0.3, 0.5) * sign
+            xt = x
+            yt = y * -sign
+
+        else:
+            y = np.random.uniform(y_lim[0], y_lim[1])
+            if x <= 0.3:
+                xt = 0.7 + (0.3-x)
+            else:
+                xt = 0.3-x
+            yt = y
+
+        z = 0.2
+        xdot = 0
+        ydot = 0
+        zdot = 0
+
+        x0 = np.hstack((x,y,z,xdot, ydot, zdot))
+        xt = np.hstack((xt, yt, z, xdot, ydot, zdot))
+
+        return x0, xt
+
+    def generate_all_trajectories(self, num_demos=5):
+        x_safe = []
+        u_safe = []
+        t_safe = []
+
+        num_safe = 0
+        while num_safe < num_demos:
+            x, xt = self.make_trial_conditions()
+            res = self.generate_safe_traj(x, xt)
+            if res is not None:
+                x_safe.append(res[0])
+                u_safe.append(res[1])
+                t_safe.append(res[2])
+                num_safe += 1
+
+        print("Generated Safe Trajectories")
+        x_daring = []
+        u_daring = []
+        t_daring = []
+
+        #num_daring = 0
+        #while num_daring < num_demos:
+        #    x, xt = self.make_trial_conditions()
+        #    res = self.generate_daring_traj(x, xt)
+        #    if res is not None:
+        #        x_daring.append(res[0])
+        #        u_daring.append(res[1])
+        #        t_daring.append(res[2])
+        #        num_daring += 1
+        # print("Generated Daring Trajectories")
+        x_unsafe = []
+        u_unsafe = []
+        t_unsafe = []
+
+        #num_unsafe = 0
+        #while num_unsafe < num_demos:
+        #    x, xt = self.make_trial_conditions()
+        #    res = self.generate_unsafe_traj(x, xt)
+        #    if res is not None:
+        #        x_unsafe.append(res[0])
+        #        u_unsafe.append(res[1])
+        #        t_unsafe.append(res[2])
+        #        num_unsafe += 1
+        #print("Generated Unsafe Trajectories")
+        cbf_traj_data = {
+            'X_safe': x_safe,
+            'U_safe': u_safe,
+            'T_safe': t_safe,
+            'X_daring': x_daring,
+            'U_daring': u_daring,
+            'T_daring': t_daring,
+            'X_unsafe': x_unsafe,
+            'U_unsafe': u_unsafe,
+            'T_unsafe': t_unsafe
+        }
+        fig = plt.figure()
+        ax = plt.axes(projection='3d')
+        for i in range(len(x_safe)):
+            plt.plot(x_safe[i][:,0],x_safe[i][:,1], x_safe[i][:,2])
+        ax.set_xlim(x_lim)
+        ax.set_ylim(y_lim)
+        ax.set_zlim(z_lim)
+        plt.show()
+
+        return cbf_traj_data
+
 
 # Get data
 user_number = '0'
@@ -113,5 +244,8 @@ print("Instantiating Traj Planner, should take around %s seconds... \n"%(n_steps
 instantiate_start = time.time()
 traj_generator = trajGenerator(centers, stds, params, bias_param, dt=dt, n_steps=n_steps)
 print("FINISH INSTANTIATING TRAJ PLANNER IN %s seconds \n" % (time.time() - instantiate_start))
+
+cbf_traj = traj_generator.generate_all_trajectories(num_demos=5)
+
 
 
