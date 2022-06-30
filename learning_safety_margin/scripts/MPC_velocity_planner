@@ -29,13 +29,14 @@ class MPC_vel_planner(object):
         self.ref_X = None
         self.ref_U = None
         self.max_time = None
+        self.first_traj = True
 
 
     def convert_cmd_msg(self, x, u, t):
         # convert data to custom cmd message for MPC control
         traj_msg = mpcTraj()
 
-        for i in range(len(x[:, 0])):
+        for i in range(len(t)):
             # Convert mpc X, U, T command to custom mpcCommand.msg format
             cmd = mpcCommand()
             cmd.time = t[i]
@@ -130,7 +131,6 @@ class MPC_vel_planner(object):
                 np.save(save_dir + "raw_for_plot", ref_traj, allow_pickle=False)
 
                 initial_traj_ready = True
-                continue
 
             elif initial_traj_ready:
                 ## Compute one step traj along reference
@@ -138,7 +138,7 @@ class MPC_vel_planner(object):
                 # Take time and state here to avoid them changing between checks and computation
                 curr_time = self.time
                 curr_state = self.state
-                target_time = curr_time+dt_init*n_steps
+                target_time = curr_time+dt*n_steps
 
                 # Avoid errors
                 if target_time > self.max_time:
@@ -165,13 +165,17 @@ class MPC_vel_planner(object):
                     break
 
                 # Calculate trajectory using MPC planner
-                # print("MPC planning trajectory from %s \n to %s \n" % (start[0:3], target[0:3]))
+                print("MPC planning trajectory from %s \n to %s \n" % (curr_time, target_time))
                 start_time = time.time()
                 X, U, T = mpc_planner.control(start, target, curr_time)
-                # print("Finished planning trajectory in %s seconds \n" % (time.time() - start_time))
+                print("Finished planning trajectory in %s seconds \n" % (time.time() - start_time))
                 # print("FINAl POS OF PLANNER : ", X[-1, 0:3], "\n")
                 # Publish joint states for recording
                 self.pub.publish(self.convert_cmd_msg(np.array(X), np.array(U), np.array(T)))
+
+                # TODO :wait for control to receive first traj and send back state ???
+                # ISSUE : second traj is also computed from 0 to 0.5 instead of using updated nitertime -> WHY
+
 
             print("TIME REMAINING IN PLANNER LOOP :", rate.remaining().to_sec(), " seconds \n")
             rate.sleep()
@@ -207,11 +211,11 @@ if __name__ == '__main__':
                                    n=x_dim, k=n_dim_features, fixed_stds=True, std=rbf_std)
 
     # SET PARAMETERS FOR MPC CONTROL
-    freq = 4
+    freq = 5
     dt = 0.1 # 1./freq  # 0.1  #
     n_steps = 5
 
-    dt_init = 0.1  # 1./freq  should be same as dt ???
+    dt_init = 0.2  # 1./freq  should be same as dt ???
     n_steps_init = 50
 
     # Instantiate 1st MPC controller -> FOR INITIAL TRAJECTORY
