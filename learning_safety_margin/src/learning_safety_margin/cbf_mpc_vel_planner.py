@@ -39,7 +39,7 @@ class CBFMPC_Controller(DoubleIntegrator):
         self.Q_x = 100
         self.Q_y = 100
         self.Q_theta = 100
-        self.Q_v = 0
+        self.Q_v = 10
         self.R1 = 1
         self.R2 = 1
         self.R3 = 1

@@ -64,7 +64,7 @@ Launch idle controller, use rosbags to record
 ```console
 ./build-server.sh
 aica-docker interactive learning-safety-margin:noetic -u ros --net host --no-hostname 
-aica-docker interactive learning-safety-margin:noetic -u ros --net host --no-hostname -v /home/lasa/Workspace/learning_safety_DS/learning_safety_margin/data:/home/ros/ros_ws/src/learning_safety_margin/data
+aica-docker interactive learning-safety-margin:noetic -u ros --net host --no-hostname -v data_vol:/home/ros/ros_ws/src/learning_safety_margin/data
 roslaunch learning_safety_margin demo.launch demo:=idle_control
 ```
 
@@ -106,7 +106,7 @@ Connect to either the real robot or simulator as shown [above](#connect-to-robot
 ```console
 cd Workspace/franka-lightweight-interface
 bash run-rt.sh
-franka_lightweight_interface 17 panda_ --sensitivity low --damping off
+franka_lightweight_interface 17 panda_ --sensitivity low --joint-damping off
 ```
 
 ### Terminal #2
@@ -121,7 +121,7 @@ TODO : add arguments to chose user_number and safety of replayed traj
 currently
 ```console
 bash build-server.sh
-aica-docker interactive learning-safety-margin:noetic -u ros --net host --no-hostname -v /home/lasa/Workspace/learning_safety_DS/learning_safety_margin/data:/home/ros/ros_ws/src/learning_safety_margin/data
+aica-docker interactive learning-safety-margin:noetic -u ros --net host --no-hostname -v data_vol:/home/ros/ros_ws/src/learning_safety_margin/data
 roslaunch learning_safety_margin demo.launch demo:=cartesian_impedance_MPC_control user_number:=1
 roslaunch learning_safety_margin demo.launch demo:=joint_torque_control
 roslaunch learning_safety_margin demo.launch demo:=joint_torque_traj_follow_control args_for_control:="test 1"
@@ -133,7 +133,7 @@ roslaunch learning_safety_margin demo.launch demo:=joint_space_velocity_control
 future 
 ```console
 bash build-server.sh
-aica-docker interactive learning-safety-margin:noetic -u ros --net host --no-hostname -v /home/lasa/Workspace/learning_safety_DS/learning_safety_margin/data:/home/ros/ros_ws/src/learning_safety_margin/data
+aica-docker interactive learning-safety-margin:noetic -u ros --net host --no-hostname -v data_vol:/home/ros/ros_ws/src/learning_safety_margin/data
 roslaunch learning_safety_margin demo.launch demo:=joint_torque_traj_follow_control user_number:=1 safety:=safe
 roslaunch learning_safety_margin mpc_control.launch robot_name:=franka args_for_planner:=0
 ```
@@ -153,9 +153,8 @@ current working scripts :
 
 
 # TODO 
-- add second mpc planner for initial traj -> used to set target 
-- impedance cartesian controller instead of velocity control
-- add logic to play several trajectories of varying safety in planner
+- 
+- add logic to play several trajectories of varying safety in planner - > check ahalya' scode, make somethi nto match that
 - add integrator to replays
 - replays must choose and output safety and traj_number
 - add arguments for user_specific and safety 
@@ -163,6 +162,13 @@ current working scripts :
 - add data_recording in mpc controller
 - add script to handle several MPC trajectories and pause between each until next input 
 - save reference traj to plot against recorded later 
+
+rty running one traj again -> fine tune gains ??
+save initial traj for dev time 
+
+
+tried updating using state instead of time -> no improvment
+tried using 5 steps of online mpc-> jittery traj
 
 ## Development
 
@@ -179,3 +185,23 @@ aica-docker connect learning-safety-margin-noetic-ssh
 
 Code here is based on this [example](https://github.com/domire8/control-libraries-ros-demos/tree/main/rospy_zmq)
 
+
+### Instructions for MPC-simulator pipeline
+
+# Terminal 1 - run simulator
+```console 
+cd Workspace/simulator-backend/pybullet_zmq
+bash build-server.sh
+aica-docker interactive aica-technology/zmq-simulator -u ros2 --net host --no-hostname
+python3 pybullet_zmq/bin/zmq-simulator
+```
+
+# Terminal 2 - run controller
+```console
+bash build-server.sh -s
+aica-docker connect learning-safety-margin-noetic-ssh
+roslaunch learning_safety_margin mpc_control.launch
+```
+
+Can edit code directly in pycharm without the need to rebuild, just ctrl+c in terminal 2 and do roslaunch again
+launch file runs MPC_velocity_control and MPC_velocity_planner

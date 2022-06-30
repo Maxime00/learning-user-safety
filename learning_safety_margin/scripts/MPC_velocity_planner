@@ -100,20 +100,34 @@ class MPC_vel_planner(object):
                 print("MPC planning initial trajectory from %s \n \t to %s" % (start[0:3], target[0:3]))
                 start_time = time.time()
                 X, U, T = init_planner.control(start, target)
+                # T = raw_ref[:,0]  ## use recorded traj to avoid instantiate initial traj planner
+                # X = raw_ref[:,1:7]
+                # U = raw_ref[:,7:10]
+
                 print("Finished planning initial trajectory in %s seconds \n" % (time.time() - start_time))
 
                 # convert into np arrays for reading ease
+                # self.ref_X = np.array(X)  # pos + vel  (n_steps, 6)
+                # self.ref_U = np.array(U)  # accel (n_steps, 3)
+
                 X = np.array(X)  # pos + vel  (n_steps, 6)
                 U = np.array(U)  # accel (n_steps, 3)
+
                 self.max_time = T[-1]
                 print("FINAl POS OF INITIAL PLANNER : ", X[-1, 0:3], "\n")
 
                 # append 0 accelerations to U to match size of other variables
                 U = np.append(U, [[0, 0, 0]], axis=0)
-
                 # Create interpolation functions
                 self.ref_X = interpolate.interp1d(T, X, axis=0)
                 self.ref_U = interpolate.interp1d(T, U, axis=0)
+
+                ref_traj = np.zeros((len(T),10))
+                ref_traj[:,0] = T
+                ref_traj[:,1:7] = X
+                ref_traj[:,7:10] = U
+
+                np.save(save_dir + "raw_for_plot", ref_traj, allow_pickle=False)
 
                 initial_traj_ready = True
                 continue
@@ -133,17 +147,27 @@ class MPC_vel_planner(object):
 
                 # Set target using time interpolation : position on reference traj at time : now + dt_init
                 target = self.ref_X(target_time)
+
+                # Set target using closest state + next index
+                # norm_arr = np.zeros((len(self.ref_X[:,0])))
+                # for i in range(len(self.ref_X[:,0])):
+                #     norm_arr[i] = np.linalg.norm(self.ref_X[i, 0:3] - curr_state[0:3])
+                # idx = norm_arr.argmin()
+                # target = self.ref_X[idx+n_steps, :]
+                # print("TARGET IDX :", idx)
+
                 # Set initial pose
                 start = curr_state
 
-                if np.linalg.norm(start[0:3] - target[0:3]) < 0.001:
+                # if np.linalg.norm(start[0:3] - self.ref_X[-1, 0:3]) < 0.001:
+                if np.linalg.norm(start[0:3] - target[0:3]) < 0.01:
                     print("CLOSE ENOUGH TO TARGET !!! \n")
                     break
 
-                       # Calculate trajectory using MPC planner
+                # Calculate trajectory using MPC planner
                 print("MPC planning trajectory from %s \n to %s \n" % (start[0:3], target[0:3]))
                 start_time = time.time()
-                X, U, T = mpc_planner.control(start, target)
+                X, U, T = mpc_planner.control(start, target, curr_time)
                 print("Finished planning trajectory in %s seconds \n" % (time.time() - start_time))
                 print("FINAl POS OF PLANNER : ", X[-1, 0:3], "\n")
                 # Publish joint states for recording
@@ -196,6 +220,10 @@ if __name__ == '__main__':
     init_traj_planner = CBFMPC_Controller(centers, stds, params, bias_param, dt=dt_init, n_steps=n_steps_init)
     print("FINISH INSTANTIATING MPC PLANNER IN %s seconds \n" % (time.time() - instantiate_start))
 
+    # save_dir = "/home/ros/ros_ws/src/learning_safety_margin/data/User_0/MPC/ref_traj/"
+    # fn = save_dir + "raw_for_plot.npy"
+    # raw_ref = np.load(fn)
+
 
     # Instantiate actual MPC controller
     print("Instantiating 2nd MPC Planner, should take around %s seconds... \n"%(n_steps/2))
@@ -204,7 +232,7 @@ if __name__ == '__main__':
     print("FINISH INSTANTIATING MPC PLANNER IN %s seconds \n" % (time.time() - instantiate_start))
 
     # Set save dir and create folder if needed
-    save_dir = data_dir + "MPC/"
+    save_dir = data_dir + "MPC/ref_traj/"
     if not os.path.isdir(save_dir):
         os.mkdir(save_dir)
 
