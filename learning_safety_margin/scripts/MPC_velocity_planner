@@ -100,6 +100,10 @@ class MPC_vel_planner(object):
                 print("MPC planning initial trajectory from %s \n \t to %s" % (start[0:3], target[0:3]))
                 start_time = time.time()
                 X, U, T = init_planner.control(start, target)
+                # T = raw_ref[:,0]  ## use recorded traj to avoid instantiate initial traj planner
+                # X = raw_ref[:,1:7]
+                # U = raw_ref[:,7:10]
+
                 print("Finished planning initial trajectory in %s seconds \n" % (time.time() - start_time))
 
                 # convert into np arrays for reading ease
@@ -215,6 +219,10 @@ if __name__ == '__main__':
     instantiate_start = time.time()
     init_traj_planner = CBFMPC_Controller(centers, stds, params, bias_param, dt=dt_init, n_steps=n_steps_init)
     print("FINISH INSTANTIATING MPC PLANNER IN %s seconds \n" % (time.time() - instantiate_start))
+
+    # save_dir = "/home/ros/ros_ws/src/learning_safety_margin/data/User_0/MPC/ref_traj/"
+    # fn = save_dir + "raw_for_plot.npy"
+    # raw_ref = np.load(fn)
 
 
     # Instantiate actual MPC controller

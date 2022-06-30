@@ -29,9 +29,9 @@ class MPC_vel_controller(object):
         self.prev_loop_time = rospy.Time()
 
         # control hyperparameters
-        self.decay_rate = 0.99
-        self.alpha_cmd = 0.1995  # filter vel and acc cmd
-        self.alpha_feedback = 0.5 # filter feedback vel
+        self.decay_rate = 0.99  # never used, what is this for ?
+        self.alpha_cmd = 0.2995  # filter vel and acc cmd
+        self.alpha_feedback = 0.6 # filter feedback vel
         self.beta_feedback = 0.9  # filter feedback acc -> only for recording anyway
         self.max_time_before_decay = 0.2  # seconds
 
@@ -239,9 +239,12 @@ class MPC_vel_controller(object):
         # SET UP CARTESIAN CTRL
         ctrl = create_cartesian_controller(CONTROLLER_TYPE.IMPEDANCE)
 
-        ctrl.set_parameter_value("stiffness", [150, 150, 150, 10, 10, 10], sr.ParameterType.DOUBLE_ARRAY)  # 100 100 5 5 - good: 80 80 5 5
-        ctrl.set_parameter_value("damping", [25, 25, 25, 4, 4, 4], sr.ParameterType.DOUBLE_ARRAY)  # 35 35 2. 2.5
-        ctrl.set_parameter_value("inertia", [.5, .5, .5, .1, .1, .1], sr.ParameterType.DOUBLE_ARRAY)
+        ctrl.set_parameter_value("stiffness", [500, 500, 500, 10, 10, 10], sr.ParameterType.DOUBLE_ARRAY)  # 100 100 5 5 - good: 80 80 5 5
+        ctrl.set_parameter_value("damping", [200, 200, 200, 4, 4, 4], sr.ParameterType.DOUBLE_ARRAY)  # 35 35 2. 2.5
+        ctrl.set_parameter_value("inertia", [3, 3, 3, .1, .1, .1], sr.ParameterType.DOUBLE_ARRAY)
+        # ctrl.set_parameter_value("stiffness", [150, 150, 150, 10, 10, 10], sr.ParameterType.DOUBLE_ARRAY)  # 100 100 5 5 - good: 80 80 5 5
+        # ctrl.set_parameter_value("damping", [25, 25, 25, 4, 4, 4], sr.ParameterType.DOUBLE_ARRAY)  # 35 35 2. 2.5
+        # ctrl.set_parameter_value("inertia", [.5, .5, .5, .1, .1, .1], sr.ParameterType.DOUBLE_ARRAY)
         # ctrl.set_parameter_value("stiffness", [10, 10, 10, 10, 10, 10], sr.ParameterType.DOUBLE_ARRAY)  # 100 100 5 5 - good: 80 80 5 5
         # ctrl.set_parameter_value("damping", [5, 5, 5, 4, 4, 4], sr.ParameterType.DOUBLE_ARRAY)  # 35 35 2. 2.5
         # ctrl.set_parameter_value("inertia", [.5, .5, .5, .1, .1, .1], sr.ParameterType.DOUBLE_ARRAY)
@@ -309,7 +312,7 @@ class MPC_vel_controller(object):
                     self.filtered_acc = self.alpha_cmd * self.filtered_acc + (1 - self.alpha_cmd) * 0
 
                 # END OF LOOP
-                if self.nIterTime.to_sec() > 20:
+                if self.nIterTime.to_sec() > 10:
                     self.plot_ref_vs_rec()
                     break
 

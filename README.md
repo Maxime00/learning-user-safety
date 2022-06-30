@@ -163,6 +163,10 @@ current working scripts :
 - add script to handle several MPC trajectories and pause between each until next input 
 - save reference traj to plot against recorded later 
 
+rty running one traj again -> fine tune gains ??
+save initial traj for dev time 
+
+
 tried updating using state instead of time -> no improvment
 tried using 5 steps of online mpc-> jittery traj
 
