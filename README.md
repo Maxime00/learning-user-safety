@@ -188,7 +188,7 @@ Code here is based on this [example](https://github.com/domire8/control-librarie
 
 ### Instructions for MPC-simulator pipeline
 
-# Terminal 1
+# Terminal 1 - run simulator
 ```console 
 cd Workspace/simulator-backend/pybullet_zmq
 bash build-server.sh
@@ -196,7 +196,7 @@ aica-docker interactive aica-technology/zmq-simulator -u ros2 --net host --no-ho
 python3 pybullet_zmq/bin/zmq-simulator
 ```
 
-# Terminal 2
+# Terminal 2 - run controller
 ```console
 bash build-server.sh -s
 aica-docker connect learning-safety-margin-noetic-ssh
@@ -204,3 +204,4 @@ roslaunch learning_safety_margin mpc_control.launch
 ```
 
 Can edit code directly in pycharm without the need to rebuild, just ctrl+c in terminal 2 and do roslaunch again
+launch file runs MPC_velocity_control and MPC_velocity_planner
