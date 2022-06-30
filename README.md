@@ -185,3 +185,22 @@ aica-docker connect learning-safety-margin-noetic-ssh
 
 Code here is based on this [example](https://github.com/domire8/control-libraries-ros-demos/tree/main/rospy_zmq)
 
+
+### Instructions for MPC-simulator pipeline
+
+# Terminal 1
+```console 
+cd Workspace/simulator-backend/pybullet_zmq
+bash build-server.sh
+aica-docker interactive aica-technology/zmq-simulator -u ros2 --net host --no-hostname
+python3 pybullet_zmq/bin/zmq-simulator
+```
+
+# Terminal 2
+```console
+bash build-server.sh -s
+aica-docker connect learning-safety-margin-noetic-ssh
+roslaunch learning_safety_margin mpc_control.launch
+```
+
+Can edit code directly in pycharm without the need to rebuild, just ctrl+c in terminal 2 and do roslaunch again
