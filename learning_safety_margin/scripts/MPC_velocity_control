@@ -30,13 +30,16 @@ class MPC_vel_controller(object):
 
         # control hyperparameters
         self.decay_rate = 0.99  # never used, what is this for ?
-        self.alpha_cmd = 0.2995  # filter vel and acc cmd
-        self.alpha_feedback = 0.6 # filter feedback vel
-        self.beta_feedback = 0.9  # filter feedback acc -> only for recording anyway
-        self.max_time_before_decay = 0.2  # seconds
+        self.theta_cmd = 0.9 # filter position cmd
+        self.alpha_cmd = 0.95  # filter vel cmd
+        self.beta_cmd = 0.995 #995  # filter acc cmd
+        self.alpha_feedback = 0.85 # filter feedback vel
+        self.beta_feedback = 0.97  # filter feedback acc -> only for recording anyway
+        self.max_time_before_decay = 0.25  # seconds
 
         # Storing commands
         self.cmd_pos = np.zeros(3)
+        self.filtered_pos = np.zeros(3)
         self.raw_vel = np.zeros(6)
         self.filtered_vel = np.zeros(6)
         self.raw_acc = np.zeros(6)
@@ -211,10 +214,10 @@ class MPC_vel_controller(object):
         # grab cmd and set read_msg flag to true
         # rospy.loginfo(rospy.get_caller_id() + "I heard %s", msg.commands[-1])
 
-        print("DESIRED POSITION : ", np.asarray(msg.commands[1].position), np.asarray(msg.commands[-1].position))
-        print("DESIRED VELOCITY : ", np.asarray(msg.commands[1].velocity), np.asarray(msg.commands[-1].velocity))
-        print("DESIRED ACCELERATION : ", np.asarray(msg.commands[0].acceleration), np.asarray(msg.commands[-2].acceleration))
-        print("TIME SINCE LAST MESSAGE : ", self.elapsed_time.to_sec())
+        # print("DESIRED POSITION : ", np.asarray(msg.commands[1].position), np.asarray(msg.commands[-1].position))
+        # print("DESIRED VELOCITY : ", np.asarray(msg.commands[1].velocity), np.asarray(msg.commands[-1].velocity))
+        # print("DESIRED ACCELERATION : ", np.asarray(msg.commands[0].acceleration), np.asarray(msg.commands[-2].acceleration))
+        # print("TIME SINCE LAST MESSAGE : ", self.elapsed_time.to_sec())
 
         # TODO : gonna need to convert/extract data somehow
 
@@ -239,9 +242,9 @@ class MPC_vel_controller(object):
         # SET UP CARTESIAN CTRL
         ctrl = create_cartesian_controller(CONTROLLER_TYPE.IMPEDANCE)
 
-        ctrl.set_parameter_value("stiffness", [500, 500, 500, 10, 10, 10], sr.ParameterType.DOUBLE_ARRAY)  # 100 100 5 5 - good: 80 80 5 5
-        ctrl.set_parameter_value("damping", [200, 200, 200, 4, 4, 4], sr.ParameterType.DOUBLE_ARRAY)  # 35 35 2. 2.5
-        ctrl.set_parameter_value("inertia", [3, 3, 3, .1, .1, .1], sr.ParameterType.DOUBLE_ARRAY)
+        ctrl.set_parameter_value("stiffness", [400, 400, 400, 10, 10, 10], sr.ParameterType.DOUBLE_ARRAY)  # 100 100 5 5 - good: 80 80 5 5
+        ctrl.set_parameter_value("damping", [250, 250, 250, 4, 4, 4], sr.ParameterType.DOUBLE_ARRAY)  # 35 35 2. 2.5
+        ctrl.set_parameter_value("inertia", [3.2, 3.2, 3.2, .1, .1, .1], sr.ParameterType.DOUBLE_ARRAY)
         # ctrl.set_parameter_value("stiffness", [150, 150, 150, 10, 10, 10], sr.ParameterType.DOUBLE_ARRAY)  # 100 100 5 5 - good: 80 80 5 5
         # ctrl.set_parameter_value("damping", [25, 25, 25, 4, 4, 4], sr.ParameterType.DOUBLE_ARRAY)  # 35 35 2. 2.5
         # ctrl.set_parameter_value("inertia", [.5, .5, .5, .1, .1, .1], sr.ParameterType.DOUBLE_ARRAY)
@@ -282,6 +285,7 @@ class MPC_vel_controller(object):
             # Received first command, set timeZero here
             if not self.planner_ready and self.read_message:
                 self.timeZero = rospy.get_rostime()
+                self.filtered_pos = state.ee_state.get_position()
                 self.planner_ready = True
 
             # Main loop
@@ -289,11 +293,19 @@ class MPC_vel_controller(object):
 
                 self.nIterTime = rospy.get_rostime() - self.timeZero
 
+                # END OF LOOP
+                if self.nIterTime.to_sec() > 10:
+                    self.plot_ref_vs_rec()
+                    break
+
                 # Use time index to find cmd in full_cmd
                 # self.curr_idx = np.abs(self.full_time_idx - self.nIterTime.to_sec()).argmin()
                 # self.cmd_pos = self.full_pos[self.curr_idx, :]
                 # self.raw_vel[0:3] = self.full_vel[self.curr_idx, :]
                 # self.raw_acc[0:3] = self.full_acc[self.curr_idx, :]
+
+                ## FILTER Position
+                self.filtered_pos = self.theta_cmd * self.filtered_pos + (1 - self.theta_cmd) * self.cmd_pos
 
                 ## Logic to set and filter command
                 # Check if we have received new planned cmd and update elapsed time accordingly
@@ -303,18 +315,14 @@ class MPC_vel_controller(object):
                 elif not self.read_message:
                     self.elapsed_time += period
 
-                # Check how long since last planned cmd and update command accordingly
+                # Check how long since last planned cmd and filter command accordingly
                 if self.elapsed_time.to_sec() < self.max_time_before_decay:
                     self.filtered_vel = self.alpha_cmd * self.filtered_vel + (1 - self.alpha_cmd) * self.raw_vel
-                    self.filtered_acc = self.alpha_cmd * self.filtered_acc + (1 - self.alpha_cmd) * self.raw_acc
+                    self.filtered_acc = self.beta_cmd * self.filtered_acc + (1 - self.beta_cmd) * self.raw_acc
                 else:
                     self.filtered_vel = self.alpha_cmd * self.filtered_vel + (1 - self.alpha_cmd) * 0
-                    self.filtered_acc = self.alpha_cmd * self.filtered_acc + (1 - self.alpha_cmd) * 0
+                    self.filtered_acc = self.beta_cmd * self.filtered_acc + (1 - self.beta_cmd) * 0
 
-                # END OF LOOP
-                if self.nIterTime.to_sec() > 10:
-                    self.plot_ref_vs_rec()
-                    break
 
                 ## SET and filter FEEDBACK state for controller
                 feedback_state.set_position(state.ee_state.get_position())
@@ -323,7 +331,7 @@ class MPC_vel_controller(object):
                 feedback_state.set_linear_velocity(dq_filtered)
 
                 ## SET DESIRED state
-                desired_state.set_position(self.cmd_pos[0:3])
+                desired_state.set_position(self.filtered_pos)
                 desired_state.set_linear_velocity(self.filtered_vel[0:3])
                 desired_state.set_linear_acceleration(self.filtered_acc[0:3])
 
@@ -341,7 +349,7 @@ class MPC_vel_controller(object):
                 self.recorded_state[self.idx, 1:4] = feedback_state.get_position()
                 self.recorded_state[self.idx, 4:7] = feedback_state.get_linear_velocity()
                 self.recorded_state[self.idx, 7:10] = ddq_filtered
-                self.recorded_state[self.idx, 10:13] = self.cmd_pos[0:3]
+                self.recorded_state[self.idx, 10:13] = self.filtered_pos
                 self.recorded_state[self.idx, 13:16] = self.filtered_vel[0:3]
                 self.recorded_state[self.idx, 16:19] = self.filtered_acc[0:3]
                 self.idx += 1

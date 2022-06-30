@@ -165,11 +165,11 @@ class MPC_vel_planner(object):
                     break
 
                 # Calculate trajectory using MPC planner
-                print("MPC planning trajectory from %s \n to %s \n" % (start[0:3], target[0:3]))
+                # print("MPC planning trajectory from %s \n to %s \n" % (start[0:3], target[0:3]))
                 start_time = time.time()
                 X, U, T = mpc_planner.control(start, target, curr_time)
-                print("Finished planning trajectory in %s seconds \n" % (time.time() - start_time))
-                print("FINAl POS OF PLANNER : ", X[-1, 0:3], "\n")
+                # print("Finished planning trajectory in %s seconds \n" % (time.time() - start_time))
+                # print("FINAl POS OF PLANNER : ", X[-1, 0:3], "\n")
                 # Publish joint states for recording
                 self.pub.publish(self.convert_cmd_msg(np.array(X), np.array(U), np.array(T)))
 
@@ -207,7 +207,7 @@ if __name__ == '__main__':
                                    n=x_dim, k=n_dim_features, fixed_stds=True, std=rbf_std)
 
     # SET PARAMETERS FOR MPC CONTROL
-    freq = 5
+    freq = 4
     dt = 0.1 # 1./freq  # 0.1  #
     n_steps = 5
 

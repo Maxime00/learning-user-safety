@@ -1,0 +1,12 @@
+Target(time)
+
+at beginning of traj horizon is far-> computes large delta_position with nn-zero velocities 
+at end of traj, target is very close -> delta_position very small with zero velocities, robot unable to execute (due to) friction??
+
+
+target(state)
+might be similar problem, other issue is :
+end of traj, small delta_pos with small velocities, robot is stuck with same target idx that is too close 
+
+
+both give very jittery trajectories, target(state) is worse
