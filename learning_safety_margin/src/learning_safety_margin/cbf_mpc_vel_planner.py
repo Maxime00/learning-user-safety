@@ -127,8 +127,8 @@ class CBFMPC_Controller(DoubleIntegrator):
         self.ubx[4: self.n_states*(self.N+1): self.n_states] = ws_lim[4,1]     # VY lower bound
         self.ubx[5: self.n_states*(self.N+1): self.n_states] = ws_lim[5,1]     # VZ lower bound
 
-        self.lbx[self.n_states*(self.N+1):] = -1.                 # v lower bound for all V
-        self.ubx[self.n_states*(self.N+1):] = 1.                  # v upper bound for all V
+        self.lbx[self.n_states*(self.N+1):] = -.5                 # v lower bound for all V
+        self.ubx[self.n_states*(self.N+1):] = .5                  # v upper bound for all V
 
 
     def control(self, x0, xgoal, t0=0):

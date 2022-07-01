@@ -32,7 +32,7 @@ class MPC_vel_controller(object):
 
         # control hyperparameters
         self.decay_rate = 0.99  # never used, what is this for ?
-        self.theta_cmd = 0.8 # filter position cmd
+        self.theta_cmd = 0.4 # filter position cmd
         self.alpha_cmd = 0.895  # filter vel cmd
         self.beta_cmd = 0.995 #995  # filter acc cmd
         self.alpha_feedback = 0.85 # filter feedback vel
@@ -52,8 +52,9 @@ class MPC_vel_controller(object):
         self.ref_vel = None
         self.ref_acc = None
         self.max_time = None
+        self.min_time = None
 
-        n_steps = 6  # n_steps from planner
+        n_steps = 6  # n_steps from planner +1
         self.full_time_idx = np.zeros(n_steps)
         self.full_pos = np.zeros((n_steps, 3))
         self.full_vel = np.zeros((n_steps, 3))
@@ -220,26 +221,26 @@ class MPC_vel_controller(object):
 
         # grab cmd and set read_msg flag to true
         # rospy.loginfo(rospy.get_caller_id() + "I heard %s", msg.commands[-1])
-        print("TIME FROM PLANNER BEGINNING: ", msg.commands[0].time)
-        print("TIME FROM PLANNER END: ", msg.commands[-1].time)
-        print("nITERTIME :", self.nIterTime.to_sec())
+        # print("TIME FROM PLANNER BEGINNING: ", msg.commands[0].time)
+        # print("TIME FROM PLANNER END: ", msg.commands[-1].time)
+        # print("nITERTIME :", self.nIterTime.to_sec())
         # print("DESIRED POSITION : ", np.asarray(msg.commands[1].position), np.asarray(msg.commands[-1].position))
         # print("DESIRED VELOCITY : ", np.asarray(msg.commands[1].velocity), np.asarray(msg.commands[-1].velocity))
         # print("DESIRED ACCELERATION : ", np.asarray(msg.commands[0].acceleration), np.asarray(msg.commands[-2].acceleration))
         # print("TIME SINCE LAST MESSAGE : ", self.elapsed_time.to_sec())
 
-        for i in range(0,len(msg.commands)-1):
+        for i in range(0, len(msg.commands)):
             self.full_time_idx[i] = msg.commands[i].time
             self.full_pos[i, :] = msg.commands[i].position
             self.full_vel[i, :] = msg.commands[i].velocity
             self.full_acc[i, :] = msg.commands[i].acceleration
 
-        # only interp here for first cmd
-        if not self.planner_ready:
-            self.ref_pos = interpolate.interp1d(self.full_time_idx, self.full_pos, axis=0)
-            self.ref_vel = interpolate.interp1d(self.full_time_idx, self.full_vel, axis=0)
-            self.ref_acc = interpolate.interp1d(self.full_time_idx, self.full_acc, axis=0)
-            self.max_time = self.full_time_idx[-1]
+        # # only interp here for first cmd
+        # if not self.planner_ready:
+        #     self.ref_pos = interpolate.interp1d(self.full_time_idx, self.full_pos, axis=0)
+        #     self.ref_vel = interpolate.interp1d(self.full_time_idx, self.full_vel, axis=0)
+        #     self.ref_acc = interpolate.interp1d(self.full_time_idx, self.full_acc, axis=0)
+        #     self.max_time = self.full_time_idx[-1]
 
         # self.cmd_pos = np.asarray(msg.commands[1].position)
         # self.raw_vel[0:3] = np.asarray(msg.commands[1].velocity)
@@ -255,15 +256,15 @@ class MPC_vel_controller(object):
         # SET UP CARTESIAN CTRL
         ctrl = create_cartesian_controller(CONTROLLER_TYPE.IMPEDANCE)
 
-        ctrl.set_parameter_value("stiffness", [40, 40, 40, 10, 10, 10], sr.ParameterType.DOUBLE_ARRAY)  # 100 100 5 5 - good: 80 80 5 5
-        ctrl.set_parameter_value("damping", [10, 10, 10, 4, 4, 4], sr.ParameterType.DOUBLE_ARRAY)  # 35 35 2. 2.5
-        ctrl.set_parameter_value("inertia", [0.5, 0.5, 0.5, .1, .1, .1], sr.ParameterType.DOUBLE_ARRAY)
+        # ctrl.set_parameter_value("stiffness", [40, 40, 40, 10, 10, 10], sr.ParameterType.DOUBLE_ARRAY)  # 100 100 5 5 - good: 80 80 5 5
+        # ctrl.set_parameter_value("damping", [10, 10, 10, 4, 4, 4], sr.ParameterType.DOUBLE_ARRAY)  # 35 35 2. 2.5
+        # ctrl.set_parameter_value("inertia", [0.5, 0.5, 0.5, .1, .1, .1], sr.ParameterType.DOUBLE_ARRAY)
         # ctrl.set_parameter_value("stiffness", [150, 150, 150, 10, 10, 10], sr.ParameterType.DOUBLE_ARRAY)  # 100 100 5 5 - good: 80 80 5 5
         # ctrl.set_parameter_value("damping", [25, 25, 25, 4, 4, 4], sr.ParameterType.DOUBLE_ARRAY)  # 35 35 2. 2.5
         # ctrl.set_parameter_value("inertia", [.5, .5, .5, .1, .1, .1], sr.ParameterType.DOUBLE_ARRAY)
-        # ctrl.set_parameter_value("stiffness", [20, 20, 20, 10, 10, 10], sr.ParameterType.DOUBLE_ARRAY)  # 100 100 5 5 - good: 80 80 5 5
-        # ctrl.set_parameter_value("damping", [5, 5, 5, 4, 4, 4], sr.ParameterType.DOUBLE_ARRAY)  # 35 35 2. 2.5
-        # ctrl.set_parameter_value("inertia", [.5, .5, .5, .1, .1, .1], sr.ParameterType.DOUBLE_ARRAY)
+        ctrl.set_parameter_value("stiffness", [20, 20, 20, 10, 10, 10], sr.ParameterType.DOUBLE_ARRAY)  # 100 100 5 5 - good: 80 80 5 5
+        ctrl.set_parameter_value("damping", [5, 5, 5, 4, 4, 4], sr.ParameterType.DOUBLE_ARRAY)  # 35 35 2. 2.5
+        ctrl.set_parameter_value("inertia", [.5, .5, .5, .1, .1, .1], sr.ParameterType.DOUBLE_ARRAY)
 
         desired_state = sr.CartesianState('panda_ee', 'panda_base')
         feedback_state = sr.CartesianState('panda_ee', 'panda_base')
@@ -305,11 +306,25 @@ class MPC_vel_controller(object):
             if self.planner_ready:
 
                 self.nIterTime = rospy.get_rostime() - self.timeZero
-                print("nitertime :", self.nIterTime.to_sec())
+                # print("nitertime :", self.nIterTime.to_sec())
                 # END OF LOOP
                 if self.nIterTime.to_sec() > 10:
+                    print("REACHED END OF TRAJ")
+                    error = np.linalg.norm(self.full_pos[-1, :] - state.ee_state.get_position())
+                    print("DISTANCE TO TARGET : ", error)
+
+                    # Stop robot
+                    command.joint_state = state.joint_state
+                    command.joint_state.set_torques(np.zeros(7))
+                    self.robot.send_command(command)
+
+                    print("WAIT ...")
+                    rospy.sleep(1.0)
+
                     self.plot_ref_vs_rec()
                     break
+
+                # print("stored full cmd :",self.full_pos, self.full_vel, self.full_acc)
 
                 ## Logic to set and filter command
                 # Check if we have received new planned cmd and update elapsed time accordingly - interpolate received trajectory
@@ -319,6 +334,7 @@ class MPC_vel_controller(object):
                     self.ref_vel = interpolate.interp1d(self.full_time_idx, self.full_vel, axis=0)
                     self.ref_acc = interpolate.interp1d(self.full_time_idx, self.full_acc, axis=0)
                     self.max_time = self.full_time_idx[-1]
+                    self.min_time = self.full_time_idx[0]
                     self.read_message = False
                 elif not self.read_message:
                     self.elapsed_time += period
@@ -326,13 +342,15 @@ class MPC_vel_controller(object):
 
                 # Use time index to find cmd in full_cmd
                 look_up_time = self.nIterTime.to_sec()
+                # small checks to avoid errors
                 if look_up_time > self.max_time:
                     look_up_time = self.max_time
+                if look_up_time < self.min_time:
+                    look_up_time = self.min_time
 
                 self.cmd_pos = self.ref_pos(look_up_time)
-                self.raw_vel[0:3] = self.ref_pos(look_up_time)
-                self.raw_acc[0:3] = self.ref_pos(look_up_time)
-
+                self.raw_vel[0:3] = self.ref_vel(look_up_time)
+                self.raw_acc[0:3] = self.ref_acc(look_up_time)
 
                 ## FILTER Position
                 self.filtered_pos = self.theta_cmd * self.filtered_pos + (1 - self.theta_cmd) * self.cmd_pos
@@ -389,7 +407,7 @@ class MPC_vel_controller(object):
 
                 # set state torques to read them in topic
                 state.joint_state.set_torques(command_torques.get_torques())
-                print("TIME REMAINING IN CONTROL LOOP :", rate.remaining().to_sec(), " seconds \n")
+                # print("TIME REMAINING IN CONTROL LOOP :", rate.remaining().to_sec(), " seconds \n")
 
             self.pub.publish(self.convert_joint_state_msg(state))
 

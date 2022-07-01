@@ -21,7 +21,7 @@ class MPC_vel_planner(object):
     def __init__(self):
 
         # create publisher and subscrber
-        self.pub = rospy.Publisher("/cmd_mpc", mpcTraj, queue_size=10) # what should queue size be
+        self.pub = rospy.Publisher("/cmd_mpc", mpcTraj, queue_size=1) # what should queue size be
         rospy.Subscriber("/ee_state", JointState, self.state_callback, queue_size=1)
 
         self.state = np.zeros(6) * np.nan
@@ -44,8 +44,10 @@ class MPC_vel_planner(object):
             cmd.velocity = x[i, 3:6]
 
             # one less U than X due to forward sim
-            if i < len(u[:, 0]):
-                cmd.acceleration = u[i, 0:3]
+            if i == 0:
+                cmd.acceleration = np.array([0., 0.0, 0.0])
+            else:
+                cmd.acceleration = u[i-1, 0:3]
 
             traj_msg.commands += [cmd]
 
@@ -143,7 +145,7 @@ class MPC_vel_planner(object):
                 # Avoid errors
                 if target_time > self.max_time:
                     target_time = self.max_time
-                    print("REACHED END OF COMMAND !!! \n")
+                    # print("REACHED END OF COMMAND !!! \n")
 
                 # Set target using time interpolation : position on reference traj at time : now + dt_init
                 target = self.ref_X(target_time)
@@ -165,19 +167,22 @@ class MPC_vel_planner(object):
                     break
 
                 # Calculate trajectory using MPC planner
-                print("MPC planning trajectory from %s \n to %s \n" % (curr_time, target_time))
+                # print("MPC planning trajectory from %s \n to %s \n" % (curr_time, target_time))
                 start_time = time.time()
                 X, U, T = mpc_planner.control(start, target, curr_time)
-                print("Finished planning trajectory in %s seconds \n" % (time.time() - start_time))
-                # print("FINAl POS OF PLANNER : ", X[-1, 0:3], "\n")
+                # print("Finished planning trajectory in %s seconds \n" % (time.time() - start_time))
+                # print("FINAl POS OF PLANNER : ", X[-1,:], "\n")
                 # Publish joint states for recording
                 self.pub.publish(self.convert_cmd_msg(np.array(X), np.array(U), np.array(T)))
 
                 # TODO :wait for control to receive first traj and send back state ???
                 # ISSUE : second traj is also computed from 0 to 0.5 instead of using updated nitertime -> WHY
+                # if self.first_traj :
+                #     rospy.sleep(0.01)
+                #     self.first_traj = False
 
 
-            print("TIME REMAINING IN PLANNER LOOP :", rate.remaining().to_sec(), " seconds \n")
+            # print("TIME REMAINING IN PLANNER LOOP :", rate.remaining().to_sec(), " seconds \n")
             rate.sleep()
 
 
