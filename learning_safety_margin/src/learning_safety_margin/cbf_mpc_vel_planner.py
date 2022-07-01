@@ -13,7 +13,7 @@ class DoubleIntegrator():
 
 class CBFMPC_Controller(DoubleIntegrator):
 
-    def __init__(self, centers, stds, theta, bias, dt=0.1, n_steps=10):
+    def __init__(self, centers, stds, theta, bias, dt=0.1, n_steps=10, v_gain = 10, r_gains =1):
 
         super().__init__(dt)
         # Set MPC Parameters
@@ -39,10 +39,10 @@ class CBFMPC_Controller(DoubleIntegrator):
         self.Q_x = 100
         self.Q_y = 100
         self.Q_theta = 100
-        self.Q_v = 10
-        self.R1 = 1
-        self.R2 = 1
-        self.R3 = 1
+        self.Q_v = v_gain
+        self.R1 = r_gains
+        self.R2 = r_gains
+        self.R3 = r_gains
 
         self.Q = casadi.diagcat(self.Q_x, self.Q_y, self.Q_theta, self.Q_v, self.Q_v, self.Q_v) # State Weights 
         self.R = casadi.diagcat(self.R1, self.R2, self.R3) # Control Weights
@@ -127,8 +127,8 @@ class CBFMPC_Controller(DoubleIntegrator):
         self.ubx[4: self.n_states*(self.N+1): self.n_states] = ws_lim[4,1]     # VY lower bound
         self.ubx[5: self.n_states*(self.N+1): self.n_states] = ws_lim[5,1]     # VZ lower bound
 
-        self.lbx[self.n_states*(self.N+1):] = -.5                 # v lower bound for all V
-        self.ubx[self.n_states*(self.N+1):] = .5                  # v upper bound for all V
+        self.lbx[self.n_states*(self.N+1):] = -1                 # v lower bound for all V
+        self.ubx[self.n_states*(self.N+1):] = 1                # v upper bound for all V
 
 
     def control(self, x0, xgoal, t0=0):

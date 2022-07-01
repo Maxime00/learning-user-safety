@@ -142,13 +142,16 @@ class MPC_vel_planner(object):
                 curr_state = self.state
                 target_time = curr_time+dt*n_steps
 
+                # Set target using time interpolation : position on reference traj at time : now + dt_init
                 # Avoid errors
                 if target_time > self.max_time:
                     target_time = self.max_time
-                    # print("REACHED END OF COMMAND !!! \n")
-
-                # Set target using time interpolation : position on reference traj at time : now + dt_init
+                #     target = self.ref_X(target_time)
+                #     target[3:6] = curr_state[3:6]
+                #     print("REACHED END OF COMMAND !!! \n")
+                # else:
                 target = self.ref_X(target_time)
+                # target = self.ref_X(self.max_time)
 
                 # Set target using closest state + next index
                 # norm_arr = np.zeros((len(self.ref_X[:,0])))
@@ -156,7 +159,7 @@ class MPC_vel_planner(object):
                 #     norm_arr[i] = np.linalg.norm(self.ref_X[i, 0:3] - curr_state[0:3])
                 # idx = norm_arr.argmin()
                 # target = self.ref_X[idx+n_steps, :]
-                # print("TARGET IDX :", idx)
+                # print("TARGET IDX :", idx+n_steps)
 
                 # Set initial pose
                 start = curr_state
@@ -164,7 +167,7 @@ class MPC_vel_planner(object):
                 # if np.linalg.norm(start[0:3] - self.ref_X[-1, 0:3]) < 0.001:
                 if np.linalg.norm(start[0:3] - target[0:3]) < 0.01:
                     print("CLOSE ENOUGH TO TARGET !!! \n")
-                    break
+                    # break
 
                 # Calculate trajectory using MPC planner
                 # print("MPC planning trajectory from %s \n to %s \n" % (curr_time, target_time))
@@ -217,7 +220,7 @@ if __name__ == '__main__':
 
     # SET PARAMETERS FOR MPC CONTROL
     freq = 5
-    dt = 0.1 # 1./freq  # 0.1  #
+    dt = 0.2 # 1./freq  # 0.1  #
     n_steps = 5
 
     dt_init = 0.2  # 1./freq  should be same as dt ???
@@ -226,7 +229,7 @@ if __name__ == '__main__':
     # Instantiate 1st MPC controller -> FOR INITIAL TRAJECTORY
     print("Instantiating 1st MPC Planner, should take around %s seconds... \n" % (n_steps_init / 2))
     instantiate_start = time.time()
-    init_traj_planner = CBFMPC_Controller(centers, stds, params, bias_param, dt=dt_init, n_steps=n_steps_init)
+    init_traj_planner = CBFMPC_Controller(centers, stds, params, bias_param, dt=dt_init, n_steps=n_steps_init, r_gains = 100)
     print("FINISH INSTANTIATING MPC PLANNER IN %s seconds \n" % (time.time() - instantiate_start))
 
     # save_dir = "/home/ros/ros_ws/src/learning_safety_margin/data/User_0/MPC/ref_traj/"
@@ -237,7 +240,7 @@ if __name__ == '__main__':
     # Instantiate actual MPC controller
     print("Instantiating 2nd MPC Planner, should take around %s seconds... \n"%(n_steps/2))
     instantiate_start = time.time()
-    mpc_planner = CBFMPC_Controller(centers, stds, params, bias_param, dt=dt, n_steps=n_steps)
+    mpc_planner = CBFMPC_Controller(centers, stds, params, bias_param, dt=dt, n_steps=n_steps, v_gain = 0 , r_gains = 1)
     print("FINISH INSTANTIATING MPC PLANNER IN %s seconds \n" % (time.time() - instantiate_start))
 
     # Set save dir and create folder if needed
