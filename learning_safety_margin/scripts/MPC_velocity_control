@@ -2,7 +2,9 @@
 
 import numpy as np
 import rospy
+import os
 import state_representation as sr
+from scipy import interpolate
 from dynamical_systems import create_cartesian_ds, DYNAMICAL_SYSTEM_TYPE
 from network_interfaces.control_type import ControlType
 from network_interfaces.zmq.network import CommandMessage
@@ -28,26 +30,35 @@ class MPC_vel_controller(object):
         self.elapsed_time = rospy.Duration()
         self.prev_loop_time = rospy.Time()
 
-        # control hyperparameters
-        self.decay_rate = 0.99  # never used, what is this for ?
-        self.alpha_cmd = 0.2995  # filter vel and acc cmd
-        self.alpha_feedback = 0.6 # filter feedback vel
-        self.beta_feedback = 0.9  # filter feedback acc -> only for recording anyway
-        self.max_time_before_decay = 0.2  # seconds
-
         # Storing commands
         self.cmd_pos = np.zeros(3)
+        self.filtered_pos = np.zeros(3)
         self.raw_vel = np.zeros(6)
         self.filtered_vel = np.zeros(6)
         self.raw_acc = np.zeros(6)
         self.filtered_acc = np.zeros(6)
         self.timeZero = rospy.get_rostime()
         self.nIterTime = rospy.Duration()
+        self.ref_pos = None
+        self.ref_vel = None
+        self.ref_acc = None
+        self.max_time = None
+        self.min_time = None
 
-        self.full_time_idx = np.zeros(6)
-        self.full_pos = np.zeros((6, 3))
-        self.full_vel = np.zeros((6, 3))
-        self.full_acc = np.zeros((6, 3))
+        # control hyperparameters
+        self.decay_rate = 0.99  # never used, what is this for ?
+        self.theta_cmd = 0.65  # filter position cmd  .9 for target(state) with low vel weight , more like .75 otherwise
+        self.alpha_cmd = 0.95  # filter vel cmd
+        self.beta_cmd = 0.995  # 995  # filter acc cmd
+        self.alpha_feedback = 0.75  # filter feedback vel
+        self.beta_feedback = 0.97  # filter feedback acc -> only for recording anyway
+        self.max_time_before_decay = 0.2  # seconds
+
+        n_steps = 6  # n_steps from planner +1
+        self.full_time_idx = np.zeros(n_steps)
+        self.full_pos = np.zeros((n_steps, 3))
+        self.full_vel = np.zeros((n_steps, 3))
+        self.full_acc = np.zeros((n_steps, 3))
         self.curr_idx = 0
 
         # data for plots
@@ -60,8 +71,17 @@ class MPC_vel_controller(object):
 
         # clean recorded data
         self.recorded_state = self.recorded_state[~np.isnan(self.recorded_state).any(axis=1)]
-        # save file -> set save dir somewhere
-        # np.save(save_dir + "_MPC_eeState", recorded_state, allow_pickle=False)
+
+        # Set save dir and create folder if needed
+        data_dir = "/home/ros/ros_ws/src/learning_safety_margin/data/"
+        save_dir = data_dir + "MPC_tests/tuning/"
+        if not os.path.isdir(save_dir):
+            os.mkdir(save_dir)
+        # count number of MPC trajectories and set name for this traj accordingly
+        count_prev_traj = sum(len(files) for _, _, files in os.walk(save_dir))
+        save_dir += str(count_prev_traj)
+
+        np.save(save_dir + "_MPC_eeState", self.recorded_state, allow_pickle=False)
 
         # grab ref traj
         save_dir = "/home/ros/ros_ws/src/learning_safety_margin/data/User_0/MPC/ref_traj/"
@@ -210,24 +230,31 @@ class MPC_vel_controller(object):
 
         # grab cmd and set read_msg flag to true
         # rospy.loginfo(rospy.get_caller_id() + "I heard %s", msg.commands[-1])
+        if self.nIterTime.to_sec() < 10 :
+            print("TIME FROM PLANNER BEGINNING: ", msg.commands[0].time)
+            print("TIME FROM PLANNER END: ", msg.commands[-1].time)
+            print("nITERTIME :", self.nIterTime.to_sec())
+            print("DESIRED POSITION : ", np.asarray(msg.commands[1].position), np.asarray(msg.commands[-1].position))
+            print("DESIRED VELOCITY : ", np.asarray(msg.commands[1].velocity), np.asarray(msg.commands[-1].velocity))
+            print("DESIRED ACCELERATION : ", np.asarray(msg.commands[0].acceleration), np.asarray(msg.commands[-2].acceleration))
+            print("TIME SINCE LAST MESSAGE : ", self.elapsed_time.to_sec())
 
-        print("DESIRED POSITION : ", np.asarray(msg.commands[1].position), np.asarray(msg.commands[-1].position))
-        print("DESIRED VELOCITY : ", np.asarray(msg.commands[1].velocity), np.asarray(msg.commands[-1].velocity))
-        print("DESIRED ACCELERATION : ", np.asarray(msg.commands[0].acceleration), np.asarray(msg.commands[-2].acceleration))
-        print("TIME SINCE LAST MESSAGE : ", self.elapsed_time.to_sec())
+        for i in range(0, len(msg.commands)):
+            self.full_time_idx[i] = msg.commands[i].time
+            self.full_pos[i, :] = msg.commands[i].position
+            self.full_vel[i, :] = msg.commands[i].velocity
+            self.full_acc[i, :] = msg.commands[i].acceleration
 
-        # TODO : gonna need to convert/extract data somehow
+        # # only interp here for first cmd
+        # if not self.planner_ready:
+        #     self.ref_pos = interpolate.interp1d(self.full_time_idx, self.full_pos, axis=0)
+        #     self.ref_vel = interpolate.interp1d(self.full_time_idx, self.full_vel, axis=0)
+        #     self.ref_acc = interpolate.interp1d(self.full_time_idx, self.full_acc, axis=0)
+        #     self.max_time = self.full_time_idx[-1]
 
-        ## TODO : should not overwrite those probably
-        # for i in range(0,len(msg.commands)-1):
-        #     self.full_time_idx[i] = msg.commands[i].time
-        #     self.full_pos[i, :] = msg.commands[i].position
-        #     self.full_vel[i, :] = msg.commands[i].velocity
-        #     self.full_acc[i, :] = msg.commands[i].acceleration
-
-        self.cmd_pos = np.asarray(msg.commands[1].position)
-        self.raw_vel[0:3] = np.asarray(msg.commands[1].velocity)
-        self.raw_acc[0:3] = np.asarray(msg.commands[0].acceleration)
+        # self.cmd_pos = np.asarray(msg.commands[1].position)
+        # self.raw_vel[0:3] = np.asarray(msg.commands[1].velocity)
+        # self.raw_acc[0:3] = np.asarray(msg.commands[0].acceleration)
         self.read_message = True
 
     def control_loop(self, freq):
@@ -239,13 +266,13 @@ class MPC_vel_controller(object):
         # SET UP CARTESIAN CTRL
         ctrl = create_cartesian_controller(CONTROLLER_TYPE.IMPEDANCE)
 
-        ctrl.set_parameter_value("stiffness", [500, 500, 500, 10, 10, 10], sr.ParameterType.DOUBLE_ARRAY)  # 100 100 5 5 - good: 80 80 5 5
-        ctrl.set_parameter_value("damping", [200, 200, 200, 4, 4, 4], sr.ParameterType.DOUBLE_ARRAY)  # 35 35 2. 2.5
-        ctrl.set_parameter_value("inertia", [3, 3, 3, .1, .1, .1], sr.ParameterType.DOUBLE_ARRAY)
+        ctrl.set_parameter_value("stiffness", [100, 100, 100, 10, 10, 10], sr.ParameterType.DOUBLE_ARRAY)  # 100 100 5 5 - good: 80 80 5 5
+        ctrl.set_parameter_value("damping", [30, 30, 30, 5, 5, 5], sr.ParameterType.DOUBLE_ARRAY)  # 35 35 2. 2.5
+        ctrl.set_parameter_value("inertia", [0.5, 0.5, 0.5, .1, .1, .1], sr.ParameterType.DOUBLE_ARRAY)
         # ctrl.set_parameter_value("stiffness", [150, 150, 150, 10, 10, 10], sr.ParameterType.DOUBLE_ARRAY)  # 100 100 5 5 - good: 80 80 5 5
         # ctrl.set_parameter_value("damping", [25, 25, 25, 4, 4, 4], sr.ParameterType.DOUBLE_ARRAY)  # 35 35 2. 2.5
         # ctrl.set_parameter_value("inertia", [.5, .5, .5, .1, .1, .1], sr.ParameterType.DOUBLE_ARRAY)
-        # ctrl.set_parameter_value("stiffness", [10, 10, 10, 10, 10, 10], sr.ParameterType.DOUBLE_ARRAY)  # 100 100 5 5 - good: 80 80 5 5
+        # ctrl.set_parameter_value("stiffness", [20, 20, 20, 10, 10, 10], sr.ParameterType.DOUBLE_ARRAY)  # 100 100 5 5 - good: 80 80 5 5
         # ctrl.set_parameter_value("damping", [5, 5, 5, 4, 4, 4], sr.ParameterType.DOUBLE_ARRAY)  # 35 35 2. 2.5
         # ctrl.set_parameter_value("inertia", [.5, .5, .5, .1, .1, .1], sr.ParameterType.DOUBLE_ARRAY)
 
@@ -281,6 +308,7 @@ class MPC_vel_controller(object):
 
             # Received first command, set timeZero here
             if not self.planner_ready and self.read_message:
+                self.filtered_pos = state.ee_state.get_position()
                 self.timeZero = rospy.get_rostime()
                 self.planner_ready = True
 
@@ -288,33 +316,69 @@ class MPC_vel_controller(object):
             if self.planner_ready:
 
                 self.nIterTime = rospy.get_rostime() - self.timeZero
+                # print("nitertime :", self.nIterTime.to_sec())
+                # END OF LOOP
+                if self.nIterTime.to_sec() > 15:
+                    print("REACHED END OF TRAJ")
+                    error = np.linalg.norm(self.full_pos[-1, :] - state.ee_state.get_position())
+                    print("DISTANCE TO TARGET : ", error)
 
-                # Use time index to find cmd in full_cmd
-                # self.curr_idx = np.abs(self.full_time_idx - self.nIterTime.to_sec()).argmin()
-                # self.cmd_pos = self.full_pos[self.curr_idx, :]
-                # self.raw_vel[0:3] = self.full_vel[self.curr_idx, :]
-                # self.raw_acc[0:3] = self.full_acc[self.curr_idx, :]
+                    # Stop robot
+                    command.joint_state = state.joint_state
+                    command.joint_state.set_torques(np.zeros(7))
+                    self.robot.send_command(command)
+
+                    print("WAIT ...")
+                    rospy.sleep(1.0)
+
+                    self.plot_ref_vs_rec()
+                    break
+
+                # print("stored full cmd :",self.full_pos, self.full_vel, self.full_acc)
 
                 ## Logic to set and filter command
-                # Check if we have received new planned cmd and update elapsed time accordingly
+                # Check if we have received new planned cmd and update elapsed time accordingly - interpolate received trajectory
                 if self.read_message:
                     self.elapsed_time = rospy.Duration(0.0)
+                    self.ref_pos = interpolate.interp1d(self.full_time_idx, self.full_pos, axis=0)
+                    self.ref_vel = interpolate.interp1d(self.full_time_idx, self.full_vel, axis=0)
+                    self.ref_acc = interpolate.interp1d(self.full_time_idx, self.full_acc, axis=0)
+                    self.max_time = self.full_time_idx[-1]
+                    self.min_time = self.full_time_idx[0]
                     self.read_message = False
                 elif not self.read_message:
                     self.elapsed_time += period
 
-                # Check how long since last planned cmd and update command accordingly
-                if self.elapsed_time.to_sec() < self.max_time_before_decay:
+
+                # Use time index to find cmd in full_cmd
+                look_up_time = self.nIterTime.to_sec()
+                # small checks to avoid errors
+                if look_up_time > self.max_time:
+                    look_up_time = self.max_time
+
+                    # # starts decay if reached end of 5step command -- doesn't seem to change much
+                    # self.elapsed_time = rospy.Duration(0.2)
+
+                if look_up_time < self.min_time:
+                    look_up_time = self.min_time
+
+
+                self.cmd_pos = self.ref_pos(look_up_time)
+                self.raw_vel[0:3] = self.ref_vel(look_up_time)
+                self.raw_acc[0:3] = self.ref_acc(look_up_time)
+
+                ## FILTER Position
+                self.filtered_pos = self.theta_cmd * self.filtered_pos + (1 - self.theta_cmd) * self.cmd_pos
+
+                # Check how long since last planned cmd and filter command accordingly
+                if self.elapsed_time.to_sec() < self.max_time_before_decay :
                     self.filtered_vel = self.alpha_cmd * self.filtered_vel + (1 - self.alpha_cmd) * self.raw_vel
-                    self.filtered_acc = self.alpha_cmd * self.filtered_acc + (1 - self.alpha_cmd) * self.raw_acc
+                    self.filtered_acc = self.beta_cmd * self.filtered_acc + (1 - self.beta_cmd) * self.raw_acc
                 else:
                     self.filtered_vel = self.alpha_cmd * self.filtered_vel + (1 - self.alpha_cmd) * 0
-                    self.filtered_acc = self.alpha_cmd * self.filtered_acc + (1 - self.alpha_cmd) * 0
+                    self.filtered_acc = self.beta_cmd * self.filtered_acc + (1 - self.beta_cmd) * 0
+                    print("DECAYING COMMAND at time :", self.nIterTime.to_sec())
 
-                # END OF LOOP
-                if self.nIterTime.to_sec() > 10:
-                    self.plot_ref_vs_rec()
-                    break
 
                 ## SET and filter FEEDBACK state for controller
                 feedback_state.set_position(state.ee_state.get_position())
@@ -323,13 +387,18 @@ class MPC_vel_controller(object):
                 feedback_state.set_linear_velocity(dq_filtered)
 
                 ## SET DESIRED state
-                desired_state.set_position(self.cmd_pos[0:3])
+                desired_state.set_position(self.filtered_pos)
                 desired_state.set_linear_velocity(self.filtered_vel[0:3])
                 desired_state.set_linear_acceleration(self.filtered_acc[0:3])
 
                 # TODO : add orientation control from DS here
-                # twist = sr.CartesianTwist(ds.evaluate(state.ee_state))
-                # twist.clamp(.25, .5)
+                twist = sr.CartesianTwist(ds.evaluate(state.ee_state))
+                twist.clamp(.25, .5)
+                desired_state.set_angular_velocity(twist.data()[3:6])
+                feedback_state.set_angular_velocity(state.ee_state.get_angular_velocity())
+
+                desired_state.set_orientation(np.array([0., 1., 0., 0.]))
+                feedback_state.set_orientation(state.ee_state.get_orientation())
 
                 # compute linear acceleration for data_recording
                 if not np.isnan(self.recorded_state[self.idx-1, 0]):
@@ -341,7 +410,7 @@ class MPC_vel_controller(object):
                 self.recorded_state[self.idx, 1:4] = feedback_state.get_position()
                 self.recorded_state[self.idx, 4:7] = feedback_state.get_linear_velocity()
                 self.recorded_state[self.idx, 7:10] = ddq_filtered
-                self.recorded_state[self.idx, 10:13] = self.cmd_pos[0:3]
+                self.recorded_state[self.idx, 10:13] = self.filtered_pos
                 self.recorded_state[self.idx, 13:16] = self.filtered_vel[0:3]
                 self.recorded_state[self.idx, 16:19] = self.filtered_acc[0:3]
                 self.idx += 1
@@ -358,8 +427,10 @@ class MPC_vel_controller(object):
 
                 # set state torques to read them in topic
                 state.joint_state.set_torques(command_torques.get_torques())
+                # print("TIME REMAINING IN CONTROL LOOP :", rate.remaining().to_sec(), " seconds \n")
 
             self.pub.publish(self.convert_joint_state_msg(state))
+
             rate.sleep()
 
 
@@ -370,6 +441,6 @@ if __name__ == '__main__':
     robot_interface = RobotInterface("*:1701", "*:1702")
     controller = MPC_vel_controller(robot_interface)
 
-    freq = 200
+    freq = 100
 
     controller.control_loop(freq)

@@ -134,7 +134,7 @@ future
 ```console
 bash build-server.sh
 aica-docker interactive learning-safety-margin:noetic -u ros --net host --no-hostname -v data_vol:/home/ros/ros_ws/src/learning_safety_margin/data
-roslaunch learning_safety_margin demo.launch demo:=joint_torque_traj_follow_control user_number:=1 safety:=safe
+roslaunch learning_safety_margin demo.launch demo:=joint_torque_traj_follow_control args_for_control:="test 1"
 roslaunch learning_safety_margin mpc_control.launch robot_name:=franka args_for_planner:=0
 ```
 
@@ -153,7 +153,7 @@ current working scripts :
 
 
 # TODO 
-- 
+- smoother trajectory for MPC - > add orientation
 - add logic to play several trajectories of varying safety in planner - > check ahalya' scode, make somethi nto match that
 - add integrator to replays
 - replays must choose and output safety and traj_number
