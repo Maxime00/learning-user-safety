@@ -244,16 +244,16 @@ def vel_learning(user_number):
 
     ### Set up Minimization
     # Sample Data
-    n_safe_sample = 300#50
+    n_safe_sample = 400#50
     x_safe = safe_pts[::n_safe_sample]
     safe_rewards = safe_rewards[::n_safe_sample]
 
-    n_unsafe_sample = 300#20
+    n_unsafe_sample = 100#20
     x_unsafe = unsafe_pts[::n_unsafe_sample]
     unsafe_rewards = unsafe_rewards[::n_unsafe_sample]
     unsafe_tte = unsafe_ttelist[::n_unsafe_sample]
 
-    n_semisafe_sample = 200#10
+    n_semisafe_sample = 300#10
     x_semisafe = semisafe_pts[::n_semisafe_sample]
     u_semisafe = semisafe_u[::n_semisafe_sample]
     semisafe_rewards = semisafe_rewards[::n_semisafe_sample]
@@ -273,8 +273,8 @@ def vel_learning(user_number):
     psi = 1.0
     dt = 0.1
     mu_dist = (ws_lim[:, 1]-ws_lim[:,0])/n_dim_features
-
-    rbf_std = onp.max(mu_dist) * 0.5 #0.1#1.0
+    print("Check: ", mu_dist, onp.max(mu_dist)*0.5)
+    rbf_std = 0.15#onp.max(mu_dist) * 0.5 #0.1#1.0
     print(rbf_std)
     # rbf_std = 0.5
     centers, stds = rbf_means_stds(X=None, X_lim = np.array([x_lim,y_lim,z_lim, vdot_lim, vdot_lim, vdot_lim]),
