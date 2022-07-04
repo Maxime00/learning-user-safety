@@ -29,9 +29,9 @@ def vel_learning(user_number):
 
 
     # Velocity Limits
-    x_lim = [0., 1.]
+    x_lim = [0.2, 1.]
     y_lim = [-0.5, 0.5]
-    z_lim = [0., 0.5]
+    z_lim = [0., 0.8]
     vdot_lim = [-1., 1.]
 
     ws_lim = onp.vstack((x_lim, y_lim, z_lim, vdot_lim, vdot_lim, vdot_lim))

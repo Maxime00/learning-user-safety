@@ -35,7 +35,7 @@ Go to franka-lightweight-interface and run docker with following commands :
 ```console
 cd Workspace/franka-lightweight-interface
 bash run-rt.sh
-franka_lightweight_interface 17 panda_ --sensitivity low --damping off
+franka_lightweight_interface 17 panda_ --sensitivity low --joint-damping off
 ```
 
 ### To connect to simulator robot

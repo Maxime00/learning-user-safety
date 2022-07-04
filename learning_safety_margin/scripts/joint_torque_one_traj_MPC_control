@@ -171,9 +171,9 @@ def control_loop(planner, robot, freq):
     # SET UP CARTESIAN CTRL
     ctrl = create_cartesian_controller(CONTROLLER_TYPE.IMPEDANCE)
 
-    ctrl.set_parameter_value("stiffness", [150, 150, 150, 10, 10, 10], sr.ParameterType.DOUBLE_ARRAY) # 100 100 5 5 - good: 80 80 5 5
-    ctrl.set_parameter_value("damping", [25, 25, 25, 4, 4, 4], sr.ParameterType.DOUBLE_ARRAY) # 35 35 2. 2.5
-    ctrl.set_parameter_value("inertia", [.25, .25, .25, .1, .1, .1], sr.ParameterType.DOUBLE_ARRAY)
+    ctrl.set_parameter_value("stiffness", [150, 150, 150, 6, 6, 6], sr.ParameterType.DOUBLE_ARRAY) # 100 100 5 5 - good: 80 80 5 5
+    ctrl.set_parameter_value("damping", [25, 25, 25, 3, 3, 3], sr.ParameterType.DOUBLE_ARRAY) # 35 35 2. 2.5
+    ctrl.set_parameter_value("inertia", [.5, .5, .5, .1, .1, .1], sr.ParameterType.DOUBLE_ARRAY)
 
     # DS for orientation control
     ds = create_cartesian_ds(DYNAMICAL_SYSTEM_TYPE.POINT_ATTRACTOR)
@@ -202,20 +202,19 @@ def control_loop(planner, robot, freq):
     target_y_lim = 0.3
 
     n_dim = 3  # cartesian space[x,y,z]]
-    alpha = 0.8
-    alpha_ang = 0.2
+    alpha = 0.85
+    alpha_ang = 0.8
     dq_filtered = np.zeros(n_dim)
     dq_filtered_ang = np.zeros(n_dim)
 
-    beta = 0.05
+    beta = 0.95
     ddq_filtered = np.zeros(n_dim)
 
     recorded_state = np.zeros((10000, 1 + n_dim * 6 + 7))* np.nan
     idx= 0
 
     # wait a bit to receive correct state
-    wait_k_loops = 5
-    k=0
+    checked_first_state = True
 
     rate = rospy.Rate(freq)
     while not rospy.is_shutdown():
@@ -225,8 +224,11 @@ def control_loop(planner, robot, freq):
         if not state:
             continue
 
-        if k< wait_k_loops:
-            k+=1
+        # Wait a bit so state is correct
+        elif state and checked_first_state :
+            print("EEF position: ", state.ee_state.get_position())
+            rospy.sleep(0.1)
+            checked_first_state = False
             continue
 
         print("EEF position: ", state.ee_state.get_position())
@@ -278,7 +280,7 @@ def control_loop(planner, robot, freq):
 
                 # wait loop to read terminal
                 print("WAIT a sec...")
-                rospy.sleep(3.0)
+                rospy.sleep(2.0)
 
                 computed_traj = True
                 timeZero = time.time()
@@ -310,12 +312,12 @@ def control_loop(planner, robot, freq):
                 feedback_state.set_position(state.ee_state.get_position())
 
                 # filter velocities
-                dq_filtered = (1 - alpha) * dq_filtered + alpha * state.ee_state.get_linear_velocity()
+                dq_filtered =  alpha * dq_filtered + (1 - alpha) * state.ee_state.get_linear_velocity()
                 feedback_state.set_linear_velocity(dq_filtered)
 
                 # orientation
                 feedback_state.set_orientation(state.ee_state.get_orientation())
-                dq_filtered_ang= (1 - alpha_ang) * dq_filtered_ang + alpha_ang * state.ee_state.get_angular_velocity()
+                dq_filtered_ang= alpha_ang * dq_filtered_ang + (1-alpha_ang)* state.ee_state.get_angular_velocity()
                 feedback_state.set_angular_velocity(dq_filtered_ang)
 
                 ## Get desired state from traj
@@ -328,30 +330,32 @@ def control_loop(planner, robot, freq):
 
                 # Set desired angular velocity
                 ds_twist = sr.CartesianTwist(ds.evaluate(feedback_state))
-                ds_twist.clamp(.25, .15)
+                ds_twist.clamp(.25, .5)
                 desired_state.set_angular_velocity(ds_twist.data()[3:6])
 
                 # integrate angular vel and add to quaternion ??
-                orientation = feedback_state.get_orientation()
-                angVel = ds_twist.data()[3:6]
-                orient_dt = 0.5 * angVel * time_period
-                quat_dt = Quaternion(1.0, orient_dt[0],orient_dt[1], orient_dt[2])
-                # print(quat_dt)
-                orientation.__add__(quat_dt)
+                # orientation = feedback_state.get_orientation()
+                # angVel = ds_twist.data()[3:6]
+                # orient_dt = 0.5 * angVel * time_period
+                # quat_dt = Quaternion(1.0, orient_dt[0],orient_dt[1], orient_dt[2])
+                # # print(quat_dt)
+                # orientation.__add__(quat_dt)
                 # print(orientation)
                 # print(type(orientation))
-                desired_state.set_orientation(orientation)
+                # desired_state.set_orientation(orientation)
+                desired_state.set_orientation(np.array([0., 1., 0., 0.]))
 
                 # compute linear acceleration for data_recording
                 if not np.isnan(recorded_state[idx-1, 0]):
                     acc = (feedback_state.get_linear_velocity() - recorded_state[idx-1, 4:7])/(nIter_time - recorded_state[idx-1, 0])
-                    ddq_filtered = (1 - beta) * ddq_filtered + beta* acc
+                    ddq_filtered =  beta * ddq_filtered + (1 - beta)* acc
 
                 ## DEBUG prints
                 print("Cartesian positions: ", feedback_state.get_position())
                 print("Cartesian Velocities: ", feedback_state.get_linear_velocity())
                 print("Cartesian Accelerations: ", ddq_filtered)
                 print("Desired positions: ", desired_state.get_position())
+                print("Current orientation: ", feedback_state.get_orientation())
                 print("Desired orientation: ", desired_state.get_orientation())
                 print("Desired Velocities: ", desired_state.get_linear_velocity())
                 print("Desired Angular Velocities: ", desired_state.get_angular_velocity())
@@ -415,7 +419,7 @@ if __name__ == '__main__':
     else:
         user_number = '0'
 
-    print("Running one_traj MPC Controller for User_"+user_number+"\n")
+    print("\n Running single trajectory MPC Controller for User_"+user_number+"\n")
 
     # Get data
     data_dir = "/home/ros/ros_ws/src/learning_safety_margin/data/User_"+user_number+"/"
@@ -434,14 +438,14 @@ if __name__ == '__main__':
 
     # SET PARAMETERS FOR MPC CONTROL
     freq = 100
-    dt = 0.1  # 1./freq
-    n_steps = 40
+    dt = 0.2  # 1./freq
+    n_steps = 50
 
 
     # Init MPC controller
     print("Instantiating MPC Planner, should take around %s seconds... \n"%(n_steps/2))
     instantiate_start = time.time()
-    mpc_planner = CBFMPC_Controller(centers, stds, params, bias_param, dt=dt, n_steps=n_steps)
+    mpc_planner = CBFMPC_Controller(centers, stds, params, bias_param, dt=dt, n_steps=n_steps, r_gains = 100)
     print("FINISH INSTANTIATING MPC PLANNER IN %s seconds \n" % (time.time() - instantiate_start))
 
     # Set save dir and create folder if needed

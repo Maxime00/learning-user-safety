@@ -67,7 +67,6 @@ class CBFMPC_Controller(DoubleIntegrator):
         self.h_fun = casadi.Function('h_fun', [self.x],  [self.h])
 
         # Set up Cost Function and Constraint Expressions
-
         self.cost_fn = 0
         self.constraints = self.X[:,0] - self.P[:self.n_states] # Initialize constraint list with x0 constraint
         self.lb_con = np.array([0]*self.n_states)
