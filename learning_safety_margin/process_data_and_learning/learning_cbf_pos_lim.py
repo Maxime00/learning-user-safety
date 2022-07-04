@@ -35,9 +35,9 @@ def pos_learning(user_number):
     nDaring = len(os.listdir(rosbag_dir+"daring"))
 
 
-    x_lim = [0., 1.]
-    y_lim = [-0.5, 0.5]
-    z_lim = [0., 0.5]
+    x_lim = [0.2, 0.8]#[0., 1.]
+    y_lim = [-.45, .45]#[-0.5, 0.5]
+    z_lim = [0.1, 0.6]#[0., 0.5]
     ws_lim = onp.vstack((x_lim, y_lim, z_lim))
 
     # Define Dynamical System
@@ -62,32 +62,63 @@ def pos_learning(user_number):
     fig = plt.figure()
     ax = fig.add_subplot(111, projection='3d')
     safe_traj = []
+    nInvalidSafe = 0
     for i in range(0, nSafe):
         fname = csv_dir + 'safe/' + str(i + 1) + '_eePosition.txt'
-        pos = onp.loadtxt(fname, delimiter=',')[:,0:3]
-        safe_traj.append(pos)
-        ax.plot(pos[:, 0], pos[:, 1], pos[:, 2], 'g')
+        if os.path.exists(fname):
+            pos = onp.loadtxt(fname, delimiter=',')[:,0:3]
+            safe_traj.append(pos)
+            ax.plot(pos[:, 0], pos[:, 1], pos[:, 2], 'g')
+        else:
+            print("Safe Demo {} File Path does not exist: {}".format(i, fname))
+            nInvalidSafe += 1
 
     unsafe_traj = []
     tte_list = []
+    nInvalidUnsafe = 0
     for i in range(0, nUnsafe):
         fname = csv_dir + 'unsafe/' + str(i + 1) + '_eePosition.txt'
-        pos = onp.loadtxt(fname, delimiter=',')[:,0:3]
-        unsafe_traj.append(pos)
-        ax.plot(pos[:, 0], pos[:, 1], pos[:, 2], 'r')
+        if os.path.exists(fname):
+            pos = onp.loadtxt(fname, delimiter=',')[:,0:3]
+            tte = onp.expand_dims(onp.ones(pos.shape[0]), axis=1)
+            for j in range(pos.shape[0]):
+                tte[j] = float((pos.shape[0] - (j + 1)) / pos.shape[0])
+            unsafe_traj.append(pos)
+            tte_list.append(tte)
+            ax.plot(pos[:, 0], pos[:, 1], pos[:, 2], 'r')
+        else:
+            print("Unsafe Demo {} File Path does not exist: {}".format(i, fname))
+            nInvalidUnsafe += 1
+
 
     daring_traj = []
+    nInvalidDaring = 0
     for i in range(0, nDaring):
         fname = csv_dir + 'daring/' + str(i + 1) + '_eePosition.txt'
-        pos = onp.loadtxt(fname, delimiter=',')[:,0:3]
-        daring_traj.append(pos)
-        ax.plot(pos[:, 0], pos[:, 1], pos[:, 2], 'b')
+        if os.path.exists(fname):
+            pos = onp.loadtxt(fname, delimiter=',')[:, 0:3]
+            daring_traj.append(pos)
+            ax.plot(pos[:, 0], pos[:, 1], pos[:, 2], 'b')
+        else:
+            print("Daring Demo {} File Path does not exist: {}".format(i, fname))
+            nInvalidDaring += 1
+
+
+    ax.set_xlabel('$x$')
+    ax.set_ylabel('$y$')
+    ax.set_zlabel('$z$')
+    ax.set_title('Franka CBF Vel_lim: Position Data')
+    if save: plt.savefig(fig_path + 'demonstration_data.pdf')
+
 
     daring_veltraj = []
     for i in range(0, nDaring):
         fname = csv_dir + 'daring/' + str(i + 1) + '_eeVelocity.txt'
-        vel = onp.loadtxt(fname, delimiter=',')[:,0:3]
-        daring_veltraj.append(vel)
+        if os.path.exists(fname):
+            vel = onp.loadtxt(fname, delimiter=',')[:,0:3]
+            daring_veltraj.append(vel)
+    else:
+        print("Daring Demo {} File Path does not exist: {}".format(i, fname))
 
     ax.set_xlabel('$x$')
     ax.set_ylabel('$y$')
@@ -95,6 +126,11 @@ def pos_learning(user_number):
     ax.set_title('Franka CBF Obstacle Avoidance: Position Data')
     if save: plt.savefig(fig_path + 'demonstration_data.pdf')
     # plt.show()
+
+
+    nSafe = nSafe - nInvalidSafe
+    nUnsafe = nUnsafe - nInvalidUnsafe
+    nDaring = nDaring - nInvalidDaring
 
     for traj_ind in range(0, nUnsafe):
         x_traj = unsafe_traj[traj_ind]
@@ -143,6 +179,7 @@ def pos_learning(user_number):
     y_lim = [-0.5, 0.5]
     z_lim = [0., 0.5]
     ws_lim = onp.vstack((x_lim, y_lim, z_lim))
+
 
     safe_pts = onp.array(safe_traj[0])
     for i in range(1, nSafe):
@@ -260,7 +297,7 @@ def pos_learning(user_number):
     def rbf(x, c, s):
         return np.exp(-1 / (2 * s ** 2) * np.linalg.norm(x - c) ** 2)
 
-
+    @vmap
     def phi(X):
         #     y = []
         #     for i in range(X.shape[0]):
@@ -268,7 +305,7 @@ def pos_learning(user_number):
         #         y.append(a)
         return a  # np.array(y)
 
-
+    @jax.jit
     def h_model(x, theta, bias):
         #     print(x.shape, phi(x).shape, theta.shape, phi(x).dot(theta).shape, bias.shape)
         #     print(x.type, theta.type, bias.type)
@@ -280,12 +317,12 @@ def pos_learning(user_number):
     x_safe = safe_pts[::n_safe_sample]
     safe_rewards = safe_rewards[::n_safe_sample]
 
-    n_semisafe_sample = 200#10
+    n_semisafe_sample = 300#10
     x_semisafe = semisafe_pts[::n_semisafe_sample]
     u_semisafe = semisafe_u[::n_semisafe_sample]
     semisafe_rewards = semisafe_rewards[::n_semisafe_sample]
 
-    n_unsafe_sample = 300#20
+    n_unsafe_sample = 50#20
     x_unsafe = unsafe_pts[::n_unsafe_sample]
     unsafe_rewards = unsafe_rewards[::n_unsafe_sample]
     unsafe_tte = unsafe_ttelist[::n_unsafe_sample]
@@ -319,15 +356,15 @@ def pos_learning(user_number):
     n_semisafe = len(x_semisafe)
 
     # Initialize RBF Parameters
-    n_dim_features = 10
+    n_dim_features = 8
     x_dim = 3
     n_features = n_dim_features**x_dim
     u_dim = 2
     psi = 1.0
     dt = 0.1
     mu_dist = (ws_lim[:, 1]-ws_lim[:,0])/n_dim_features
-
-    rbf_std = onp.max(mu_dist) * 0.5 #0.1#1.0
+    print(onp.max(mu_dist))
+    rbf_std = onp.max(mu_dist) #0.1#1.0
     print(rbf_std)
     # rbf_std = 0.5
     centers, stds = rbf_means_stds(X=None, X_lim = np.array([x_lim,y_lim,z_lim]),
@@ -352,33 +389,6 @@ def pos_learning(user_number):
 
     x_all = np.vstack((x_safe, x_unsafe, x_semisafe))
     print(x_all.shape, x_safe.shape, x_unsafe.shape, x_semisafe.shape)
-    art_safe_pts = []
-    print(range(len(centers)))
-    for i in range(len(centers)):
-        print(i, len(centers))
-        dist = np.linalg.norm(x_all-centers[i], axis=1)
-        # dist = np.array([np.linalg.norm(x-centers[i]) for x in x_all])
-        if np.all(dist > 3*rbf_std):
-            art_safe_pts.append(centers[i])
-    art_safe_pts = np.array(art_safe_pts)
-    print(art_safe_pts.shape)
-
-    fig = plt.figure(figsize=(6, 6))
-    ax = plt.axes(projection='3d')
-    ax.scatter(x_safe[:, 0], x_safe[:, 1], x_safe[:,2], 'g')#, marker=m)
-    ax.scatter(x_unsafe[:, 0], x_unsafe[:, 1], x_unsafe[:,2], 'r')
-    ax.scatter(x_semisafe[:, 0], x_semisafe[:, 1], x_semisafe[:,2], 'g')
-    ax.scatter(art_safe_pts[:, 0], art_safe_pts[:, 1], art_safe_pts[:,2], 'k')
-    # ax.axis('square')
-    ax.set_xlim(x_lim)
-    ax.set_ylim(y_lim)
-    ax.set_xlabel('x', fontsize=18)
-    ax.set_ylabel('y', fontsize=18)
-    ax.zaxis.set_rotate_label(False)  # disable automatic rotation
-    ax.set_zlabel(r'$\theta$', rotation=180, fontsize=18)
-    plt.title('Demo Data + Artificial Pts')
-    if save: plt.savefig(fig_path+'demodata_withartificialpts.pdf')
-    # plt.show()
 
     # Initialize variables
     is_bias = False
@@ -401,6 +411,35 @@ def pos_learning(user_number):
     else:
         unsafe_slack = cp.Variable(n_unsafe)
 
+    art_safe_pts = []
+    if is_artificial:
+        print(range(len(centers)))
+        for i in range(len(centers)):
+            # print(i, len(centers))
+            dist = np.linalg.norm(x_all - centers[i], axis=1)
+            # dist = np.array([np.linalg.norm(x-centers[i]) for x in x_all])
+            if np.all(dist > 1 * rbf_std):
+                art_safe_pts.append(centers[i])
+        art_safe_pts = np.array(art_safe_pts)
+        print(art_safe_pts.shape)
+
+        fig = plt.figure(figsize=(6, 6))
+        ax = plt.axes(projection='3d')
+        ax.scatter(x_safe[:, 0], x_safe[:, 1], x_safe[:, 2], 'g')  # , marker=m)
+        ax.scatter(x_unsafe[:, 0], x_unsafe[:, 1], x_unsafe[:, 2], 'r')
+        ax.scatter(x_semisafe[:, 0], x_semisafe[:, 1], x_semisafe[:, 2], 'g')
+        ax.scatter(art_safe_pts[:, 0], art_safe_pts[:, 1], art_safe_pts[:, 2], 'k')
+        # ax.axis('square')
+        ax.set_xlim(x_lim)
+        ax.set_ylim(y_lim)
+        ax.set_xlabel('x', fontsize=18)
+        ax.set_ylabel('y', fontsize=18)
+        ax.zaxis.set_rotate_label(False)  # disable automatic rotation
+        ax.set_zlabel(r'$\theta$', rotation=180, fontsize=18)
+        plt.title('Demo Data + Artificial Pts')
+        if save: plt.savefig(fig_path + 'demodata_withartificialpts.pdf')
+        # plt.show()
+
     # Initialize reward parameters
     r_scaling = 1.
     safe_val = np.ones(n_safe) * 2.  # np.array(onp.squeeze(safe_rewards)*r_scaling)#np.ones(n_safe)*0.3
@@ -411,15 +450,16 @@ def pos_learning(user_number):
     unsafe_tte = unsafe_ttelist ** 3
 
     if is_artificial: art_safe_val = np.ones(len(art_safe_pts)) * 0.1  # *0.5
+    else: art_safe_val = None
     print(safe_val.shape, unsafe_val.shape, semisafe_val.shape)  # , art_safe_val.shape)
     print(unsafe_val[0])
 
-    plt.plot(unsafe_tte)
-    plt.xlabel('Unsafe Points')
-    plt.ylabel('Time to End (TTE) value')
-    plt.title('Time to End (TTE) vs. Unsafe Points')
-    if save: plt.savefig(fig_path + 'unsafe_tte_list.pdf')
-    plt.show()
+    # plt.plot(unsafe_tte)
+    # plt.xlabel('Unsafe Points')
+    # plt.ylabel('Time to End (TTE) value')
+    # plt.title('Time to End (TTE) vs. Unsafe Points')
+    # if save: plt.savefig(fig_path + 'unsafe_tte_list.pdf')
+    # plt.show()
 
     # Initialize cost
     h_cost = 0
@@ -431,7 +471,7 @@ def pos_learning(user_number):
 
     # Safe Constraints
     print("SAFE CONSTRAINTS")
-    phis_safe = [phi(x) for x in x_safe]
+    phis_safe = phi(x_safe)#[phi(x) for x in x_safe]
     if is_slack_both or is_slack_safe:
         print("Adding safe slack constraints")
         for i in range(n_safe):
@@ -446,14 +486,14 @@ def pos_learning(user_number):
 
     if is_artificial:
         print("ADDING ARTIFICIAL SAFE PTS")
-        phis_artificial = [phi(x) for x in art_safe_pts]
+        phis_artificial = phi(art_safe_pts)#[phi(x) for x in art_safe_pts]
         for i in range(len(art_safe_pts)):
             h_cost += cp.sum_squares(
                 theta.T @ np.squeeze(phis_artificial[i]) + bias)  # cost of norm(alpha_i * phi(x,xi) + b)
             constraints.append((theta.T @ np.squeeze(phis_artificial[i]) + bias) >= art_safe_val[i])
     # Unsafe Constraints
     print("UNSAFE CONSTRAINTS")
-    phis_unsafe = [phi(x) for x in x_unsafe]
+    phis_unsafe = phi(x_unsafe)#[phi(x) for x in x_unsafe]
     if is_slack_both or not is_slack_safe:
         print("Adding unsafe slack constraints")
         for i in range(n_unsafe):
@@ -471,7 +511,7 @@ def pos_learning(user_number):
         # Boundary Constraints: TODO: need to include semisafe control u values
         print("BOUNDARY CONSTRAINTS")
 
-        phis_semisafe = [phi(x) for x in x_semisafe]
+        phis_semisafe = phi(x_semisafe)#[phi(x) for x in x_semisafe]
         print("SEMISAFE H CONSTRAINTS")
         for i in range(n_semisafe):
             h_cost += cp.sum_squares(theta.T @ np.squeeze(phis_semisafe[i]) + bias)  # cost of norm(alpha_i * phi(x,xi) + b)
@@ -551,8 +591,8 @@ def pos_learning(user_number):
         data = {
            "theta": params,
             "bias": bias_param,
-            "centers": centers,
-            "stds": stds,
+            "rbf_centers": centers,
+            "rbf_stds": stds,
             "safe_slack": safe_slack_param,
             "unsafe_slack": unsafe_slack_param,
             "x_safe": x_safe,
@@ -573,6 +613,8 @@ def pos_learning(user_number):
         data = {
            "theta": params,
             "bias": bias_param,
+            "rbf_centers": centers,
+            "rbf_stds": stds,
             "safe_slack": safe_slack_param,
             "unsafe_slack": unsafe_slack_param,
             "x_safe": x_safe,

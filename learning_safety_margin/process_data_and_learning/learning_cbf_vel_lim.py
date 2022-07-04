@@ -55,30 +55,47 @@ def vel_learning(user_number):
     fig = plt.figure()
     ax = fig.add_subplot(111, projection='3d')
     safe_traj = []
+    nInvalidSafe = 0
     for i in range(0, nSafe):
         fname = csv_dir + 'safe/' + str(i + 1) + '_eePosition.txt'
-        pos = onp.loadtxt(fname, delimiter=',')[:,0:3]
-        safe_traj.append(pos)
-        ax.plot(pos[:, 0], pos[:, 1], pos[:, 2], 'g')
+        if os.path.exists(fname):
+            pos = onp.loadtxt(fname, delimiter=',')[:,0:3]
+            safe_traj.append(pos)
+            ax.plot(pos[:, 0], pos[:, 1], pos[:, 2], 'g')
+        else:
+            print("Safe Demo {} File Path does not exist: {}".format(i, fname))
+            nInvalidSafe += 1
 
     unsafe_traj = []
     tte_list = []
+    nInvalidUnsafe = 0
     for i in range(0, nUnsafe):
         fname = csv_dir + 'unsafe/' + str(i + 1) + '_eePosition.txt'
-        pos = onp.loadtxt(fname, delimiter=',')[:,0:3]
-        tte = onp.expand_dims(onp.ones(pos.shape[0]), axis=1)
-        for j in range(pos.shape[0]):
-            tte[j] = float((pos.shape[0] - (j + 1)) / pos.shape[0])
-        unsafe_traj.append(pos)
-        tte_list.append(tte)
-        ax.plot(pos[:, 0], pos[:, 1], pos[:, 2], 'r')
+        if os.path.exists(fname):
+            pos = onp.loadtxt(fname, delimiter=',')[:,0:3]
+            tte = onp.expand_dims(onp.ones(pos.shape[0]), axis=1)
+            for j in range(pos.shape[0]):
+                tte[j] = float((pos.shape[0] - (j + 1)) / pos.shape[0])
+            unsafe_traj.append(pos)
+            tte_list.append(tte)
+            ax.plot(pos[:, 0], pos[:, 1], pos[:, 2], 'r')
+        else:
+            print("Unsafe Demo {} File Path does not exist: {}".format(i, fname))
+            nInvalidUnsafe += 1
+
 
     daring_traj = []
+    nInvalidDaring = 0
     for i in range(0, nDaring):
         fname = csv_dir + 'daring/' + str(i + 1) + '_eePosition.txt'
-        pos = onp.loadtxt(fname, delimiter=',')[:, 0:3]
-        daring_traj.append(pos)
-        ax.plot(pos[:, 0], pos[:, 1], pos[:, 2], 'b')
+        if os.path.exists(fname):
+            pos = onp.loadtxt(fname, delimiter=',')[:, 0:3]
+            daring_traj.append(pos)
+            ax.plot(pos[:, 0], pos[:, 1], pos[:, 2], 'b')
+        else:
+            print("Daring Demo {} File Path does not exist: {}".format(i, fname))
+            nInvalidDaring += 1
+
 
     ax.set_xlabel('$x$')
     ax.set_ylabel('$y$')
@@ -92,32 +109,49 @@ def vel_learning(user_number):
     safe_vel = []
     for i in range(0, nSafe):
         fname = csv_dir + 'safe/' + str(i+1) + '_eeVelocity.txt'
-        vel = onp.loadtxt(fname, delimiter=',')[:,0:3]
-        safe_vel.append(vel)
-        ax.plot(vel[:,0], vel[:,1], vel[:,2], 'g')
+        if os.path.exists(fname):
+            vel = onp.loadtxt(fname, delimiter=',')[:,0:3]
+            safe_vel.append(vel)
+            ax.plot(vel[:,0], vel[:,1], vel[:,2], 'g')
+        else:
+            print("Safe Demo {} File Path does not exist: {}".format(i, fname))
 
     unsafe_vel = []
     for i in range(0, nUnsafe):
         fname = csv_dir + 'unsafe/' + str(i+1) + '_eeVelocity.txt'
-        vel = onp.loadtxt(fname, delimiter=',')[:,0:3]
-        unsafe_vel.append(vel)
-        ax.plot(vel[:,0], vel[:,1], vel[:,2], 'r')
+        if os.path.exists(fname):
+            vel = onp.loadtxt(fname, delimiter=',')[:,0:3]
+            unsafe_vel.append(vel)
+            ax.plot(vel[:,0], vel[:,1], vel[:,2], 'r')
+        else:
+            print("Unsafe Demo {} File Path does not exist: {}".format(i, fname))
 
     daring_vel = []
     for i in range(0, nDaring):
         fname = csv_dir + 'daring/' + str(i+1) + '_eeVelocity.txt'
-        vel = onp.loadtxt(fname, delimiter=',')[:,0:3]
-        daring_vel.append(vel)
-        ax.plot(vel[:,0], vel[:,1], vel[:,2], 'b')
+        if os.path.exists(fname):
+            vel = onp.loadtxt(fname, delimiter=',')[:,0:3]
+            daring_vel.append(vel)
+            ax.plot(vel[:,0], vel[:,1], vel[:,2], 'b')
+        else:
+            print("Daring Demo {} File Path does not exist: {}".format(i, fname))
 
     daring_acc = []
     for i in range(0, nDaring):
-        vel = daring_vel[i]
-        acc = []
-        for t in range(len(vel)-1):
-            dt = 1./200.#time[t+1]-time[t]
-            acc.append((vel[t+1]-vel[t])/dt)
-        daring_acc.append(acc)
+        fname = csv_dir + 'daring/' + str(i+1) + '_eeAcceleration.txt'
+        if os.path.exists(fname):
+            acc = onp.loadtxt(fname, delimiter=',')[:,0:3]
+            daring_acc.append(acc)
+            # ax.plot(acc[:,0], acc[:,1], acc[:,2], 'b')
+        else:
+            print("Daring Demo {} File Path does not exist: {}".format(i, fname))
+
+        # vel = daring_vel[i]
+        # acc = []
+        # for t in range(len(vel)-1):
+        #     dt = 1./200.#time[t+1]-time[t]
+        #     acc.append((vel[t+1]-vel[t])/dt)
+        # daring_acc.append(acc)
         # ax.plot(acc[:,0], acc[:,1], acc[:,2], 'b')
 
     ax.set_xlabel('$\dot{x}$')
@@ -125,6 +159,10 @@ def vel_learning(user_number):
     ax.set_zlabel('$\dot{z}$')
     ax.set_title('Franka CBF Velocity Limits: Velocity Data')
     # plt.show()
+
+    nSafe = nSafe-nInvalidSafe
+    nUnsafe = nUnsafe-nInvalidUnsafe
+    nDaring = nDaring-nInvalidDaring
 
     xtraj = onp.hstack((safe_traj[0], safe_vel[0]))
     safe_pts = xtraj
@@ -244,11 +282,11 @@ def vel_learning(user_number):
 
     ### Set up Minimization
     # Sample Data
-    n_safe_sample = 400#50
+    n_safe_sample = 300#50
     x_safe = safe_pts[::n_safe_sample]
     safe_rewards = safe_rewards[::n_safe_sample]
 
-    n_unsafe_sample = 100#20
+    n_unsafe_sample = 50#20
     x_unsafe = unsafe_pts[::n_unsafe_sample]
     unsafe_rewards = unsafe_rewards[::n_unsafe_sample]
     unsafe_tte = unsafe_ttelist[::n_unsafe_sample]
@@ -268,18 +306,30 @@ def vel_learning(user_number):
     # Initialize RBF Parameters
     n_dim_features = 5
     x_dim = 6
-    n_features = 2000#n_dim_features**x_dim
+    n_features = 1000#n_dim_features**x_dim
     u_dim = 2
     psi = 1.0
     dt = 0.1
     mu_dist = (ws_lim[:, 1]-ws_lim[:,0])/n_dim_features
     print("Check: ", mu_dist, onp.max(mu_dist)*0.5)
-    rbf_std = 0.15#onp.max(mu_dist) * 0.5 #0.1#1.0
+    rbf_std = 0.4#onp.max(mu_dist) * 0.5 #0.1#1.0
     print(rbf_std)
     # rbf_std = 0.5
     centers, stds = rbf_means_stds(X=None, X_lim = np.array([x_lim,y_lim,z_lim, vdot_lim, vdot_lim, vdot_lim]),
                                    n=x_dim, k=n_dim_features, set_means='random',fixed_stds=True, std=rbf_std, nCenters=n_features)
     print("rbf shapes", centers.shape, stds.shape)
+
+    x_all = np.vstack((x_safe, x_unsafe, x_semisafe))
+    print(x_all.shape, x_safe.shape, x_unsafe.shape, x_semisafe.shape)
+    art_safe_pts = []
+    print(range(len(centers)))
+    for i in range(len(centers)):
+        dist = np.linalg.norm(x_all-centers[i], axis=1)
+        if np.all(dist > 2*rbf_std):
+            art_safe_pts.append(centers[i])
+    art_safe_pts = np.array(art_safe_pts)
+    print(art_safe_pts.shape)
+
 
     # Initialize variables
     is_bias = False
@@ -413,7 +463,7 @@ def vel_learning(user_number):
     params = None
     bias_param = None
     prob = cp.Problem(obj, constraints)
-    result = prob.solve(solver=cp.MOSEK, verbose=True, enforce_dpp=True)
+    result = prob.solve(solver=cp.MOSEK, verbose=True)#, enforce_dpp=True)
 
     params = theta.value
     if is_bias: bias_param = bias.value

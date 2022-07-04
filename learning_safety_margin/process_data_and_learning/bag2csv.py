@@ -85,89 +85,99 @@ def process_user_rosbags(user_num='0', smooth_flag = '1'):
 		# print(" BASE Frames : ", base_frame, "\n")
 		# print(" JOINT Frames : ", joint_frames, "\n")
 
+		print(bag.get_message_count())
+		if bag.get_message_count() == 0:
+			print("Empty Bag")
+			bag.close()
+		else:
+			for topic, msg, t in bag.read_messages():
 
-		for topic, msg, t in bag.read_messages():
+				# positions
+				# must convert to sr to compute forward kinematics
+				# print(topic)
+				jointPos = sr.JointPositions("franka", np.array(msg.position))
+				eePos = robot.forward_kinematics(jointPos, 'panda_link8')  # outputs cartesian pose (7d)
+				# convert back from sr to save to list
+				eePositions.append(eePos.data()) # only saving transitional pos, not orientation
 
-			# positions
-			# must convert to sr to compute forward kinematics
-			# print(topic)
-			jointPos = sr.JointPositions("franka", np.array(msg.position))
-			eePos = robot.forward_kinematics(jointPos, 'panda_link8')  # outputs cartesian pose (7d)
-			# convert back from sr to save to list
-			eePositions.append(eePos.data()) # only saving transitional pos, not orientation
+				# velocities
+				# must convert to sr Joint state to compute forward velocities
+				temp_jointState.set_velocities( np.array(msg.velocity))
+				temp_jointState.set_positions( np.array(msg.position))
+				eeVel = robot.forward_velocity(temp_jointState, 'panda_link8')  # outputs cartesian twist (6d)
+				# convert back from sr to save to list
+				eeVelocities.append(eeVel.data())  # only saving transitional vel, not orientation
 
-			# velocities
-			# must convert to sr Joint state to compute forward velocities
-			temp_jointState.set_velocities( np.array(msg.velocity))
-			temp_jointState.set_positions( np.array(msg.position))
-			eeVel = robot.forward_velocity(temp_jointState, 'panda_link8')  # outputs cartesian twist (6d)
-			# convert back from sr to save to list
-			eeVelocities.append(eeVel.data())  # only saving transitional vel, not orientation
+				# Joint State
+				jointPositions.append(np.array(msg.position))#temp_jointState.get_positions())
+				jointVelocities.append(np.array(msg.velocity))
+				jointTorques.append(np.array(msg.effort))
+				time_idx.append(t.to_sec())
 
-			# Joint State
-			jointPositions.append(np.array(msg.position))#temp_jointState.get_positions())
-			jointVelocities.append(np.array(msg.velocity))
-			jointTorques.append(np.array(msg.effort))
-			time_idx.append(t.to_sec())
+			# Reshape lists
+			pose2save = np.array(eePositions)
+			twist2save = np.array(eeVelocities)
+
+			jointVel2save = np.array(jointVelocities)
+			jointTorq2save = np.array(jointTorques)
 
 
-		# Reshape lists
-		pose2save = np.array(eePositions)
-		twist2save = np.array(eeVelocities)
 
-		jointVel2save = np.array(jointVelocities)
-		jointTorq2save = np.array(jointTorques)
-		# make time relative to traj
-		time_idx = np.array(time_idx)
-		time_idx = time_idx - time_idx[0]
+			# make time relative to traj
+			time_idx = np.array(time_idx)
+			time_idx = time_idx - time_idx[0]
 
-		# Filter velocities and torques
-		smoothTorques = np.zeros(jointTorq2save.shape)
-		smoothJointVel = np.zeros(jointVel2save.shape)
-		smoothTwistVel = np.zeros(twist2save.shape)
-		for i in range(0,len(jointTorq2save[0,:])):
-			smoothTorques[:,i] = signal.savgol_filter(x=jointTorq2save[:,i], window_length=100, polyorder = 3)
-			smoothJointVel[:, i] = signal.savgol_filter(x=jointVel2save[:, i], window_length=100, polyorder=3)
+			# Filter velocities and torques
+			smoothTorques = np.zeros(jointTorq2save.shape)
+			smoothJointVel = np.zeros(jointVel2save.shape)
+			smoothTwistVel = np.zeros(twist2save.shape)
+			for i in range(0,len(jointTorq2save[0,:])):
+				window_len = 100
+				if window_len > jointTorq2save[:,i].shape[0]: window_len = jointTorq2save[:,i].shape[0]
+				print(jointTorq2save[:, i].shape, len(jointTorq2save[0, :]), window_len)
 
-		for i in range(0, len(twist2save[0, :])):
-			smoothTwistVel[:, i] = signal.savgol_filter(x=twist2save[:, i], window_length=100, polyorder=3)
+				smoothTorques[:,i] = signal.savgol_filter(x=jointTorq2save[:,i], window_length=window_len, polyorder = 3)
+				smoothJointVel[:, i] = signal.savgol_filter(x=jointVel2save[:, i], window_length=window_len, polyorder=3)
 
-		# plot velocities
-		# plt.figure()
-		# plt.plot(time_idx, jointVel2save)
-		# plt.title("raw")
-		#
-		# # plot velocities smooth
-		# plt.figure()
-		# plt.plot(time_idx, smoothVel)
-		# plt.title("smooth")
-		# plt.show()
+			for i in range(0, len(twist2save[0, :])):
+				smoothTwistVel[:, i] = signal.savgol_filter(x=twist2save[:, i], window_length=window_len, polyorder=3)
 
-		# compute accelerations -use smooth vel to avoid noise
-		eeAcc = []
-		for i in range(0, len(smoothTwistVel[:-1, 0])):
-			acc = (smoothTwistVel[i + 1] - smoothTwistVel[i]) / (time_idx[i+1] - time_idx[i])
-			eeAcc.append(acc)
-		acc2save = np.array(eeAcc)
+			# plot velocities
+			# plt.figure()
+			# plt.plot(time_idx, jointVel2save)
+			# plt.title("raw")
+			#
+			# # plot velocities smooth
+			# plt.figure()
+			# plt.plot(time_idx, smoothVel)
+			# plt.title("smooth")
+			# plt.show()
 
-		# convert to pandas
-		traj_dict = {'time' : time_idx ,'position': jointPositions, 'velocity': smoothJointVel.tolist(), 'torques': smoothTorques.tolist()}
-		trajectory_df = pd.DataFrame.from_dict(data=traj_dict)
+			# compute accelerations -use smooth vel to avoid noise
+			eeAcc = []
+			for i in range(0, len(smoothTwistVel[:-1, 0])):
+				acc = (smoothTwistVel[i + 1] - smoothTwistVel[i]) / (time_idx[i+1] - time_idx[i])
+				eeAcc.append(acc)
+			acc2save = np.array(eeAcc)
 
-		# Save to file
-		print("Saving file " + str(count) + " of  " + str(numberOfFiles) + ": " + save_dir+"_eePosition.txt")
-		np.savetxt(save_dir+"_eePosition.txt", pose2save, delimiter=",")
+			# convert to pandas
+			traj_dict = {'time' : time_idx ,'position': jointPositions, 'velocity': smoothJointVel.tolist(), 'torques': smoothTorques.tolist()}
+			trajectory_df = pd.DataFrame.from_dict(data=traj_dict)
 
-		if smooth_flag =='1':
-			np.savetxt(save_dir + "_eeVelocity.txt", smoothTwistVel, delimiter=",")
-		elif smooth_flag == '0':
-			np.savetxt(save_dir+"_eeVelocity.txt", twist2save, delimiter=",")
+			# Save to file
+			print("Saving file " + str(count) + " of  " + str(numberOfFiles) + ": " + save_dir+"_eePosition.txt")
+			np.savetxt(save_dir+"_eePosition.txt", pose2save, delimiter=",")
 
-		np.savetxt(save_dir + "_eeAcceleration.txt", acc2save, delimiter=",")
+			if smooth_flag =='1':
+				np.savetxt(save_dir + "_eeVelocity.txt", smoothTwistVel, delimiter=",")
+			elif smooth_flag == '0':
+				np.savetxt(save_dir+"_eeVelocity.txt", twist2save, delimiter=",")
 
-		trajectory_df.to_pickle(path = save_dir+"_jointState.pkl")
+			np.savetxt(save_dir + "_eeAcceleration.txt", acc2save, delimiter=",")
 
-		bag.close()
+			trajectory_df.to_pickle(path = save_dir+"_jointState.pkl")
+
+			bag.close()
 
 	print("Done reading all " + str(numberOfFiles) + " bag files.")
 
