@@ -146,9 +146,15 @@ def process_user_rosbags(user_num='0', smooth_flag = '1'):
 		# compute accelerations -use smooth vel to avoid noise
 		eeAcc = []
 		for i in range(0, len(smoothTwistVel[:-1, 0])):
-			acc = (smoothTwistVel[i + 1] - smoothTwistVel[i]) / (time_idx[i+1] - time_idx[i])
+			acc = (smoothTwistVel[i + 1, :] - smoothTwistVel[i, :]) / (time_idx[i+1] - time_idx[i])
 			eeAcc.append(acc)
 		acc2save = np.array(eeAcc)
+
+		eeJerk = []
+		for i in range(0, len(acc2save[:-1, 0])):
+			jerk = (acc2save[i + 1, :] - acc2save[i, :]) / (time_idx[i+1] - time_idx[i])
+			eeJerk.append(jerk)
+		jerk2save = np.array(eeJerk)
 
 		# convert to pandas
 		traj_dict = {'time' : time_idx ,'position': jointPositions, 'velocity': smoothJointVel.tolist(), 'torques': smoothTorques.tolist()}
@@ -164,6 +170,7 @@ def process_user_rosbags(user_num='0', smooth_flag = '1'):
 			np.savetxt(save_dir+"_eeVelocity.txt", twist2save, delimiter=",")
 
 		np.savetxt(save_dir + "_eeAcceleration.txt", acc2save, delimiter=",")
+		np.savetxt(save_dir + "_eeJerk.txt", jerk2save, delimiter=",")
 
 		trajectory_df.to_pickle(path = save_dir+"_jointState.pkl")
 

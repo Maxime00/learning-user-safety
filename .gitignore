@@ -7,4 +7,7 @@
 *.bag
 *.txt
 *.pkl
+*.zip
+*.npy
 
+learning_safety_margin/data/User_Study_Notes
