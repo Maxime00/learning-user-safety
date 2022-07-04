@@ -13,7 +13,7 @@ class DoubleIntegrator():
 
 class CBFMPC_Controller(DoubleIntegrator):
 
-    def __init__(self, centers, stds, theta, bias, dt=0.1, n_steps=10, v_gain = 10, r_gains =1):
+    def __init__(self, centers, stds, theta, bias, dt=0.1, n_steps=10, v_gain = 10, r_gains =1, zero_acc_start = False):
 
         super().__init__(dt)
         # Set MPC Parameters
@@ -69,8 +69,16 @@ class CBFMPC_Controller(DoubleIntegrator):
         # Set up Cost Function and Constraint Expressions
         self.cost_fn = 0
         self.constraints = self.X[:,0] - self.P[:self.n_states] # Initialize constraint list with x0 constraint
-        self.lb_con = np.array([0]*self.n_states)
-        self.ub_con = np.array([0]*self.n_states)
+        # adding zero acceleration at start constraint
+        if zero_acc_start:
+            cmd_constraint = self.U[:,0] - np.zeros(self.n_controls)
+            self.constraints = casadi.vertcat(self.constraints, cmd_constraint)
+            self.lb_con = np.array([0]*(self.n_states+self.n_controls))
+            self.ub_con = np.array([0]*(self.n_states+self.n_controls))
+        else:
+            self.lb_con = np.array([0] * self.n_states)
+            self.ub_con = np.array([0] * self.n_states)
+
         for i in range(self.N):
             xi = self.X[:, i]
             ui = self.U[:,i]

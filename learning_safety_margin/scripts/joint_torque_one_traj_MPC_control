@@ -171,8 +171,8 @@ def control_loop(planner, robot, freq):
     # SET UP CARTESIAN CTRL
     ctrl = create_cartesian_controller(CONTROLLER_TYPE.IMPEDANCE)
 
-    ctrl.set_parameter_value("stiffness", [150, 150, 150, 6, 6, 6], sr.ParameterType.DOUBLE_ARRAY) # 100 100 5 5 - good: 80 80 5 5
-    ctrl.set_parameter_value("damping", [25, 25, 25, 3, 3, 3], sr.ParameterType.DOUBLE_ARRAY) # 35 35 2. 2.5
+    ctrl.set_parameter_value("stiffness", [150, 150, 150, 10, 10, 10], sr.ParameterType.DOUBLE_ARRAY) # 100 100 5 5 - good: 80 80 5 5
+    ctrl.set_parameter_value("damping", [25, 25, 25, 5, 5, 5], sr.ParameterType.DOUBLE_ARRAY) # 35 35 2. 2.5
     ctrl.set_parameter_value("inertia", [.5, .5, .5, .1, .1, .1], sr.ParameterType.DOUBLE_ARRAY)
 
     # DS for orientation control
@@ -330,20 +330,21 @@ def control_loop(planner, robot, freq):
 
                 # Set desired angular velocity
                 ds_twist = sr.CartesianTwist(ds.evaluate(feedback_state))
-                ds_twist.clamp(.25, .5)
-                desired_state.set_angular_velocity(ds_twist.data()[3:6])
 
                 # integrate angular vel and add to quaternion ??
-                # orientation = feedback_state.get_orientation()
-                # angVel = ds_twist.data()[3:6]
-                # orient_dt = 0.5 * angVel * time_period
-                # quat_dt = Quaternion(1.0, orient_dt[0],orient_dt[1], orient_dt[2])
-                # # print(quat_dt)
-                # orientation.__add__(quat_dt)
+                orientation = feedback_state.get_orientation()
+                angVel = ds_twist.data()[3:6]
+                orient_dt = 0.5 * angVel * time_period
+                quat_dt = Quaternion(1.0, orient_dt[0],orient_dt[1], orient_dt[2])
+                # print(quat_dt)
+                orientation.__add__(quat_dt)
                 # print(orientation)
                 # print(type(orientation))
-                # desired_state.set_orientation(orientation)
-                desired_state.set_orientation(np.array([0., 1., 0., 0.]))
+                desired_state.set_orientation(orientation)
+                # desired_state.set_orientation(np.array([0., 1., 0., 0.]))
+                # clamp and set desired angular velocities
+                ds_twist.clamp(.25, .5)
+                desired_state.set_angular_velocity(ds_twist.data()[3:6])
 
                 # compute linear acceleration for data_recording
                 if not np.isnan(recorded_state[idx-1, 0]):
@@ -445,7 +446,7 @@ if __name__ == '__main__':
     # Init MPC controller
     print("Instantiating MPC Planner, should take around %s seconds... \n"%(n_steps/2))
     instantiate_start = time.time()
-    mpc_planner = CBFMPC_Controller(centers, stds, params, bias_param, dt=dt, n_steps=n_steps, r_gains = 100)
+    mpc_planner = CBFMPC_Controller(centers, stds, params, bias_param, dt=dt, n_steps=n_steps, r_gains = 500, zero_acc_start=True)
     print("FINISH INSTANTIATING MPC PLANNER IN %s seconds \n" % (time.time() - instantiate_start))
 
     # Set save dir and create folder if needed
