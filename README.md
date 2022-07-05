@@ -153,7 +153,7 @@ current working scripts :
 
 
 # TODO 
-- smoother trajectory for MPC - > add orientation
+- smoother trajectory for MPC
 - add logic to play several trajectories of varying safety in planner - > check ahalya' scode, make somethi nto match that
 - add integrator to replays
 - replays must choose and output safety and traj_number
