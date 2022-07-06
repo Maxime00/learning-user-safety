@@ -47,8 +47,8 @@ aica-docker interactive aica-technology/zmq-simulator -u ros2 --net host --no-ho
 python3 pybullet_zmq/bin/zmq-simulator
 ```
 Once the simulator is running, you can start your controllers as shown [below](#run-controllers)
-NOTE : To run controllers in the simulator, IP ports of RobotInterface should be 'robot_interface = RobotInterface("*:1601", "*:1602")'
-Similarly, binded ports in aica-server command in build-server.sh script should be '-p1601:1601 -p1602:1602'
+
+Best development pipeline is to use the -s when calling 'bash build-server.sh' and connect to the container using aica-docker connect
 
 To run controllers in the simulator, you must add 'robot_name:=franka' to the roslaunch command :
 ```console
@@ -122,19 +122,17 @@ currently
 ```console
 bash build-server.sh
 aica-docker interactive learning-safety-margin:noetic -u ros --net host --no-hostname -v data_vol:/home/ros/ros_ws/src/learning_safety_margin/data
-roslaunch learning_safety_margin demo.launch demo:=cartesian_impedance_MPC_control user_number:=1
-roslaunch learning_safety_margin demo.launch demo:=joint_torque_control
-roslaunch learning_safety_margin demo.launch demo:=joint_torque_traj_follow_control args_for_control:="test 1"
-roslaunch learning_safety_margin demo.launch demo:=joint_torque_one_traj_MPC_control
+roslaunch learning_safety_margin demo.launch demo:=joint_space_traj_replay_control args_for_control:="test 1"
+roslaunch learning_safety_margin demo.launch demo:=cartesian_space_traj_follow_control
  robot_name:=franka
-roslaunch learning_safety_margin demo.launch demo:=cartesian_twist_traj_follow_control
+roslaunch learning_safety_margin demo.launch demo:=cartesian_twist_control
 roslaunch learning_safety_margin demo.launch demo:=joint_space_velocity_control
 ```
 future 
 ```console
 bash build-server.sh
 aica-docker interactive learning-safety-margin:noetic -u ros --net host --no-hostname -v data_vol:/home/ros/ros_ws/src/learning_safety_margin/data
-roslaunch learning_safety_margin demo.launch demo:=joint_torque_traj_follow_control args_for_control:="test 1"
+roslaunch learning_safety_margin demo.launch demo:=joint_space_traj_replay_control args_for_control:="test 1"
 roslaunch learning_safety_margin mpc_control.launch robot_name:=franka args_for_planner:=0
 ```
 
@@ -145,8 +143,9 @@ to add to pycharm environment variable PYTHONPATH :
 $PYTHONPATH:/opt/ros/noetic/lib/python3/dist-packages:/home/ros/ros_ws/devel/lib/python3/dist-packages:/home/ros/.local/lib/python3.8/site-packages
 
 current working scripts : 
-- idle_control ( recording) 
-- joint_torque_traj_follow (replays)
+- idle_control (recording) 
+- joint_space_traj_replay_control (replays)
+- cartesian_space_traj_follow_control (follows single trajectory from MPC planner)
 - cartesian twist control (demo script)
 - joint space velocity control (demo script)
 
@@ -155,7 +154,7 @@ current working scripts :
 # TODO 
 - smoother trajectory for MPC
 - add logic to play several trajectories of varying safety in planner - > check ahalya' scode, make somethi nto match that
-- add integrator to replays
+- tune integrator for replays ??
 - replays must choose and output safety and traj_number
 - add arguments for user_specific and safety 
 - Tune gains
@@ -163,12 +162,8 @@ current working scripts :
 - add script to handle several MPC trajectories and pause between each until next input 
 - save reference traj to plot against recorded later 
 
-rty running one traj again -> fine tune gains ??
-save initial traj for dev time 
 
 
-tried updating using state instead of time -> no improvment
-tried using 5 steps of online mpc-> jittery traj
 
 ## Development
 
@@ -186,9 +181,9 @@ aica-docker connect learning-safety-margin-noetic-ssh
 Code here is based on this [example](https://github.com/domire8/control-libraries-ros-demos/tree/main/rospy_zmq)
 
 
-### Instructions for MPC-simulator pipeline
+# Instructions for MPC-simulator pipeline
 
-# Terminal 1 - run simulator
+## Terminal 1 - run simulator
 ```console 
 cd Workspace/simulator-backend/pybullet_zmq
 bash build-server.sh
@@ -196,7 +191,7 @@ aica-docker interactive aica-technology/zmq-simulator -u ros2 --net host --no-ho
 python3 pybullet_zmq/bin/zmq-simulator
 ```
 
-# Terminal 2 - run controller
+## Terminal 2 - run controller
 ```console
 bash build-server.sh -s
 aica-docker connect learning-safety-margin-noetic-ssh
@@ -204,4 +199,5 @@ roslaunch learning_safety_margin mpc_control.launch
 ```
 
 Can edit code directly in pycharm without the need to rebuild, just ctrl+c in terminal 2 and do roslaunch again
-launch file runs MPC_velocity_control and MPC_velocity_planner
+
+the mpc_control.launch file runs MPC_velocity_control and MPC_velocity_planner as two communicating nodes

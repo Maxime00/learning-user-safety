@@ -1,5 +1,5 @@
 <launch>
-    <arg name="demo" default="joint_space_velocity_control"/>
+    <arg name="demo" default="idle_control"/>
     <arg name="robot_name" default="franka"/>
     <arg name="args_for_control" default="0 1"/>
 
