@@ -1,0 +1,254 @@
+#!/usr/bin/env python3
+
+import pandas as pd
+import numpy as np
+import pickle
+import rospy
+import time
+import sys
+import os
+from scipy import interpolate
+
+from sensor_msgs.msg import JointState
+from std_msgs.msg import Header
+
+from learning_safety_margin.cbf_mpc_vel_planner import *
+from learning_safety_margin.vel_control_utils import *
+from learning_safety_margin.msg import mpcCommand, mpcTraj
+
+class MPC_vel_planner(object):
+
+    def __init__(self):
+
+        # create publisher and subscrber
+        self.pub = rospy.Publisher("/cmd_mpc", mpcTraj, queue_size=1) # what should queue size be
+        rospy.Subscriber("/ee_state", JointState, self.state_callback, queue_size=1)
+
+        self.state = np.zeros(6) * np.nan
+        self.time = None
+        self.ref_X = None
+        self.ref_U = None
+        self.max_time = None
+        self.first_traj = True
+
+
+    def convert_cmd_msg(self, x, u, t):
+        # convert data to custom cmd message for MPC control
+        traj_msg = mpcTraj()
+
+        for i in range(len(t)):
+            # Convert mpc X, U, T command to custom mpcCommand.msg format
+            cmd = mpcCommand()
+            cmd.time = t[i]
+            cmd.position = x[i, 0:3]
+            cmd.velocity = x[i, 3:6]
+
+            # one less U than X due to forward sim
+            if i == 0:
+                cmd.acceleration = np.array([0., 0.0, 0.0])
+            else:
+                cmd.acceleration = u[i-1, 0:3]
+
+            traj_msg.commands += [cmd]
+
+        traj_msg.header.stamp = rospy.get_rostime()
+
+        return traj_msg
+
+    def state_callback(self, msg):
+        # read current ee state of robot using JointState sensor_msgs from ROS
+
+        # rospy.loginfo(rospy.get_caller_id() + "I heard %s \n", [msg.position, msg.velocity])
+
+        # TODO : gonna need to convert/extract data somehow
+        self.time = msg.header.stamp.to_sec()
+        # print("received time : ", self.time)
+        self.state[0:3] = np.asarray(msg.position)
+        self.state[3:6] = np.asarray(msg.velocity)
+
+    def planner_loop(self, init_planner, mpc_planner, freq):
+
+        initial_traj_ready = False
+        target_y_lim = 0.3
+
+        rate = rospy.Rate(freq)
+
+        while not rospy.is_shutdown():
+
+            # wait until state is published
+            if np.isnan(self.state).all():
+                continue
+
+            ## TODO : how to set end of trajectory target ??
+
+            if not initial_traj_ready:
+                ## Compute initial trajectory
+
+                ## Set start and target depending on starting position
+                target = np.zeros(6)
+                target[0:3] = self.state[0:3]
+
+                # simply invert y coordinate for target, set to target_y_lim if too small
+                if abs(target[1]) > target_y_lim:
+                    target[1] = -target[1]
+                elif (abs(target[1]) < target_y_lim) and (target[1] > 0):
+                    target[1] = - target_y_lim
+                elif (abs(target[1]) < target_y_lim) and (target[1] < 0):
+                    target[1] = target_y_lim
+
+                start = np.zeros(6)
+                start[0:3] = self.state[0:3]
+
+                # Calculate trajectory using MPC planner
+                print("MPC planning initial trajectory from %s \n \t to %s" % (start[0:3], target[0:3]))
+                start_time = time.time()
+                X, U, T = init_planner.control(start, target)
+                # T = raw_ref[:,0]  ## use recorded traj to avoid instantiate initial traj planner
+                # X = raw_ref[:,1:7]
+                # U = raw_ref[:,7:10]
+
+                print("Finished planning initial trajectory in %s seconds \n" % (time.time() - start_time))
+
+                # convert into np arrays for reading ease
+                # self.ref_X = np.array(X)  # pos + vel  (n_steps, 6)
+                # self.ref_U = np.array(U)  # accel (n_steps, 3)
+
+                X = np.array(X)  # pos + vel  (n_steps, 6)
+                U = np.array(U)  # accel (n_steps, 3)
+
+                self.max_time = T[-1]
+                print("FINAl POS OF INITIAL PLANNER : ", X[-1, 0:3], "\n")
+
+                # append 0 accelerations to U to match size of other variables
+                U = np.append(U, [[0, 0, 0]], axis=0)
+                # Create interpolation functions
+                self.ref_X = interpolate.interp1d(T, X, axis=0)
+                self.ref_U = interpolate.interp1d(T, U, axis=0)
+
+                ref_traj = np.zeros((len(T),10))
+                ref_traj[:,0] = T
+                ref_traj[:,1:7] = X
+                ref_traj[:,7:10] = U
+
+                np.save(save_dir + "raw_for_plot", ref_traj, allow_pickle=False)
+
+                initial_traj_ready = True
+
+            elif initial_traj_ready:
+                ## Compute one step traj along reference
+
+                # Take time and state here to avoid them changing between checks and computation
+                curr_time = self.time
+                curr_state = self.state
+                target_time = curr_time+dt*n_steps
+
+                # Set target using time interpolation : position on reference traj at time : now + dt_init
+                # Avoid errors
+                if target_time > self.max_time:
+                    target_time = self.max_time
+                #     target = self.ref_X(target_time)
+                #     target[3:6] = curr_state[3:6]
+                #     print("REACHED END OF COMMAND !!! \n")
+                # else:
+                target = self.ref_X(target_time)
+                # target = self.ref_X(self.max_time)
+
+                # Set target using closest state + next index
+                # norm_arr = np.zeros((len(self.ref_X[:,0])))
+                # for i in range(len(self.ref_X[:,0])):
+                #     norm_arr[i] = np.linalg.norm(self.ref_X[i, 0:3] - curr_state[0:3])
+                # idx = norm_arr.argmin()
+                # target = self.ref_X[idx+n_steps, :]
+                # print("TARGET IDX :", idx+n_steps)
+
+                # Set initial pose
+                start = curr_state
+
+                # if np.linalg.norm(start[0:3] - self.ref_X[-1, 0:3]) < 0.001:
+                if np.linalg.norm(start[0:3] - target[0:3]) < 0.01:
+                    print("CLOSE ENOUGH TO TARGET !!! \n")
+                    # break
+
+                # Calculate trajectory using MPC planner
+                # print("MPC planning trajectory from %s \n to %s \n" % (curr_time, target_time))
+                start_time = time.time()
+                X, U, T = mpc_planner.control(start, target, curr_time)
+                # print("Finished planning trajectory in %s seconds \n" % (time.time() - start_time))
+                # print("FINAl POS OF PLANNER : ", X[-1,:], "\n")
+                # Publish joint states for recording
+                self.pub.publish(self.convert_cmd_msg(np.array(X), np.array(U), np.array(T)))
+
+                # TODO :wait for control to receive first traj and send back state ???
+                # ISSUE : second traj is also computed from 0 to 0.5 instead of using updated nitertime -> WHY
+                # if self.first_traj :
+                #     rospy.sleep(0.01)
+                #     self.first_traj = False
+
+
+            # print("TIME REMAINING IN PLANNER LOOP :", rate.remaining().to_sec(), " seconds \n")
+            rate.sleep()
+
+
+# Controller to replay demonstrations
+if __name__ == '__main__':
+
+    rospy.init_node("plan", anonymous=True)
+
+    # Check passed argument - User number
+    if len(sys.argv) >= 2:
+        user_number = sys.argv[1]
+    else:
+        user_number = '0'
+
+    print("Running MPC Controller for User_"+user_number+"\n")
+
+    # Get data
+    data_dir = "/home/ros/ros_ws/src/learning_safety_margin/data/User_"+user_number+"/"
+
+    data = pickle.load(open(data_dir + "vel_data_dict.p", "rb"))
+
+    # Set up data for MPC planner
+    params = data["theta"]
+    bias_param = data["bias"]
+    slack_param = data["unsafe_slack"]
+    bias_param = 0.1
+
+    # Initialize RBF Parameters
+    # print(ws_lim, x_dim, n_dim_features, rbf_std)
+    centers, stds = rbf_means_stds(X=None, X_lim=np.array([x_lim, y_lim, z_lim, vdot_lim, vdot_lim, vdot_lim]),
+                                   n=x_dim, k=n_dim_features, fixed_stds=True, std=rbf_std)
+
+    # SET PARAMETERS FOR MPC CONTROL
+    freq = 5
+    dt = 0.2 # 1./freq  # 0.1  #
+    n_steps = 5
+
+    dt_init = 0.2  # 1./freq  should be same as dt ???
+    n_steps_init = 50
+
+    # Instantiate 1st MPC controller -> FOR INITIAL TRAJECTORY
+    print("Instantiating 1st MPC Planner, should take around %s seconds... \n" % (n_steps_init / 2))
+    instantiate_start = time.time()
+    init_traj_planner = CBFMPC_Controller(centers, stds, params, bias_param, dt=dt_init, n_steps=n_steps_init, r_gains = 100)
+    print("FINISH INSTANTIATING MPC PLANNER IN %s seconds \n" % (time.time() - instantiate_start))
+
+    # save_dir = "/home/ros/ros_ws/src/learning_safety_margin/data/User_0/MPC/ref_traj/"
+    # fn = save_dir + "raw_for_plot.npy"
+    # raw_ref = np.load(fn)
+
+
+    # Instantiate actual MPC controller
+    print("Instantiating 2nd MPC Planner, should take around %s seconds... \n"%(n_steps/2))
+    instantiate_start = time.time()
+    mpc_planner = CBFMPC_Controller(centers, stds, params, bias_param, dt=dt, n_steps=n_steps, v_gain = 0 , r_gains = 1)
+    print("FINISH INSTANTIATING MPC PLANNER IN %s seconds \n" % (time.time() - instantiate_start))
+
+    # Set save dir and create folder if needed
+    save_dir = data_dir + "MPC/ref_traj/"
+    if not os.path.isdir(save_dir):
+        os.mkdir(save_dir)
+
+    # Create planer object and start planning loop
+    planner = MPC_vel_planner()
+
+    planner.planner_loop(init_traj_planner, mpc_planner, freq)

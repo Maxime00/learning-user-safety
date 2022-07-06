@@ -13,7 +13,7 @@ class DoubleIntegrator():
 
 class CBFMPC_Controller(DoubleIntegrator):
 
-    def __init__(self, centers, stds, theta, bias, dt=0.1, n_steps=10):
+    def __init__(self, centers, stds, theta, bias, dt=0.1, n_steps=10, v_gain = 10, r_gains =1, zero_acc_start = False):
 
         super().__init__(dt)
         # Set MPC Parameters
@@ -39,10 +39,10 @@ class CBFMPC_Controller(DoubleIntegrator):
         self.Q_x = 100
         self.Q_y = 100
         self.Q_theta = 100
-        self.Q_v = 10
-        self.R1 = 1
-        self.R2 = 1
-        self.R3 = 1
+        self.Q_v = v_gain
+        self.R1 = r_gains
+        self.R2 = r_gains
+        self.R3 = r_gains
 
         self.Q = casadi.diagcat(self.Q_x, self.Q_y, self.Q_theta, self.Q_v, self.Q_v, self.Q_v) # State Weights 
         self.R = casadi.diagcat(self.R1, self.R2, self.R3) # Control Weights
@@ -67,11 +67,18 @@ class CBFMPC_Controller(DoubleIntegrator):
         self.h_fun = casadi.Function('h_fun', [self.x],  [self.h])
 
         # Set up Cost Function and Constraint Expressions
-
         self.cost_fn = 0
         self.constraints = self.X[:,0] - self.P[:self.n_states] # Initialize constraint list with x0 constraint
-        self.lb_con = np.array([0]*self.n_states)
-        self.ub_con = np.array([0]*self.n_states)
+        # adding zero acceleration at start constraint
+        if zero_acc_start:
+            cmd_constraint = self.U[:,0] - np.zeros(self.n_controls)
+            self.constraints = casadi.vertcat(self.constraints, cmd_constraint)
+            self.lb_con = np.array([0]*(self.n_states+self.n_controls))
+            self.ub_con = np.array([0]*(self.n_states+self.n_controls))
+        else:
+            self.lb_con = np.array([0] * self.n_states)
+            self.ub_con = np.array([0] * self.n_states)
+
         for i in range(self.N):
             xi = self.X[:, i]
             ui = self.U[:,i]
@@ -110,7 +117,6 @@ class CBFMPC_Controller(DoubleIntegrator):
         self.solver = casadi.nlpsol('solver', 'ipopt', self.nlp, self.opts)
 
         # Set Variable Limits
- 
         self.lbx = casadi.DM.zeros((self.n_states*(self.N+1) + self.n_controls*self.N, 1))
         self.ubx = casadi.DM.zeros((self.n_states*(self.N+1) + self.n_controls*self.N, 1))       
 
@@ -128,8 +134,8 @@ class CBFMPC_Controller(DoubleIntegrator):
         self.ubx[4: self.n_states*(self.N+1): self.n_states] = ws_lim[4,1]     # VY lower bound
         self.ubx[5: self.n_states*(self.N+1): self.n_states] = ws_lim[5,1]     # VZ lower bound
 
-        self.lbx[self.n_states*(self.N+1):] = -1.                 # v lower bound for all V
-        self.ubx[self.n_states*(self.N+1):] = 1.                  # v upper bound for all V
+        self.lbx[self.n_states*(self.N+1):] = -1                 # v lower bound for all V
+        self.ubx[self.n_states*(self.N+1):] = 1                # v upper bound for all V
 
 
     def control(self, x0, xgoal, t0=0):
