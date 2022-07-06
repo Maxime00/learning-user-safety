@@ -154,20 +154,24 @@ def control_loop(traj, robot, freq):
     ctrl = create_joint_controller(CONTROLLER_TYPE.IMPEDANCE, nb_joints)
 
     ## IRL GAINS
-    ctrl.set_parameter_value("stiffness", [220, 220, 220, 180, 120, 120, 100], sr.ParameterType.DOUBLE_ARRAY)
-    ctrl.set_parameter_value("damping", [15, 15, 15, 13, 11, 10, 8], sr.ParameterType.DOUBLE_ARRAY)
+    # ctrl.set_parameter_value("stiffness", [220, 220, 220, 180, 120, 120, 100], sr.ParameterType.DOUBLE_ARRAY)
+    # ctrl.set_parameter_value("damping", [15, 15, 15, 13, 11, 10, 8], sr.ParameterType.DOUBLE_ARRAY)
     ## SIMULATOR GAINS
-    # ctrl.set_parameter_value("stiffness", [10., 5., 4., 2., 2, 2, 2], sr.ParameterType.DOUBLE_ARRAY)
-    # ctrl.set_parameter_value("damping", [3., 2., 2., 1., .5, .5, .5], sr.ParameterType.DOUBLE_ARRAY)
+    ctrl.set_parameter_value("stiffness", [10., 5., 4., 2., 2, 2, 2], sr.ParameterType.DOUBLE_ARRAY)
+    ctrl.set_parameter_value("damping", [3., 2., 2., 1., .5, .5, .5], sr.ParameterType.DOUBLE_ARRAY)
 
     # SET UP variables
     desired_state = sr.JointState("franka", nb_joints)
     feedback_state = sr.JointState("franka", nb_joints)
 
     flag = 0
-    init_pos_err_threshold = 0.205
+    start_integrator_threshold = 0.21
+    init_pos_err_threshold = 0.02
     initial_pos = traj['position'].at[0]
     time_period = 1. / freq
+    inte_gain = [10, 10, 10, 10, 10, 10, 8]
+    integral = np.zeros(7)
+    inte_torques = np.zeros(7)
 
     alpha = 0.99
     dq_filtered = np.zeros(7)
@@ -196,7 +200,7 @@ def control_loop(traj, robot, freq):
             if error < init_pos_err_threshold:
                 print("REACHED START POSITION : ", initial_pos)
                 print("ERROR :", error)
-                flag = 1
+                # flag = 1
 
                 # Stop robot
                 command.joint_state = state.joint_state
@@ -205,9 +209,27 @@ def control_loop(traj, robot, freq):
 
 
                 print("WAIT ...")
-                rospy.sleep(2.0)
+                rospy.sleep(10.0)
                 timeZero = time.time()
                 continue
+
+            if error < start_integrator_threshold :
+                print("Adding integrator for precise positioning")
+                print("ERROR :", error)
+                integral += (initial_pos - state.joint_state.get_positions()) * time_period
+                inte_torques = inte_gain * integral
+
+                inte_torques = np.clip(inte_torques, -2, 2)
+
+                print("inte TORQUES: ", inte_torques)
+                # print("WAIT ...")
+                # rospy.sleep(1.0)
+
+            # reset integral if overhsoot
+            if integral.any() != 0 and error > start_integrator_threshold:
+                integral *= 0
+                print("RESET INTEGRAL")
+                rospy.sleep(2.0)
 
             # Extract form Yang code
             feedback_state.set_positions(state.joint_state.get_positions())
@@ -223,16 +245,16 @@ def control_loop(traj, robot, freq):
             pos_d = feedback_state.get_positions() + time_period * velo_d
             desired_state.set_positions(pos_d)
 
-            print("Joint positions: ", feedback_state.get_positions())
-            print("Joint Velocities: ", feedback_state.get_velocities())
-            print("Desired positions: ", desired_state.get_positions())
-            print("Desired Velocities: ", desired_state.get_velocities())
+            # print("Joint positions: ", feedback_state.get_positions())
+            # print("Joint Velocities: ", feedback_state.get_velocities())
+            # print("Desired positions: ", desired_state.get_positions())
+            # print("Desired Velocities: ", desired_state.get_velocities())
 
             # command = ctrl.compute_command(desired_state, state.joint_state)
 
             command_torques = sr.JointTorques(ctrl.compute_command(desired_state, feedback_state))
             command.joint_state = state.joint_state
-            command.joint_state.set_torques(command_torques.get_torques())
+            command.joint_state.set_torques(command_torques.get_torques() + inte_torques)
 
             print("Command:", command.joint_state.get_torques())
             if np.any(command_torques.get_torques() > 30):
@@ -336,6 +358,7 @@ if __name__ == '__main__':
         traj_number = sys.argv[2]
     else:
         user_number = 0
+        traj_number = 1
 
     if isinstance(user_number, str):
         print("Processing rosbags for User_" + user_number)

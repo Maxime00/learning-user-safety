@@ -121,7 +121,6 @@ def process_user_rosbags(user_num='0', smooth_flag = '1'):
 		time_idx = np.array(time_idx)
 		time_idx = time_idx - time_idx[0]
 
-
 		# Filter velocities and torques
 		smoothTorques = np.zeros(jointTorq2save.shape)
 		smoothJointVel = np.zeros(jointVel2save.shape)
@@ -144,6 +143,12 @@ def process_user_rosbags(user_num='0', smooth_flag = '1'):
 		# plt.title("smooth")
 		# plt.show()
 
+		# compute accelerations -use smooth vel to avoid noise
+		eeAcc = []
+		for i in range(0, len(smoothTwistVel[:-1, 0])):
+			acc = (smoothTwistVel[i + 1] - smoothTwistVel[i]) / (time_idx[i+1] - time_idx[i])
+			eeAcc.append(acc)
+		acc2save = np.array(eeAcc)
 
 		# convert to pandas
 		traj_dict = {'time' : time_idx ,'position': jointPositions, 'velocity': smoothJointVel.tolist(), 'torques': smoothTorques.tolist()}
@@ -158,6 +163,8 @@ def process_user_rosbags(user_num='0', smooth_flag = '1'):
 		elif smooth_flag == '0':
 			np.savetxt(save_dir+"_eeVelocity.txt", twist2save, delimiter=",")
 
+		np.savetxt(save_dir + "_eeAcceleration.txt", acc2save, delimiter=",")
+
 		trajectory_df.to_pickle(path = save_dir+"_jointState.pkl")
 
 		bag.close()
@@ -171,7 +178,8 @@ if __name__ == '__main__':
 		user_number = sys.argv[1]
 		smooth_flag = sys.argv[2]
 	else:
-		user_number = 0
+		user_number = 'test'
+		smooth_flag = '1'
 
 	if isinstance(user_number, str):
 		print("Processing rosbags for User_"+user_number)
