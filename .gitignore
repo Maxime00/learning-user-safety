@@ -7,7 +7,6 @@
 *.bag
 *.txt
 *.pkl
-*.pkl
 *.zip
 *.npy
 

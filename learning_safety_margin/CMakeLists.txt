@@ -34,14 +34,7 @@ set(DEMOS_SCRIPTS
     joint_space_velocity_control
     idle_control
     cartesian_twist_control
-    cartesian_impedance_MPC_control
-    joint_torque_control
     joint_torque_traj_follow_control
-    joint_torque_one_traj_MPC_control
-    cartesian_twist_traj_follow_control
-    cartesian_impedance_cbfvel_control
-    MPC_velocity_planner
-    MPC_velocity_control
 )
 
 foreach(SCRIPT ${DEMOS_SCRIPTS})
