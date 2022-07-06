@@ -156,12 +156,11 @@ current working scripts :
 - add logic to play several trajectories of varying safety in planner - > check ahalya' scode, make somethi nto match that
 - tune integrator for replays ??
 - replays must choose and output safety and traj_number
-- add arguments for user_specific and safety 
-- Tune gains
-- add data_recording in mpc controller
+- add arguments for user_specific and safety
 - add script to handle several MPC trajectories and pause between each until next input 
 - save reference traj to plot against recorded later 
-
+- make offline plot functions for mpc trajectories
+- successive traj follow : make lis tof traj, wait for inptu at the end of each 
 
 
 
