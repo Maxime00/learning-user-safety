@@ -10,15 +10,6 @@ import time
 from robot_model import Model, InverseKinematicsParameters, QPInverseVelocityParameters
 import state_representation as sr
 from scipy import signal
-import matplotlib.pyplot as plt
-from sensor_msgs.msg import JointState
-from std_msgs.msg import Header
-
-
-def find_closest_time(df, time):
-    dist = (df['time'] - time).abs()
-    return df.loc[dist.idxmin()]
-
 
 def process_user_rosbags(user_num='0', smooth_flag = '1'):
 

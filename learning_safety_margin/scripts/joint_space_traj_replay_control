@@ -406,8 +406,8 @@ if __name__ == '__main__':
         user_number = sys.argv[1]
         number_of_traj = sys.argv[2]
     else:
-        user_number = 0
-        number_of_traj = 2
+        user_number = '0'
+        number_of_traj = '2'
 
     if isinstance(user_number, str):
         print("Processing rosbags for User_" + user_number)
