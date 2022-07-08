@@ -146,8 +146,9 @@ $PYTHONPATH:/opt/ros/noetic/lib/python3/dist-packages:/home/ros/ros_ws/devel/lib
 
 current working scripts : 
 - idle_control (recording) 
-- joint_space_traj_replay_control (replays)
-- cartesian_space_traj_follow_control (follows single trajectory from MPC planner)
+- joint_space_traj_replay_control (successive replays)
+- cartesian_space_single_traj_follow_control (follows single trajectory from CBF planner)
+- - cartesian_space_single_traj_follow_control (follow several trajectories from CBF planner)
 - cartesian twist control (demo script)
 - joint space velocity control (demo script)
 
