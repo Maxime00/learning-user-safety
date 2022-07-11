@@ -130,23 +130,23 @@ class trajGenerator():
                 y = np.random.uniform(0.3, 0.5)
             else:
                 y = np.random.uniform(-0.3, -0.5)
-            xt = x
-            yt = y * -1
+            xt = x + np.random.uniform(0.3-x, 0.7-x)
+            yt = -y
 
         else:
             y = np.random.uniform(y_lim[0], y_lim[1])
-            if x <= 0.3:
+            if x < 0.3:
                 xt = 0.7 + (0.3-x)
             else:
                 xt = x - 0.5
-            yt = y
+            yt = y + np.random.uniform(y_lim[0]-y, y_lim[1]-y)
 
         z = 0.2
         xdot = 0
         ydot = 0
         zdot = 0
 
-        x0 = np.hstack((x,y,z,xdot, ydot, zdot))
+        x0 = np.hstack((x, y, z, xdot, ydot, zdot))
         xt = np.hstack((xt, yt, z, xdot, ydot, zdot))
 
         return x0, xt

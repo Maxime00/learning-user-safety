@@ -53,7 +53,7 @@ def plot_ref_vs_rec(pos_vel, acc, t, rec):
     error_pos = rec_pos - rec_ref_pos
 
     rec_vel = rec[:, 4:7]
-    ref_vel = pos_vel[:,3:6]
+    ref_vel = pos_vel[:, 3:6]
     rec_ref_vel = rec[:, 13:16]
     error_vel = rec_vel - rec_ref_vel
 
@@ -245,8 +245,6 @@ def control_loop(traj_dict, robot, freq):
     # append 0 accelerations to U to match size of other variables
     full_desired_U = np.append(full_desired_U, [[0, 0, 0]], axis=0)
 
-    print("X :", full_desired_X[0,0:3])
-
     # get initial joint state
     initial_cart_pos = sr.CartesianState("panda_ee", "panda_link0")
     initial_cart_pos.set_position(full_desired_X[0, 0:3])
@@ -274,6 +272,7 @@ def control_loop(traj_dict, robot, freq):
             print("EEF position: ", state.ee_state.get_position())
             rospy.sleep(0.1)
             checked_first_state = False
+            input("Waiting for user input... Press Enter to start")
             print("Going to start position...")
             continue
 
@@ -306,7 +305,7 @@ def control_loop(traj_dict, robot, freq):
                                              state.ee_state.get_reference_frame())
                 ds.set_parameter_value("attractor", target_ds, sr.ParameterType.STATE, sr.StateType.CARTESIAN_POSE)
 
-                input("Waiting for user input... Press any key to start \n ")
+                input("Waiting for user input... Press Enter to start \n ")
                 rospy.sleep(1.0)
                 # print("Replaying trajectory %s of %s " % (traj_idx+1, len(fpath_list)))
                 # print("Traj name : ", fn_list[traj_idx])
@@ -454,7 +453,6 @@ def control_loop(traj_dict, robot, freq):
             # ------------END OF TRAJ-> DO PLOTS ------------------------
             # remove zeros
             recorded_state = recorded_state[~np.isnan(recorded_state).any(axis=1)]
-            # TODO : check recorded state, why is it empty ??
 
             # count number of MPC trajectories and set name for this traj accordingly
             count_prev_traj = sum(len(files) for _, _, files in os.walk(save_dir))
@@ -493,6 +491,7 @@ def control_loop(traj_dict, robot, freq):
 
                     # call plot function
                     plot_ref_vs_rec(full_desired_X, full_desired_U, full_desired_T, recorded_state)
+                    break
 
                 ## Set up next traj
                 traj_idx = idx_list[idx_to_incr]
@@ -502,12 +501,18 @@ def control_loop(traj_dict, robot, freq):
                 desired_label = traj_dict['Labels'][traj_idx]
                 # append 0 accelerations to U to match size of other variables
                 full_desired_U = np.append(full_desired_U, [[0, 0, 0]], axis=0)
+                # Set initial position as joint pos for joint ctrl
+                initial_cart_pos.set_position(full_desired_X[0, 0:3])
+                initial_cart_pos.set_orientation(np.array([0, 1, 0, 0]))
+                initial_joint_pos_sr = sr.JointPositions(
+                    robot_model.inverse_kinematics(sr.CartesianPose(initial_cart_pos), test_js, param, "panda_link8"))
+                initial_joint_pos = initial_joint_pos_sr.data()
 
             elif should_replay == 'y':
                 print("Replaying same trajectory... \n")
 
             # Reset recording list
-            recorded_state = np.zeros((10000, 1 + nb_joints * 6)) * np.nan
+            recorded_state = np.zeros((10000, 1 + n_dim * 6 + 7)) * np.nan
             idx = 0
 
             # Reset integrator
@@ -555,7 +560,7 @@ if __name__ == '__main__':
     # SET PARAMETERS FOR MPC CONTROL
     freq = 100
     dt = 0.15  # 1./freq
-    n_steps = 40
+    n_steps = 10
     nbr_demos = int(number_of_demos)
 
     # Init Trajectory Generation
