@@ -13,7 +13,7 @@ from learning_safety_margin.vel_control_utils import *
 
 class trajGenerator():
 
-    def __init__(self, centers, stds, theta, bias, daring_offset=0.1, unsafe_offset=30., dt=0.1, n_steps=50):
+    def __init__(self, centers, stds, theta, bias, daring_offset=0.1, unsafe_offset=30., dt=0.1, n_steps=50, r_gains = 1, zero_acc_start = False):
 
         self.centers = centers
         self.stds = stds
@@ -27,7 +27,8 @@ class trajGenerator():
 
         self.dt = dt
         self.n_steps = n_steps
-
+        self.r_gains = r_gains
+        self.zero_acc_start = zero_acc_start
 
         # Generate H function(s) for Casadi
 
@@ -54,9 +55,9 @@ class trajGenerator():
         self.h_unsafe_fun = casadi.Function('h_unsafe_fun', [self.x], [self.h_unsafe])
 
         # Generate Planners
-        self.safe_mpc_planner = CBFMPC_Controller(self.centers, self.stds, self.theta, self.bias, dt=self.dt, n_steps=self.n_steps,r_gains = 200, zero_acc_start=True)
-        self.daring_mpc_planner = CBFMPC_Controller(self.centers, self.stds, self.theta, self.daring_bias, dt=self.dt, n_steps=self.n_steps, r_gains = 200, zero_acc_start=True)
-        self.unsafe_mpc_planner = CBFMPC_Controller(self.centers, self.stds, self.theta, self.unsafe_bias, dt=self.dt, n_steps=self.n_steps, r_gains = 200, zero_acc_start=True)
+        self.safe_mpc_planner = CBFMPC_Controller(self.centers, self.stds, self.theta, self.bias, dt=self.dt, n_steps=self.n_steps,r_gains = self.r_gains, zero_acc_start=self.zero_acc_start)
+        self.daring_mpc_planner = CBFMPC_Controller(self.centers, self.stds, self.theta, self.daring_bias, dt=self.dt, n_steps=self.n_steps, r_gains = self.r_gains, zero_acc_start=self.zero_acc_start)
+        self.unsafe_mpc_planner = CBFMPC_Controller(self.centers, self.stds, self.theta, self.unsafe_bias, dt=self.dt, n_steps=self.n_steps, r_gains = self.r_gains, zero_acc_start=self.zero_acc_start)
 
     def generate_safe_traj(self, start, target):
         X, U, T = self.safe_mpc_planner.control(start, target)
