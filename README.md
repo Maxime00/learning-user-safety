@@ -159,8 +159,8 @@ current working scripts :
 - tune integrator for replays traj follow ??
 - make offline plot functions for mpc trajectories
 - check/fix issue with inverse_kinematics not converging (sometimes, depends on x pos?)
-- test successive mpc on real robot
-
+- figure out difference in ref frame panda_base and panda_link0
+- 
 
 
 
