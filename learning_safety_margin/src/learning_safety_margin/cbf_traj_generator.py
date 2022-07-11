@@ -54,9 +54,9 @@ class trajGenerator():
         self.h_unsafe_fun = casadi.Function('h_unsafe_fun', [self.x], [self.h_unsafe])
 
         # Generate Planners
-        self.safe_mpc_planner = CBFMPC_Controller(self.centers, self.stds, self.theta, self.bias, dt=self.dt, n_steps=self.n_steps)
-        self.daring_mpc_planner = CBFMPC_Controller(self.centers, self.stds, self.theta, self.daring_bias, dt=self.dt, n_steps=self.n_steps)
-        self.unsafe_mpc_planner = CBFMPC_Controller(self.centers, self.stds, self.theta, self.unsafe_bias, dt=self.dt, n_steps=self.n_steps)
+        self.safe_mpc_planner = CBFMPC_Controller(self.centers, self.stds, self.theta, self.bias, dt=self.dt, n_steps=self.n_steps,r_gains = 200, zero_acc_start=True)
+        self.daring_mpc_planner = CBFMPC_Controller(self.centers, self.stds, self.theta, self.daring_bias, dt=self.dt, n_steps=self.n_steps, r_gains = 200, zero_acc_start=True)
+        self.unsafe_mpc_planner = CBFMPC_Controller(self.centers, self.stds, self.theta, self.unsafe_bias, dt=self.dt, n_steps=self.n_steps, r_gains = 200, zero_acc_start=True)
 
     def generate_safe_traj(self, start, target):
         X, U, T = self.safe_mpc_planner.control(start, target)
@@ -125,14 +125,16 @@ class trajGenerator():
         # Generate starting pose
 
         x = np.random.uniform(x_lim[0], x_lim[1])
+        print("x:", x)
         if 0.3 <= x <= 0.7:
             if random.random() < 0.5:
                 y = np.random.uniform(0.3, 0.5)
+                print("y :", y)
             else:
                 y = np.random.uniform(-0.3, -0.5)
             xt = x + np.random.uniform(0.3-x, 0.7-x)
             yt = -y
-
+            print("x, y : ", x, y, xt, yt)
         else:
             y = np.random.uniform(y_lim[0], y_lim[1])
             if x < 0.3:
@@ -141,11 +143,11 @@ class trajGenerator():
                 xt = x - 0.5
             yt = y + np.random.uniform(y_lim[0]-y, y_lim[1]-y)
 
-        z = 0.2
+        z = 0.25
         xdot = 0
         ydot = 0
         zdot = 0
-
+        print("x, y again : ", x, y, xt, yt)
         x0 = np.hstack((x, y, z, xdot, ydot, zdot))
         xt = np.hstack((xt, yt, z, xdot, ydot, zdot))
 
@@ -205,8 +207,8 @@ class trajGenerator():
         ax = plt.axes(projection='3d')
         for i in range(len(x_list)):
             plt.plot(x_list[i][:,0],x_list[i][:,1], x_list[i][:,2])
-            # print(x_list[i][0,0:3])
-            # print(x_list[i][-1, 0:3])
+            print("start: ", x_list[i][0,0:3])
+            print("end: ", x_list[i][-1, 0:3])
         ax.set_xlim(x_lim)
         ax.set_ylim(y_lim)
         ax.set_zlim(z_lim)

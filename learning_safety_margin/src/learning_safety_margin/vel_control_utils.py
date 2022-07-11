@@ -3,7 +3,7 @@ import casadi
 
 dt = 0.01
 
-x_lim = [0.2, 0.8]
+x_lim = [0.3, 0.8]
 y_lim = [-0.5, 0.5]
 z_lim = [0., 0.8]
 vdot_lim = [-1., 1.]
