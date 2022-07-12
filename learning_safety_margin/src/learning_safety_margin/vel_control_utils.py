@@ -3,9 +3,9 @@ import casadi
 
 dt = 0.01
 
-x_lim = [0.3, 0.75]
+x_lim = [0.25, 0.75]
 y_lim = [-0.45, 0.45]
-z_lim = [0., 0.8]
+z_lim = [0., 0.7]
 vdot_lim = [-1., 1.]
 
 ws_lim = np.vstack((x_lim, y_lim, z_lim, vdot_lim, vdot_lim, vdot_lim))

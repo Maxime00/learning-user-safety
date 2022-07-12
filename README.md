@@ -155,12 +155,11 @@ current working scripts :
 
 
 # TODO 
-- smoother trajectory for MPC
-- tune integrator for replays traj follow ??
+- tune orientation gains to avoid oscillations but stay well oriented
+- tune integrator to be quicker (is overshoot okay??)
 - make offline plot functions for mpc trajectories
-- check/fix issue with inverse_kinematics not converging (sometimes, depends on x pos?)
-- figure out difference in ref frame panda_base and panda_link0
-- 
+- improve random positions of cbf traj planner
+
 
 
 

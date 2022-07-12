@@ -171,7 +171,6 @@ def plot_f0_traj(rec):
 
     rec_pos = rec[:, 1:8]
     rec_ref_pos = rec[:, 15:22]
-    error_pos = rec_pos - rec_ref_pos
 
     rec_int = rec[:, 22:29]
     rec_int_tor = rec[:, 29:36]
@@ -191,14 +190,6 @@ def plot_f0_traj(rec):
         ax.set(xlabel="Time [sec]")
     fig.legend(labels=['Recorded', 'Reference'], loc=(.6,.15))
 
-    # Plot position error
-    fig, axs = plt.subplots(4, 2)
-    fig.suptitle("Joint position error of '{}'".format(traj_name))
-
-    for i, ax in enumerate(axs.ravel()[:-1]):
-        ax.plot(rec_time, error_pos[:, i])
-        ax.set(ylabel="joint {}".format(i+1))
-        ax.set(xlabel="Time [sec]")
 
     # Plot velocities and reference
     fig, axs = plt.subplots(4, 2)
@@ -242,8 +233,8 @@ def control_loop(traj_dict, robot, freq):
     # SET UP CARTESIAN CTRL
     ctrl = create_cartesian_controller(CONTROLLER_TYPE.IMPEDANCE)
 
-    ctrl.set_parameter_value("stiffness", [150, 150, 150, 8, 8, 8], sr.ParameterType.DOUBLE_ARRAY) # 100 100 5 5 - good: 80 80 5 5
-    ctrl.set_parameter_value("damping", [25, 25, 25, 5.2, 5.2, 5.2], sr.ParameterType.DOUBLE_ARRAY) # 6, 4.8, 0 for angular
+    ctrl.set_parameter_value("stiffness", [150, 150, 150, 6, 6, 6], sr.ParameterType.DOUBLE_ARRAY) # 100 100 5 5 - good: 80 80 5 5
+    ctrl.set_parameter_value("damping", [25, 25, 25, 4.8, 4.8, 4.8], sr.ParameterType.DOUBLE_ARRAY) # 6, 4.8, 0 for angular
     ctrl.set_parameter_value("inertia", [.5, .5, .5, 0., 0., 0.], sr.ParameterType.DOUBLE_ARRAY)
 
     # DS for orientation control
@@ -255,11 +246,11 @@ def control_loop(traj_dict, robot, freq):
     joint_ctrl = create_joint_controller(CONTROLLER_TYPE.IMPEDANCE, nb_joints)
 
     ## IRL GAINS
-    # joint_ctrl.set_parameter_value("stiffness", [220, 220, 220, 180, 120, 120, 100], sr.ParameterType.DOUBLE_ARRAY)
-    # joint_ctrl.set_parameter_value("damping", [15, 15, 15, 13, 11, 10, 8], sr.ParameterType.DOUBLE_ARRAY)
+    joint_ctrl.set_parameter_value("stiffness", [220, 220, 220, 180, 120, 120, 100], sr.ParameterType.DOUBLE_ARRAY)
+    joint_ctrl.set_parameter_value("damping", [15, 15, 15, 13, 11, 10, 8], sr.ParameterType.DOUBLE_ARRAY)
     ## SIMULATOR GAINS
-    joint_ctrl.set_parameter_value("stiffness", [10., 5., 4., 2., 2, 2, 2], sr.ParameterType.DOUBLE_ARRAY)
-    joint_ctrl.set_parameter_value("damping", [3., 2., 2., 1., .5, .5, .5], sr.ParameterType.DOUBLE_ARRAY)
+    # joint_ctrl.set_parameter_value("stiffness", [10., 5., 4., 2., 2, 2, 2], sr.ParameterType.DOUBLE_ARRAY)
+    # joint_ctrl.set_parameter_value("damping", [3., 2., 2., 1., .5, .5, .5], sr.ParameterType.DOUBLE_ARRAY)
 
     # SET UP state variables
     desired_state = sr.CartesianState('panda_ee', 'panda_base')
@@ -274,7 +265,7 @@ def control_loop(traj_dict, robot, freq):
     flag = 0
 
     # integrator variables
-    inte_gain = [3., 2., 2., 1., .5, .5, .5]   ##[10, 10, 10, 8, 7, 6, 4]# [80, 80, 75, 60, 50, 45, 40] #[60, 60, 60, 55, 50, 40, 30] ### #
+    inte_gain = [10, 10, 10, 8, 7, 6, 4]# [60, 60, 60, 55, 50, 40, 30] #[3., 2., 2., 1., .5, .5, .5]   ##[80, 80, 75, 60, 50, 45, 40] ### #
     start_integrator_threshold = 0.5
     init_pos_err_threshold = 0.01
     time_period = 1. / freq
@@ -330,28 +321,14 @@ def control_loop(traj_dict, robot, freq):
     initial_cart_pos.set_position(init_pos)
     # add -45 deg compensation (ref frame offset from link8 to hand)
     offset_rot = Quaternion(axis= [0., 0., 1.], degrees=45) #0.9238, 0.0, 0.3826, 0.)
-    print(offset_rot)
     temp_orient = Quaternion(0.,1.,0.,0.)
-    # print(desired_start_orientation)
-    # desired_start_orientation.__mul__(offset_rot)
-    # print(desired_start_orientation)
-    print(temp_orient)
     desired_start_orientation = temp_orient * offset_rot
-    print(desired_start_orientation)
     initial_cart_pos.set_orientation(desired_start_orientation.elements)
     print("final start orientation", initial_cart_pos.get_orientation())
     param = InverseKinematicsParameters()
     param.max_number_of_iterations = 15000
-    # ul = np.array([2.8973, 1.7628, 2.8973, -0.0698, 2.8973, 3.7525, 2.8973]) - 0.25
-    # ll = np.array([-2.8973, -1.7628, -2.8973, -3.0718, -2.8973, -0.0175, -2.8973]) + 0.25
-    # q0 = 0.5 * (ul + ll)
-    # test_js = sr.JointPositions("franka", robot_model.get_joint_frames(), q0) # test_js,
     initial_joint_pos_sr = sr.JointPositions(robot_model.inverse_kinematics(sr.CartesianPose(initial_cart_pos), param, "panda_link8"))
-    # initial_joint_pos_sr = robot_model.inverse_kinematics(sr.CartesianPose(initial_cart_pos), param, 'panda_link8')
-    print("orient from cart state :", initial_cart_pos.get_orientation())
-    print("orient from convert js :", robot_model.forward_kinematics(initial_joint_pos_sr, 'panda_link8').data()[3:7])
     initial_joint_pos = initial_joint_pos_sr.data()
-    # initial_joint_pos = initial_joint_pos_sr.get_positions()
 
 
     print_count= 0
@@ -432,8 +409,8 @@ def control_loop(traj_dict, robot, freq):
                 inte_torques = inte_gain * integral
 
                 # clip to avoid too big a compensation
-                inte_torques = inte_torques / np.linalg.norm(inte_torques) if np.linalg.norm(inte_torques) > 2.0 else inte_torques
-                # inte_torques = np.clip(inte_torques, -2, 2)
+                # inte_torques = inte_torques / np.linalg.norm(inte_torques) if np.linalg.norm(inte_torques) > 10.0 else inte_torques
+                inte_torques = np.clip(inte_torques, -2, 2)
 
                 if print_count % 50 == 0 :
                     print("INTERGRATOR TORQUES :", inte_torques)
@@ -473,8 +450,7 @@ def control_loop(traj_dict, robot, freq):
 
             # debug print
             if print_count % 50 == 0:
-                print("CARTESIAN POS :", state.ee_state.get_position())
-                print("ORIENTATION: ", state.ee_state.get_orientation())
+                print("Error :", error)
                 print("JS: ", state.joint_state.get_positions())
             print_count += 1
 
@@ -558,10 +534,10 @@ def control_loop(traj_dict, robot, freq):
             # print("Cartesian Velocities: ", feedback_state.get_linear_velocity())
             # print("Cartesian Accelerations: ", ddq_filtered)
             # print("Desired positions: ", desired_state.get_position())
-            # print("Current orientation: ", feedback_state.get_orientation())
-            # print("Desired orientation: ", desired_state.get_orientation())
-            # print("Desired Velocities: ", desired_state.get_linear_velocity())
-            # print("Desired Angular Velocities: ", desired_state.get_angular_velocity())
+            print("Current orientation: ", feedback_state.get_orientation())
+            print("Desired orientation: ", desired_state.get_orientation())
+            print("Current angular Velocities: ", feedback_state.get_angular_velocity())
+            print("Desired Angular Velocities: ", desired_state.get_angular_velocity())
 
             # SAVE current state
             recorded_state[idx, 0] = nIter_time
@@ -632,6 +608,8 @@ def control_loop(traj_dict, robot, freq):
                     plot_ref_vs_rec(full_desired_X, full_desired_U, full_desired_T, recorded_state)
                     break
 
+                plot_ref_vs_rec(full_desired_X, full_desired_U, full_desired_T, recorded_state)
+
                 ## Set up next traj
                 traj_idx = idx_list[idx_to_incr]
                 full_desired_X = traj_dict['X'][traj_idx]
@@ -646,7 +624,7 @@ def control_loop(traj_dict, robot, freq):
                 initial_cart_pos.set_position(init_pos)
                 initial_cart_pos.set_orientation(np.array([0, 1, 0, 0]))
                 initial_joint_pos_sr = sr.JointPositions(
-                    robot_model.inverse_kinematics(sr.CartesianPose(initial_cart_pos), test_js, param, "panda_link8"))
+                    robot_model.inverse_kinematics(sr.CartesianPose(initial_cart_pos), param, "panda_link8"))
                 initial_joint_pos = initial_joint_pos_sr.data()
 
             elif should_replay == 'y':
@@ -655,6 +633,8 @@ def control_loop(traj_dict, robot, freq):
             # Reset recording list
             recorded_state = np.zeros((10000, 1 + n_dim * 6 + 7)) * np.nan
             idx = 0
+            js_record = np.zeros((10000, 1 + nb_joints * 5)) * np.nan
+            js_idx = 0
 
             # Reset integrator
             integral = np.zeros(7)
@@ -702,7 +682,7 @@ if __name__ == '__main__':
     # SET PARAMETERS FOR MPC CONTROL
     freq = 100
     dt = 0.15  # 1./freq
-    n_steps = 15
+    n_steps = 40
     nbr_demos = int(number_of_demos)
 
     # Init Trajectory Generation

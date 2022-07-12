@@ -125,30 +125,37 @@ class trajGenerator():
     def make_trial_conditions(self):
         # Generate starting pose
 
-        x = np.random.uniform(x_lim[0], x_lim[1])
-        print("x:", x)
-        if 0.3 <= x <= 0.7:
-            if random.random() < 0.5:
-                y = np.random.uniform(0.3, 0.5)
-                print("y :", y)
-            else:
-                y = np.random.uniform(-0.3, -0.5)
-            xt = x + np.random.uniform(0.3-x, 0.7-x)
-            yt = -y
-            print("x, y : ", x, y, xt, yt)
-        else:
-            y = np.random.uniform(y_lim[0], y_lim[1])
-            if x < 0.3:
-                xt = 0.7 + (0.3-x)
-            else:
-                xt = x - 0.5
-            yt = y + np.random.uniform(y_lim[0]-y, y_lim[1]-y)
+        inRange = False
 
-        z = 0.25
+        while not inRange:
+            x = np.random.uniform(x_lim[0], x_lim[1])
+            print("x:", x)
+            if 0.3 <= x <= 0.7:
+                if random.random() < 0.5:
+                    y = np.random.uniform(0.3, 0.45)
+                    print("y :", y)
+                else:
+                    y = np.random.uniform(-0.3, -0.45)
+                xt = x + np.random.uniform(0.3-x, 0.7-x)
+                yt = -y
+                print("x, y : ", x, y, xt, yt)
+            else:
+                y = np.random.uniform(y_lim[0], y_lim[1])
+                if x < 0.3:
+                    xt = 0.7 + (0.3-x)
+                else:
+                    xt = x - 0.5
+                yt = y + np.random.uniform(y_lim[0]-y, y_lim[1]-y)
+
+            # check coordinates are reachable by robot
+            if np.linalg.norm([x,y]) <= .75:
+                inRange = True
+
+        z = 0.2
         xdot = 0
         ydot = 0
         zdot = 0
-        print("x, y again : ", x, y, xt, yt)
+        print("x, y and xt, yt : ", x, y, xt, yt)
         x0 = np.hstack((x, y, z, xdot, ydot, zdot))
         xt = np.hstack((xt, yt, z, xdot, ydot, zdot))
 
