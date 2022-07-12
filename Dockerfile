@@ -10,7 +10,6 @@ RUN rm -rf /tmp/network-interfaces
 WORKDIR /home/${USER}/ros_ws
 ADD ./learning_safety_margin/requirements.txt ./src/learning_safety_margin/requirements.txt
 RUN pip3 install -r ./src/learning_safety_margin/requirements.txt
-RUN pip3 install ruckig
 
 # set up MOSEK license
 WORKDIR /home/${USER}
