@@ -5,6 +5,7 @@ import numpy as np
 import pickle
 import random
 import rospy
+import math
 import time
 import sys
 import os
@@ -254,11 +255,11 @@ def control_loop(traj_dict, robot, freq):
     joint_ctrl = create_joint_controller(CONTROLLER_TYPE.IMPEDANCE, nb_joints)
 
     ## IRL GAINS
-    joint_ctrl.set_parameter_value("stiffness", [220, 220, 220, 180, 120, 120, 100], sr.ParameterType.DOUBLE_ARRAY)
-    joint_ctrl.set_parameter_value("damping", [15, 15, 15, 13, 11, 10, 8], sr.ParameterType.DOUBLE_ARRAY)
+    # joint_ctrl.set_parameter_value("stiffness", [220, 220, 220, 180, 120, 120, 100], sr.ParameterType.DOUBLE_ARRAY)
+    # joint_ctrl.set_parameter_value("damping", [15, 15, 15, 13, 11, 10, 8], sr.ParameterType.DOUBLE_ARRAY)
     ## SIMULATOR GAINS
-    # joint_ctrl.set_parameter_value("stiffness", [10., 5., 4., 2., 2, 2, 2], sr.ParameterType.DOUBLE_ARRAY)
-    # joint_ctrl.set_parameter_value("damping", [3., 2., 2., 1., .5, .5, .5], sr.ParameterType.DOUBLE_ARRAY)
+    joint_ctrl.set_parameter_value("stiffness", [10., 5., 4., 2., 2, 2, 2], sr.ParameterType.DOUBLE_ARRAY)
+    joint_ctrl.set_parameter_value("damping", [3., 2., 2., 1., .5, .5, .5], sr.ParameterType.DOUBLE_ARRAY)
 
     # SET UP state variables
     desired_state = sr.CartesianState('panda_ee', 'panda_base')
@@ -268,12 +269,12 @@ def control_loop(traj_dict, robot, freq):
 
     # import panda urdf
     urdf_path = "/home/ros/ros_ws/src/learning_safety_margin/urdf/panda_arm.urdf"
-    robot_model = Model("franka", urdf_path)
+    robot_model = Model('panda', urdf_path)
 
     flag = 0
 
     # integrator variables
-    inte_gain =[10, 10, 10, 8, 7, 6, 4]# [80, 80, 75, 60, 50, 45, 40] #[60, 60, 60, 55, 50, 40, 30] ### ##[3., 2., 2., 1., .5, .5, .5]   ##
+    inte_gain = [3., 2., 2., 1., .5, .5, .5]   ##[10, 10, 10, 8, 7, 6, 4]# [80, 80, 75, 60, 50, 45, 40] #[60, 60, 60, 55, 50, 40, 30] ### #
     start_integrator_threshold = 0.5
     init_pos_err_threshold = 0.01
     time_period = 1. / freq
@@ -322,25 +323,35 @@ def control_loop(traj_dict, robot, freq):
     print(robot_model.get_frames())
     print(robot_model.get_joint_frames())
 
-    z_axis_gripper_offset = 0.107
+    z_axis_gripper_offset = 0.1034
     initial_cart_pos = sr.CartesianState("panda_ee", robot_model.get_base_frame())
     # add z-axis offset for gripper
     init_pos = full_desired_X[0, 0:3] + [0,0, z_axis_gripper_offset]
     initial_cart_pos.set_position(init_pos)
-    initial_cart_pos.set_orientation(np.array([0.,1.,0.,0.]))
+    # add -45 deg compensation (ref frame offset from link8 to hand)
+    offset_rot = Quaternion(axis= [0., 0., 1.], degrees=45) #0.9238, 0.0, 0.3826, 0.)
+    print(offset_rot)
+    temp_orient = Quaternion(0.,1.,0.,0.)
+    # print(desired_start_orientation)
+    # desired_start_orientation.__mul__(offset_rot)
+    # print(desired_start_orientation)
+    print(temp_orient)
+    desired_start_orientation = temp_orient * offset_rot
+    print(desired_start_orientation)
+    initial_cart_pos.set_orientation(desired_start_orientation.elements)
+    print("final start orientation", initial_cart_pos.get_orientation())
     param = InverseKinematicsParameters()
     param.max_number_of_iterations = 15000
-    ul = np.array([2.8973, 1.7628, 2.8973, -0.0698, 2.8973, 3.7525, 2.8973]) - 0.25
-    ll = np.array([-2.8973, -1.7628, -2.8973, -3.0718, -2.8973, -0.0175, -2.8973]) + 0.25
-    q0 = 0.5 * (ul + ll)
-    test_js = sr.JointPositions("franka", robot_model.get_joint_frames(), q0) # test_js,
+    # ul = np.array([2.8973, 1.7628, 2.8973, -0.0698, 2.8973, 3.7525, 2.8973]) - 0.25
+    # ll = np.array([-2.8973, -1.7628, -2.8973, -3.0718, -2.8973, -0.0175, -2.8973]) + 0.25
+    # q0 = 0.5 * (ul + ll)
+    # test_js = sr.JointPositions("franka", robot_model.get_joint_frames(), q0) # test_js,
     initial_joint_pos_sr = sr.JointPositions(robot_model.inverse_kinematics(sr.CartesianPose(initial_cart_pos), param, "panda_link8"))
     # initial_joint_pos_sr = robot_model.inverse_kinematics(sr.CartesianPose(initial_cart_pos), param, 'panda_link8')
     print("orient from cart state :", initial_cart_pos.get_orientation())
     print("orient from convert js :", robot_model.forward_kinematics(initial_joint_pos_sr, 'panda_link8').data()[3:7])
     initial_joint_pos = initial_joint_pos_sr.data()
     # initial_joint_pos = initial_joint_pos_sr.get_positions()
-
 
 
     print_count= 0
@@ -419,8 +430,10 @@ def control_loop(traj_dict, robot, freq):
                 # print("Adding integrator for precise positioning")
                 integral += (initial_joint_pos - state.joint_state.get_positions()) * time_period
                 inte_torques = inte_gain * integral
+
                 # clip to avoid too big a compensation
-                inte_torques = np.clip(inte_torques, -2, 2)
+                inte_torques = inte_torques / np.linalg.norm(inte_torques) if np.linalg.norm(inte_torques) > 2.0 else inte_torques
+                # inte_torques = np.clip(inte_torques, -2, 2)
 
                 if print_count % 50 == 0 :
                     print("INTERGRATOR TORQUES :", inte_torques)
@@ -522,13 +535,15 @@ def control_loop(traj_dict, robot, freq):
             ds_twist = sr.CartesianTwist(ds.evaluate(feedback_state))
 
             # integrate angular vel and add to quaternion ??
-            orientation = feedback_state.get_orientation()
+            orientation = Quaternion(feedback_state.get_orientation())
             angVel = ds_twist.data()[3:6]
             orient_dt = 0.5 * angVel * time_period
-            quat_dt = Quaternion(1.0, orient_dt[0],orient_dt[1], orient_dt[2])
-            orientation.__add__(quat_dt)
-            # desired_state.set_orientation(orientation)
-            desired_state.set_orientation(np.array([0., 1., 0., 0.]))
+            quat_dt = Quaternion(1.0, orient_dt[0], orient_dt[1], orient_dt[2])
+            # normalise to avoid unstability
+            quat_dt = quat_dt.normalised
+            new_orientation = quat_dt*orientation
+            desired_state.set_orientation(new_orientation)
+            # desired_state.set_orientation(np.array([0., 1., 0., 0.]))
             # clamp and set desired angular velocities
             ds_twist.clamp(.25, .5)
             desired_state.set_angular_velocity(ds_twist.data()[3:6])
@@ -686,8 +701,8 @@ if __name__ == '__main__':
 
     # SET PARAMETERS FOR MPC CONTROL
     freq = 100
-    dt = 0.2  # 1./freq
-    n_steps = 30
+    dt = 0.15  # 1./freq
+    n_steps = 15
     nbr_demos = int(number_of_demos)
 
     # Init Trajectory Generation
