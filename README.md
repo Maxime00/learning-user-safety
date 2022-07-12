@@ -155,12 +155,11 @@ current working scripts :
 
 
 # TODO 
-- tune orientation gains to avoid oscillations but stay well oriented
-- tune integrator to be quicker (is overshoot okay??)
+- tune orientation gains to avoid oscillations but stay well oriented 
+- tune integrator to be quicker (is overshoot okay??) (to try : lower activation threshold, )
 - make offline plot functions for mpc trajectories
 - improve random positions of cbf traj planner
-
-
+- fix permission denied when savin gnp file ??? -> loic thing to add user 
 
 
 ## Development

@@ -246,8 +246,8 @@ def control_loop(traj_dict, robot, freq):
     joint_ctrl = create_joint_controller(CONTROLLER_TYPE.IMPEDANCE, nb_joints)
 
     ## IRL GAINS
-    joint_ctrl.set_parameter_value("stiffness", [220, 220, 220, 180, 120, 120, 100], sr.ParameterType.DOUBLE_ARRAY)
-    joint_ctrl.set_parameter_value("damping", [15, 15, 15, 13, 11, 10, 8], sr.ParameterType.DOUBLE_ARRAY)
+    joint_ctrl.set_parameter_value("stiffness", [220, 220, 220, 180, 120, 100, 80], sr.ParameterType.DOUBLE_ARRAY)
+    joint_ctrl.set_parameter_value("damping", [15, 15, 15, 13, 9, 8, 6], sr.ParameterType.DOUBLE_ARRAY)
     ## SIMULATOR GAINS
     # joint_ctrl.set_parameter_value("stiffness", [10., 5., 4., 2., 2, 2, 2], sr.ParameterType.DOUBLE_ARRAY)
     # joint_ctrl.set_parameter_value("damping", [3., 2., 2., 1., .5, .5, .5], sr.ParameterType.DOUBLE_ARRAY)
@@ -265,9 +265,10 @@ def control_loop(traj_dict, robot, freq):
     flag = 0
 
     # integrator variables
-    inte_gain = [10, 10, 10, 8, 7, 6, 4]# [60, 60, 60, 55, 50, 40, 30] #[3., 2., 2., 1., .5, .5, .5]   ##[80, 80, 75, 60, 50, 45, 40] ### #
+    inte_gain = [60, 60, 60, 55, 50, 40, 20] #[10, 10, 10, 8, 7, 6, 4]# [3., 2., 2., 1., .5, .5, .5]   ##[80, 80, 75, 60, 50, 45, 40] ### #
     start_integrator_threshold = 0.5
     init_pos_err_threshold = 0.01
+    clip_threshold = 2
     time_period = 1. / freq
     integral = np.zeros(nb_joints)
     inte_torques = np.zeros(nb_joints)
@@ -310,9 +311,9 @@ def control_loop(traj_dict, robot, freq):
     full_desired_U = np.append(full_desired_U, [[0, 0, 0]], axis=0)
 
     # get initial joint state
-    print(robot_model.get_base_frame())
-    print(robot_model.get_frames())
-    print(robot_model.get_joint_frames())
+    # print(robot_model.get_base_frame())
+    # print(robot_model.get_frames())
+    # print(robot_model.get_joint_frames())
 
     z_axis_gripper_offset = 0.1034
     initial_cart_pos = sr.CartesianState("panda_ee", robot_model.get_base_frame())
@@ -324,14 +325,12 @@ def control_loop(traj_dict, robot, freq):
     temp_orient = Quaternion(0.,1.,0.,0.)
     desired_start_orientation = temp_orient * offset_rot
     initial_cart_pos.set_orientation(desired_start_orientation.elements)
-    print("final start orientation", initial_cart_pos.get_orientation())
     param = InverseKinematicsParameters()
     param.max_number_of_iterations = 15000
     initial_joint_pos_sr = sr.JointPositions(robot_model.inverse_kinematics(sr.CartesianPose(initial_cart_pos), param, "panda_link8"))
     initial_joint_pos = initial_joint_pos_sr.data()
 
-
-    print_count= 0
+    print_count = 0
 
     rate = rospy.Rate(freq)
     while not rospy.is_shutdown():
@@ -391,7 +390,7 @@ def control_loop(traj_dict, robot, freq):
 
                 ### set DS target for orientation control
                 target_ds = sr.CartesianPose(state.ee_state.get_name(),  full_desired_X[-1, 0:3], np.array([0., 1., 0., 0.]),
-                                             state.ee_state.get_reference_frame()) # state.ee_state
+                                             state.ee_state.get_reference_frame())
                 ds.set_parameter_value("attractor", target_ds, sr.ParameterType.STATE, sr.StateType.CARTESIAN_POSE)
 
                 input("Waiting for user input... Press Enter to start \n ")
@@ -410,7 +409,7 @@ def control_loop(traj_dict, robot, freq):
 
                 # clip to avoid too big a compensation
                 # inte_torques = inte_torques / np.linalg.norm(inte_torques) if np.linalg.norm(inte_torques) > 10.0 else inte_torques
-                inte_torques = np.clip(inte_torques, -2, 2)
+                inte_torques = np.clip(inte_torques, -clip_threshold, clip_threshold)
 
                 if print_count % 50 == 0 :
                     print("INTERGRATOR TORQUES :", inte_torques)
@@ -527,7 +526,7 @@ def control_loop(traj_dict, robot, freq):
             # compute linear acceleration for data_recording
             if not np.isnan(recorded_state[idx-1, 0]):
                 acc = (feedback_state.get_linear_velocity() - recorded_state[idx-1, 4:7])/(nIter_time - recorded_state[idx-1, 0])
-                ddq_filtered =  beta * ddq_filtered + (1 - beta)* acc
+                ddq_filtered = beta * ddq_filtered + (1 - beta) * acc
 
             # ## DEBUG prints
             # print("Cartesian positions: ", feedback_state.get_position())
@@ -622,7 +621,11 @@ def control_loop(traj_dict, robot, freq):
                 # add z-axis offset for gripper
                 init_pos = full_desired_X[0, 0:3] + [0, 0, z_axis_gripper_offset]
                 initial_cart_pos.set_position(init_pos)
-                initial_cart_pos.set_orientation(np.array([0, 1, 0, 0]))
+                # add -45 deg compensation (ref frame offset from link8 to hand)
+                offset_rot = Quaternion(axis=[0., 0., 1.], degrees=45)  # 0.9238, 0.0, 0.3826, 0.)
+                temp_orient = Quaternion(0., 1., 0., 0.)
+                desired_start_orientation = temp_orient * offset_rot
+                initial_cart_pos.set_orientation(desired_start_orientation.elements)
                 initial_joint_pos_sr = sr.JointPositions(
                     robot_model.inverse_kinematics(sr.CartesianPose(initial_cart_pos), param, "panda_link8"))
                 initial_joint_pos = initial_joint_pos_sr.data()
@@ -688,7 +691,7 @@ if __name__ == '__main__':
     # Init Trajectory Generation
     print("Instantiating Traj Planner, should take around %s seconds... \n" % ((n_steps/2)*3))
     instantiate_start = time.time()
-    traj_generator = trajGenerator(centers, stds, params, bias_param, dt=dt, n_steps=n_steps, r_gains = 300, zero_acc_start=True)
+    traj_generator = trajGenerator(centers, stds, params, bias_param, dt=dt, n_steps=n_steps, r_gains=100, zero_acc_start=True)
     print("FINISH INSTANTIATING TRAJ PLANNER IN %s seconds \n" % (time.time() - instantiate_start))
 
     print("Planning %s trajectories... \n" % (nbr_demos))

@@ -129,16 +129,16 @@ class trajGenerator():
 
         while not inRange:
             x = np.random.uniform(x_lim[0], x_lim[1])
-            print("x:", x)
+            # print("x:", x)
             if 0.3 <= x <= 0.7:
                 if random.random() < 0.5:
                     y = np.random.uniform(0.3, 0.45)
-                    print("y :", y)
+                    # print("y :", y)
                 else:
                     y = np.random.uniform(-0.3, -0.45)
                 xt = x + np.random.uniform(0.3-x, 0.7-x)
                 yt = -y
-                print("x, y : ", x, y, xt, yt)
+                # print("x, y : ", x, y, xt, yt)
             else:
                 y = np.random.uniform(y_lim[0], y_lim[1])
                 if x < 0.3:

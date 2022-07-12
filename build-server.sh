@@ -3,7 +3,7 @@ BASE_IMAGE_TAG=noetic
 #-develop
 
 IMAGE_NAME=learning-safety-margin
-
+USERNAME="ros"
 SERVE_REMOTE=false
 REMOTE_SSH_PORT=2280
 
