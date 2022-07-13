@@ -158,9 +158,9 @@ current working scripts :
 - tune orientation gains to avoid oscillations but stay well oriented 
 - tune integrator to be quicker (is overshoot okay??) (to try : lower activation threshold, )
 - make offline plot functions for mpc trajectories
-- improve random positions of cbf traj planner
-- fix permission denied when savin gnp file ??? -> loic thing to add user 
-
+- improve random positions of cbf traj plann
+- reduce cart position gains? increase acc??
+- reduce start_integrator_threshold (0.2?)
 
 ## Development
 

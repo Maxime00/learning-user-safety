@@ -38,6 +38,7 @@ docker pull ghcr.io/aica-technology/ros-control-libraries:"${BASE_IMAGE_TAG}"
 
 BUILD_FLAGS+=(--build-arg BASE_IMAGE_TAG="${BASE_IMAGE_TAG}")
 BUILD_FLAGS+=(-t "${IMAGE_NAME}:${BASE_IMAGE_TAG}")
+BUILD_FLAGS+=(--build-arg HOST_GID=$(id -g))   # Pass the correct GID to avoid issues with mounted volumes
 
 DOCKER_BUILDKIT=1 docker build "${BUILD_FLAGS[@]}" .
 
