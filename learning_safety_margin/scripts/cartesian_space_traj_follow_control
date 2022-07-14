@@ -116,7 +116,6 @@ def plot_ref_vs_rec(pos_vel, acc, t, rec):
         ax.set(ylabel="Dim {}".format(i))
         ax.set(xlabel="Time [sec]")
 
-
     # Plot velocities and reference
     fig, axs = plt.subplots(3, 1)
     fig.suptitle("EE Velocity and reference of '{}'".format(traj_name))
@@ -169,15 +168,6 @@ def plot_ref_vs_rec(pos_vel, acc, t, rec):
         ax.set(ylabel="Dim {}".format(i))
         ax.set(xlabel="Time [sec]")
     fig.legend(labels=['Recorded', 'Reference'])
-
-    # Plot torque error
-    # fig, axs = plt.subplots(3, 1)
-    # fig.suptitle("EE acceleration error of '{}'".format(traj_name))
-    #
-    # for i, ax in enumerate(axs.ravel()):
-    #     ax.plot(rec_time, error_acc[:, i])
-    #     ax.set(ylabel="Dim {}".format(i))
-    #     ax.set(xlabel="Time [sec]")
 
     # Plot torques
     fig, axs = plt.subplots(4, 2)
@@ -338,11 +328,7 @@ def control_loop(traj_dict, robot, freq):
     # append 0 accelerations to U to match size of other variables
     full_desired_U = np.append(full_desired_U, [[0, 0, 0]], axis=0)
 
-    # get initial joint state
-    # print(robot_model.get_base_frame())
-    # print(robot_model.get_frames())
-    # print(robot_model.get_joint_frames())
-
+    # Set up initial position in Joint State
     z_axis_gripper_offset = 0.1034
     initial_cart_pos = sr.CartesianState("panda_ee", robot_model.get_base_frame())
     # add z-axis offset for gripper
@@ -389,7 +375,7 @@ def control_loop(traj_dict, robot, freq):
 
             if all(error < init_pos_err_threshold):
                 print("Desired start position : ", initial_joint_pos)
-                print("desired cart pos :",full_desired_X[0, 0:3])
+                print("desired cart pos :", full_desired_X[0, 0:3])
                 print("Current cart pos :", state.ee_state.get_position())
                 print("Error :", error)
                 print("ref frame :", state.ee_state.get_reference_frame())
@@ -423,9 +409,7 @@ def control_loop(traj_dict, robot, freq):
 
                 input("Waiting for user input... Press Enter to start \n ")
                 rospy.sleep(1.0)
-                print("Playing CBF planned trajectory... \n")
-                # print("Replaying trajectory %s of %s " % (traj_idx+1, len(fpath_list)))
-                # print("Traj name : ", fn_list[traj_idx])
+                print("Playing CBF planned trajectory #%s of #s ... \n" %(idx_to_incr+1, len(idx_list)))
                 timeZero = time.time()
                 continue
 
@@ -436,10 +420,10 @@ def control_loop(traj_dict, robot, freq):
                 inte_torques = inte_gain * integral
 
                 # clip to avoid too big a compensation
-                # inte_torques = inte_torques / np.linalg.norm(inte_torques) if np.linalg.norm(inte_torques) > 10.0 else inte_torques
+                # TODO : alternative, clip integral directly ??
                 inte_torques = np.clip(inte_torques, -clip_threshold, clip_threshold)
 
-                if print_count % 50 == 0 :
+                if print_count % 50 == 0:
                     print("INTERGRATOR TORQUES :", inte_torques)
 
 
@@ -448,20 +432,22 @@ def control_loop(traj_dict, robot, freq):
                 integral *= 0
                 print("RESET INTEGRAL \n")
 
-            # Extract form Yang code
+            # Set feedback state
             feedback_joint_state.set_positions(state.joint_state.get_positions())
             dq_filtered = (1 - alpha) * dq_filtered + alpha * state.joint_state.get_velocities()
             feedback_joint_state.set_velocities(dq_filtered)
 
+            # Set velocity and position error
             velo_d = initial_joint_pos - state.joint_state.get_positions()
 
-            # NOTE: this might cause error
+            # Norm velocities
             velo_d = velo_d / np.linalg.norm(velo_d) if np.linalg.norm(velo_d) > 1.0 else velo_d
             desired_joint_state.set_velocities(velo_d)
 
             pos_d = feedback_joint_state.get_positions() + time_period * velo_d
             desired_joint_state.set_positions(pos_d)
 
+            # Set command
             command_torques = sr.JointTorques(joint_ctrl.compute_command(desired_joint_state, feedback_joint_state))
             command.joint_state = state.joint_state
             command.joint_state.set_torques(command_torques.get_torques() + inte_torques)
@@ -473,12 +459,11 @@ def control_loop(traj_dict, robot, freq):
             js_record[js_idx, 15:22] = initial_joint_pos
             js_record[js_idx, 22:29] = integral
             js_record[js_idx, 29:36] = inte_torques
-            js_idx +=1
+            js_idx += 1
 
             # debug print
             if print_count % 50 == 0:
                 print("Error :", error)
-                print("JS: ", state.joint_state.get_positions())
             print_count += 1
 
             # print("Command:", command.joint_state.get_torques())
@@ -492,7 +477,6 @@ def control_loop(traj_dict, robot, freq):
         if flag == 1:
             # GET current time
             nIter_time = time.time() - timeZero
-            # print("Time : ", round(nIter_time, 4))
 
             # Check if reached end of traj
             if nIter_time > full_desired_T[-1]:
@@ -557,14 +541,17 @@ def control_loop(traj_dict, robot, freq):
                 ddq_filtered = beta * ddq_filtered + (1 - beta) * acc
 
             # ## DEBUG prints
-            # print("Cartesian positions: ", feedback_state.get_position())
-            # print("Cartesian Velocities: ", feedback_state.get_linear_velocity())
-            # print("Cartesian Accelerations: ", ddq_filtered)
-            # print("Desired positions: ", desired_state.get_position())
-            # print("Current orientation: ", feedback_state.get_orientation())
-            # print("Desired orientation: ", desired_state.get_orientation())
-            # print("Current angular Velocities: ", feedback_state.get_angular_velocity())
-            # print("Desired Angular Velocities: ", desired_state.get_angular_velocity())
+            # if print_count % 50 == 0:
+                # print("Time : ", round(nIter_time, 4))
+                # print("Cartesian positions: ", feedback_state.get_position())
+                # print("Cartesian Velocities: ", feedback_state.get_linear_velocity())
+                # print("Cartesian Accelerations: ", ddq_filtered)
+                # print("Desired positions: ", desired_state.get_position())
+                # print("Current orientation: ", feedback_state.get_orientation())
+                # print("Desired orientation: ", desired_state.get_orientation())
+                # print("Current angular Velocities: ", feedback_state.get_angular_velocity())
+                # print("Desired Angular Velocities: ", desired_state.get_angular_velocity())
+            # print_count += 1
 
             # SAVE current state
             recorded_state[idx, 0] = nIter_time
@@ -578,7 +565,7 @@ def control_loop(traj_dict, robot, freq):
             recorded_state[idx, 30:34] = desired_state.get_orientation_coefficients()
             recorded_state[idx, 34:37] = feedback_state.get_angular_velocity()
             recorded_state[idx, 37:40] = desired_state.get_angular_velocity()
-            idx+=1
+            idx += 1
 
             # Set command torques
             command_torques = sr.JointTorques(ctrl.compute_command(desired_state, feedback_state, state.jacobian))
@@ -618,6 +605,7 @@ def control_loop(traj_dict, robot, freq):
                 real_classification.append(save_fn)
                 print("Classified as :", classified_as)
 
+                # in case of crash
                 np.savetxt(save_dir + "temp_list_of_labels.txt", np.array(user_classification), fmt='%s')
                 np.savetxt(save_dir + "temp_list_of_mpc_traj.txt", np.array(real_classification), fmt='%s')
 
@@ -728,7 +716,7 @@ if __name__ == '__main__':
     traj_generator = trajGenerator(centers, stds, params, bias_param, dt=dt, n_steps=n_steps, r_gains=200, zero_acc_start=True)
     print("FINISH INSTANTIATING TRAJ PLANNER IN %s seconds \n" % (time.time() - instantiate_start))
 
-    print("Planning %s trajectories... \n" % (nbr_demos))
+    print("Planning %s trajectories... \n" % nbr_demos)
     plan_start = time.time()
     cbf_traj = traj_generator.generate_all_trajectories(num_demos=nbr_demos)
     print("FINISH planning trajectories in %s seconds \n" % (time.time() - plan_start))
