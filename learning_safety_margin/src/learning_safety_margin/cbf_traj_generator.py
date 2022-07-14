@@ -144,7 +144,7 @@ class trajGenerator():
                 if x < 0.3:
                     xt = 0.7 + (0.3-x)
                 else:
-                    xt = x - 0.5
+                    xt = x - 0.45
                 yt = y + np.random.uniform(y_lim[0]-y, y_lim[1]-y)
 
             # check coordinates are reachable by robot

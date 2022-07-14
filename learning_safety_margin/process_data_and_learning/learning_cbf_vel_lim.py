@@ -29,9 +29,9 @@ def vel_learning(user_number):
 
 
     # Velocity Limits
-    x_lim = [0.2, 1.]
-    y_lim = [-0.5, 0.5]
-    z_lim = [0., 0.8]
+    x_lim = [0.25, 0.75]
+    y_lim = [-0.45, 0.45]
+    z_lim = [0., 0.7]
     vdot_lim = [-1., 1.]
 
     ws_lim = onp.vstack((x_lim, y_lim, z_lim, vdot_lim, vdot_lim, vdot_lim))
@@ -485,6 +485,6 @@ if __name__ == '__main__':
         print("Learning velocity cbf for User_"+user_number)
         vel_learning(user_number)
     else:
-        print("Learning velocity cbf for User_1 \n")
+        print("Learning velocity cbf for User_0 \n")
         print("To process other user, provide user number as sole argument: python3 bag2csv.py 2")
-        vel_learning("1")
+        vel_learning("0")

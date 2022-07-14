@@ -25,11 +25,12 @@ def bags_need_processing(user_number):
     data_dir = "/home/ros/ros_ws/src/learning_safety_margin/data/User_"+user_number
 
     count_csv = sum(len(files) for _, _, files in os.walk(data_dir + "/csv"))
-    count_rosbags= sum(len(files) for _, _, files in os.walk(data_dir + "/rosbags"))
+    count_rosbags = sum(len(files) for _, _, files in os.walk(data_dir + "/rosbags"))
 
-    if count_csv >= 3*count_rosbags:
+    # bag2csv outputs 5 files per bag
+    if count_csv >= 5*count_rosbags:
         return False
-    elif count_csv < 3*count_rosbags:
+    elif count_csv < 5*count_rosbags:
         return True
 
 
@@ -40,11 +41,11 @@ def parser():
 
     group = parser.add_mutually_exclusive_group()
     group.add_argument("-v", "--verbose", action="store_true", default=True)
-    group.add_argument("-q", "--quiet", action="store_true", default = False)
+    group.add_argument("-q", "--quiet", action="store_true", default=False)
     parser.add_argument("-p", "--plot", action="store_true", default=False)
     parser.add_argument("-u", "--user_number", type=str, default='0', nargs='?', help="The user data to process")
-    parser.add_argument("-l", "--learning_algorithm", type=str, choices=['pos', 'vel'], default = 'pos',  nargs='?', help="The learning algorithm to run")
-    parser.add_argument("-s", "--to_smooth", type=str, choices=['0', '1'], default='1', nargs='?', help="option to smooth cartesian velocities")
+    parser.add_argument("-l", "--learning_algorithm", type=str, choices=['pos', 'vel'], default='vel',  nargs='?', help="The learning algorithm to run")
+    parser.add_argument("-s", "--to_smooth", type=str, choices=['0', '1'], default='1', nargs='?', help="Option to smooth cartesian velocities")
 
     args = parser.parse_args()
 
