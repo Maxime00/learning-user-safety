@@ -27,7 +27,6 @@ def vel_learning(user_number):
     fig_path = '../franka_env/figures/vel_lim/'
     save = False
 
-
     # Velocity Limits
     x_lim = [0.25, 0.75]
     y_lim = [-0.45, 0.45]

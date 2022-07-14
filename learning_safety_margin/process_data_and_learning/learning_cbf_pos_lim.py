@@ -35,9 +35,9 @@ def pos_learning(user_number):
     nDaring = len(os.listdir(rosbag_dir+"daring"))
 
 
-    x_lim = [0., 1.]
-    y_lim = [-0.5, 0.5]
-    z_lim = [0., 0.5]
+    x_lim = [0.25, 0.75]
+    y_lim = [-0.45, 0.45]
+    z_lim = [0., 0.7]
     ws_lim = onp.vstack((x_lim, y_lim, z_lim))
 
     # Define Dynamical System
