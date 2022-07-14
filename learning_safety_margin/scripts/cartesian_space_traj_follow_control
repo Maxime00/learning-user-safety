@@ -251,8 +251,8 @@ def control_loop(traj_dict, robot, freq):
     # SET UP CARTESIAN CTRL
     ctrl = create_cartesian_controller(CONTROLLER_TYPE.IMPEDANCE)
 
-    ctrl.set_parameter_value("stiffness", [200, 200, 200, 40, 40, 40], sr.ParameterType.DOUBLE_ARRAY) # 100 100 5 5 - good: 80 80 5 5
-    ctrl.set_parameter_value("damping", [28, 28, 28, 9, 9, 9], sr.ParameterType.DOUBLE_ARRAY) # 6, 4.8, 0 for angular
+    ctrl.set_parameter_value("stiffness", [200, 200, 200, 10, 10, 10], sr.ParameterType.DOUBLE_ARRAY) # between 20 adn 10
+    ctrl.set_parameter_value("damping", [28, 28, 28, 6, 6, 2], sr.ParameterType.DOUBLE_ARRAY) # between 5 and 10
     ctrl.set_parameter_value("inertia", [.5, .5, .5, 0., 0., 0.], sr.ParameterType.DOUBLE_ARRAY)
 
     # DS for orientation control
@@ -409,7 +409,7 @@ def control_loop(traj_dict, robot, freq):
 
                 input("Waiting for user input... Press Enter to start \n ")
                 rospy.sleep(1.0)
-                print("Playing CBF planned trajectory #%s of #s ... \n" %(idx_to_incr+1, len(idx_list)))
+                print("Playing CBF planned trajectory %s of %s ... \n" %(idx_to_incr+1, len(idx_list)))
                 timeZero = time.time()
                 continue
 
@@ -576,6 +576,7 @@ def control_loop(traj_dict, robot, freq):
             recorded_state[idx, 19:26] = command.joint_state.get_torques()
 
             if np.any(command_torques.get_torques() > 30):
+                print("Command:", command.joint_state.get_torques())
                 print("TORQUES TOO BIG !!!")
                 break
 

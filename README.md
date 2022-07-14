@@ -125,7 +125,7 @@ currently
 bash build-server.sh
 aica-docker interactive learning-safety-margin:noetic -u ros --net host --no-hostname -v data_vol:/home/ros/ros_ws/src/learning_safety_margin/data
 roslaunch learning_safety_margin demo.launch demo:=joint_space_traj_replay_control args_for_control:="0 2"
-roslaunch learning_safety_margin demo.launch demo:=cartesian_space_traj_follow_control
+roslaunch learning_safety_margin demo.launch demo:=cartesian_space_traj_follow_control args_for_control:="1 2"
  robot_name:=franka
 roslaunch learning_safety_margin demo.launch demo:=cartesian_twist_control
 roslaunch learning_safety_margin demo.launch demo:=joint_space_velocity_control
@@ -161,6 +161,8 @@ current working scripts :
 - improve random positions of cbf traj plann
 - reduce cart position gains? increase acc??
 - reduce start_integrator_threshold (0.2?)
+- maybe clip integral and not torques ?? or both ?
+- set back to 0 when integral >0.1 ?
 
 ## Development
 
