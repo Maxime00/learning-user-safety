@@ -171,7 +171,7 @@ def control_loop(fpath_list, robot, freq):
 
     # integrator variables  [60, 50, 45, 40, 35, 25, 20]
     inte_gain = [65, 55, 50, 45, 40, 30, 20]
-    start_integrator_threshold = 0.25
+    start_integrator_threshold = 0.28
     init_pos_err_threshold = 0.01
     integrator_reset_threshold = 0.05
     time_period = 1. / freq

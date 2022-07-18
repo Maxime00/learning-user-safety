@@ -139,21 +139,16 @@ current working scripts :
 - idle_control (recording) 
 - joint_space_traj_replay_control (successive replays)
 - cartesian_space_single_traj_follow_control (follows single trajectory from CBF planner)
-- cartesian_space_single_traj_follow_control (follow several trajectories from CBF planner)
+- cartesian_space_traj_follow_control (follow several trajectories from CBF planner)
 - cartesian twist control (demo script)
 - joint space velocity control (demo script)
 
 
-
 # TODO 
-- tune orientation gains to avoid oscillations but stay well oriented 
-- tune integrator to be quicker (is overshoot okay??) (to try : lower activation threshold, )
+- add option to start/stop integrator ? start thresh should be small but always reachable ( np.any instead? or start integrator if in same pos for too long )
+- add 'show_plots' option ?
 - make offline plot functions for mpc trajectories
-- improve random positions of cbf traj plann
-- reduce cart position gains? increase acc??
-- reduce start_integrator_threshold (0.2?)
-- maybe clip integral and not torques ?? or both ?
-- set back to 0 when integral >0.1 ?
+- improve random positions of cbf traj planner -> must stay in reachable space
 
 ## Development
 
