@@ -283,11 +283,10 @@ def control_loop(traj_dict, robot, freq):
     flag = 0
 
     # integrator variables  [60, 50, 45, 40, 35, 25, 20]
-    inte_gain = [65, 55, 50, 45, 40, 30, 20] 
+    inte_gain = [65, 55, 50, 45, 40, 30, 20]
     start_integrator_threshold = 0.25
     init_pos_err_threshold = 0.01
     integrator_reset_threshold = 0.05
-    clip_threshold = 2
     time_period = 1. / freq
     integral = np.zeros(nb_joints)
     inte_torques = np.zeros(nb_joints)
@@ -393,7 +392,7 @@ def control_loop(traj_dict, robot, freq):
                 ## plot f0 traj
                 # remove zeros
                 js_record = js_record[~np.isnan(js_record).any(axis=1)]
-                plot_f0_traj(js_record)
+                # plot_f0_traj(js_record)
 
                 ## Setup trajectory following
                 # Create interpolation functions
@@ -619,10 +618,11 @@ def control_loop(traj_dict, robot, freq):
                     os.remove(save_dir + "temp_list_of_mpc_traj.txt")
 
                     # call plot function
-                    plot_ref_vs_rec(full_desired_X, full_desired_U, full_desired_T, recorded_state)
+                    # plot_ref_vs_rec(full_desired_X, full_desired_U, full_desired_T, recorded_state)
                     break
 
-                plot_ref_vs_rec(full_desired_X, full_desired_U, full_desired_T, recorded_state)
+                # call plot function
+                # plot_ref_vs_rec(full_desired_X, full_desired_U, full_desired_T, recorded_state)
 
                 ## Set up next traj
                 traj_idx = idx_list[idx_to_incr]
