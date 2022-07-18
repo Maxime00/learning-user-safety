@@ -175,7 +175,7 @@ def plot_ref_vs_rec(pos_vel, acc, t, rec):
 
     for i, ax in enumerate(axs.ravel()[:-1]):
         ax.plot(rec_time, rec_tor[:, i])
-        ax.set(ylabel="joint {}".format(i))
+        ax.set(ylabel="joint {}".format(i+1))
         ax.set(xlabel="Time [sec]")
 
     plt.show()
@@ -248,18 +248,18 @@ def control_loop(traj_dict, robot, freq):
     command = CommandMessage()
     command.control_type = [ControlType.EFFORT.value]
 
-    # SET UP CARTESIAN CTRL
+    # SET UP CARTESIAN CTRL - follow trajectory
     ctrl = create_cartesian_controller(CONTROLLER_TYPE.IMPEDANCE)
 
-    ctrl.set_parameter_value("stiffness", [200, 200, 200, 10, 10, 10], sr.ParameterType.DOUBLE_ARRAY) # between 20 adn 10
-    ctrl.set_parameter_value("damping", [28, 28, 28, 6, 6, 2], sr.ParameterType.DOUBLE_ARRAY) # between 5 and 10
-    ctrl.set_parameter_value("inertia", [.5, .5, .5, 0., 0., 0.], sr.ParameterType.DOUBLE_ARRAY)
+    ctrl.set_parameter_value("stiffness", [150, 150, 150, 15, 15, 15], sr.ParameterType.DOUBLE_ARRAY) # between 20 and 10
+    ctrl.set_parameter_value("damping", [25, 25, 25, 7.5, 7.5, 1.0], sr.ParameterType.DOUBLE_ARRAY) # between 5 and 10
+    ctrl.set_parameter_value("inertia", [.45, .45, .45, 0., 0., 0.], sr.ParameterType.DOUBLE_ARRAY)
 
     # DS for orientation control
     ds = create_cartesian_ds(DYNAMICAL_SYSTEM_TYPE.POINT_ATTRACTOR)
-    ds.set_parameter_value("gain", [0., 0., 0., 10., 10., 10.], sr.ParameterType.DOUBLE_ARRAY)
+    ds.set_parameter_value("gain", [0., 0., 0., 5., 5., 5.], sr.ParameterType.DOUBLE_ARRAY)
 
-    # SET UP TORQUE controller
+    # SET UP TORQUE controller - reach start position
     nb_joints = 7
     joint_ctrl = create_joint_controller(CONTROLLER_TYPE.IMPEDANCE, nb_joints)
 
@@ -283,9 +283,10 @@ def control_loop(traj_dict, robot, freq):
     flag = 0
 
     # integrator variables  [60, 50, 45, 40, 35, 25, 20]
-    inte_gain = [65, 55, 50, 45, 40, 30, 20] #[100, 100, 90, 75, 60, 45, 30]#[60, 60, 50, 45, 40, 30, 20] # [3., 2., 2., 1., .5, .5, .5]   #### #
-    start_integrator_threshold = 0.5
+    inte_gain = [65, 55, 50, 45, 40, 30, 20] 
+    start_integrator_threshold = 0.25
     init_pos_err_threshold = 0.01
+    integrator_reset_threshold = 0.05
     clip_threshold = 2
     time_period = 1. / freq
     integral = np.zeros(nb_joints)
@@ -373,14 +374,11 @@ def control_loop(traj_dict, robot, freq):
             error = abs(initial_joint_pos - state.joint_state.get_positions())
             time_f0 = time.time() - start_f0
 
-            if all(error < init_pos_err_threshold):
-                print("Desired start position : ", initial_joint_pos)
+            if np.all(error < init_pos_err_threshold):
+                # print("Desired start position : ", initial_joint_pos)
                 print("desired cart pos :", full_desired_X[0, 0:3])
                 print("Current cart pos :", state.ee_state.get_position())
                 print("Error :", error)
-                print("ref frame :", state.ee_state.get_reference_frame())
-                print("orient from cart state :", initial_cart_pos.get_orientation())
-                print("orient from convert js :", robot_model.forward_kinematics(initial_joint_pos_sr, 'panda_link8').data()[3:7])
                 print("EEF orientation: ", state.ee_state.get_orientation())
                 print("Reached start position in %s seconds" % time_f0)
                 flag = 1
@@ -408,29 +406,25 @@ def control_loop(traj_dict, robot, freq):
                 ds.set_parameter_value("attractor", target_ds, sr.ParameterType.STATE, sr.StateType.CARTESIAN_POSE)
 
                 input("Waiting for user input... Press Enter to start \n ")
-                rospy.sleep(1.0)
+                rospy.sleep(0.2)
                 print("Playing CBF planned trajectory %s of %s ... \n" %(idx_to_incr+1, len(idx_list)))
                 timeZero = time.time()
                 continue
 
             # Adding integrator when getting close to target
-            if all(error < start_integrator_threshold):
+            if np.all(error < start_integrator_threshold):
                 # print("Adding integrator for precise positioning")
                 integral += (initial_joint_pos - state.joint_state.get_positions()) * time_period
-                inte_torques = inte_gain * integral
 
-                # clip to avoid too big a compensation
-                # TODO : alternative, clip integral directly ??
-                inte_torques = np.clip(inte_torques, -clip_threshold, clip_threshold)
+                # reset integral if overhsoot
+                if np.any(abs(integral) > integrator_reset_threshold):
+                    integral *= 0
+                    print("RESET INTEGRAL \n")
+
+                inte_torques = inte_gain * integral
 
                 if print_count % 50 == 0:
                     print("INTERGRATOR TORQUES :", inte_torques)
-
-
-            # reset integral if overhsoot
-            if np.any(integral != 0) and all(error > start_integrator_threshold):
-                integral *= 0
-                print("RESET INTEGRAL \n")
 
             # Set feedback state
             feedback_joint_state.set_positions(state.joint_state.get_positions())
@@ -521,16 +515,16 @@ def control_loop(traj_dict, robot, freq):
             # Set desired angular velocity
             ds_twist = sr.CartesianTwist(ds.evaluate(feedback_state))
 
-            # integrate angular vel and add to quaternion ??
-            orientation = Quaternion(feedback_state.get_orientation())
-            angVel = ds_twist.data()[3:6]
-            orient_dt = 0.5 * angVel * time_period
-            quat_dt = Quaternion(1.0, orient_dt[0], orient_dt[1], orient_dt[2])
-            # normalise to avoid unstability
-            quat_dt = quat_dt.normalised
-            new_orientation = quat_dt*orientation
-            desired_state.set_orientation(new_orientation)
-            # desired_state.set_orientation(np.array([0., 1., 0., 0.]))
+            # integrate angular vel and add to quaternion : Better to hard set orientation to avoid movement
+            # orientation = Quaternion(feedback_state.get_orientation())
+            # angVel = ds_twist.data()[3:6]
+            # orient_dt = 0.5 * angVel * time_period
+            # quat_dt = Quaternion(1.0, orient_dt[0], orient_dt[1], orient_dt[2])
+            # # normalise to avoid unstability
+            # quat_dt = quat_dt.normalised
+            # new_orientation = quat_dt*orientation
+            # desired_state.set_orientation(new_orientation)
+            desired_state.set_orientation(np.array([0., 1., 0., 0.]))
             # clamp and set desired angular velocities
             ds_twist.clamp(.25, .5)
             desired_state.set_angular_velocity(ds_twist.data()[3:6])
@@ -604,7 +598,7 @@ def control_loop(traj_dict, robot, freq):
                 classified_as = input("How would you classify this trajectory ? [safe/daring/unsafe] \n")
                 user_classification.append(classified_as)
                 real_classification.append(save_fn)
-                print("Classified as :", classified_as)
+                print("Classified as :", classified_as, "\n")
 
                 # in case of crash
                 np.savetxt(save_dir + "temp_list_of_labels.txt", np.array(user_classification), fmt='%s')
@@ -666,6 +660,7 @@ def control_loop(traj_dict, robot, freq):
             integral = np.zeros(7)
 
             # Reset flag to start loop again
+            input("Waiting for user input... Press Enter to start")
             print("Going to start position...")
             start_f0 = time.time()
             flag = 0
