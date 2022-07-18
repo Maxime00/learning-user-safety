@@ -203,9 +203,6 @@ def control_loop(fpath_list, robot, freq):
 
         if not state:
             continue
-        # print("EEF position: ", state.ee_state.get_position())
-        # print("EEF orientation: ", state.ee_state.get_orientation())
-        # print("FLAG : ", flag)
 
         # Wait a bit so state is correct
         elif state and checked_first_state:
@@ -221,14 +218,10 @@ def control_loop(fpath_list, robot, freq):
         if flag == 0:
             # ------GO TO START POSITION ------------------------
 
-            # error = np.linalg.norm(initial_pos - state.joint_state.get_positions())
             error = abs(initial_pos - state.joint_state.get_positions())
-            # print("|q-q0| : ", abs(state.joint_state.get_positions() - initial_pos))
-            # print("Error:", error)
 
             if all(error < init_pos_err_threshold):
-                # print("REACHED START POSITION : ", initial_pos)
-                print("ERROR :", error)
+                print("Error :", error)
                 print("Reached start position ")
                 flag = 1
 
@@ -270,6 +263,7 @@ def control_loop(fpath_list, robot, freq):
             pos_d = feedback_state.get_positions() + time_period * velo_d
             desired_state.set_positions(pos_d)
 
+            ## DEBUG PRINTS
             # print("Joint positions: ", feedback_state.get_positions())
             # print("Joint Velocities: ", feedback_state.get_velocities())
             # print("Desired positions: ", desired_state.get_positions())
