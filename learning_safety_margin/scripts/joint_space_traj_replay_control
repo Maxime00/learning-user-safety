@@ -159,7 +159,7 @@ def control_loop(fpath_list, robot, freq):
     ## SIMULATOR GAINS
     # ctrl.set_parameter_value("stiffness", [10., 5., 4., 2., 2, 2, 2], sr.ParameterType.DOUBLE_ARRAY)
     # ctrl.set_parameter_value("damping", [3., 2., 2., 1., .5, .5, .5], sr.ParameterType.DOUBLE_ARRAY)
-    ## FRANKALIB GAINS
+    ## FRANKALIB GAINS -- too high
     # ctrl.set_parameter_value("stiffness", [600, 600, 600, 600, 250, 150, 50], sr.ParameterType.DOUBLE_ARRAY)
     # ctrl.set_parameter_value("damping", [50, 50, 50, 50, 30, 25, 15], sr.ParameterType.DOUBLE_ARRAY)
 
@@ -168,13 +168,6 @@ def control_loop(fpath_list, robot, freq):
     feedback_state = sr.JointState("franka", nb_joints)
 
     flag = 0
-    # start_integrator_threshold = 0.5
-    # init_pos_err_threshold = 0.01
-    #
-    # time_period = 1. / freq
-    # inte_gain = [22, 22, 22, 20, 18, 15, 12] ## IRl gains ## [3., 2., 2., 1., .5, .5, .5] ##
-    # integral = np.zeros(7)
-    # inte_torques = np.zeros(7)
 
     # integrator variables  [60, 50, 45, 40, 35, 25, 20]
     inte_gain = [65, 55, 50, 45, 40, 30, 20]
