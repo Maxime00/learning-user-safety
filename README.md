@@ -117,22 +117,15 @@ If running an ssh container, you can connect to it using :
 aica-docker connect learning-safety-margin-noetic-ssh
 ```
 
-TODO : add arguments to chose user_number and safety of replayed traj
-currently
+The trajectory replaying and following take in as argument the user_number and the number_of_traj per safety category to be played
+Default is "0 2"
+
 ```console
 bash build-server.sh
 aica-docker interactive learning-safety-margin:noetic -u ros --net host --no-hostname -v data_vol:/home/ros/ros_ws/src/learning_safety_margin/data
-roslaunch learning_safety_margin demo.launch demo:=joint_space_traj_replay_control args_for_control:="test 1"
-roslaunch learning_safety_margin demo.launch demo:=cartesian_space_traj_follow_control
- robot_name:=franka
-roslaunch learning_safety_margin demo.launch demo:=cartesian_twist_control
+roslaunch learning_safety_margin demo.launch demo:=joint_space_traj_replay_control args_for_control:="0 2"
+roslaunch learning_safety_margin demo.launch demo:=cartesian_space_traj_follow_control args_for_control:="1 2"
 roslaunch learning_safety_margin demo.launch demo:=joint_space_velocity_control
-```
-future 
-```console
-bash build-server.sh
-aica-docker interactive learning-safety-margin:noetic -u ros --net host --no-hostname -v data_vol:/home/ros/ros_ws/src/learning_safety_margin/data
-roslaunch learning_safety_margin demo.launch demo:=joint_space_traj_replay_control args_for_control:="test 1"
 roslaunch learning_safety_margin mpc_control.launch robot_name:=franka args_for_planner:=0
 ```
 
@@ -144,26 +137,23 @@ $PYTHONPATH:/opt/ros/noetic/lib/python3/dist-packages:/home/ros/ros_ws/devel/lib
 
 current working scripts : 
 - idle_control (recording) 
-- joint_space_traj_replay_control (replays)
-- cartesian_space_traj_follow_control (follows single trajectory from MPC planner)
+- joint_space_traj_replay_control (successive replays)
+- cartesian_space_single_traj_follow_control (follows single trajectory from CBF planner)
+- cartesian_space_single_traj_follow_control (follow several trajectories from CBF planner)
 - cartesian twist control (demo script)
 - joint space velocity control (demo script)
 
 
 
 # TODO 
-- smoother trajectory for MPC
-- add logic to play several trajectories of varying safety in planner - > check ahalya' scode, make somethi nto match that
-- tune integrator for replays ??
-- replays must choose and output safety and traj_number
-- add arguments for user_specific and safety 
-- Tune gains
-- add data_recording in mpc controller
-- add script to handle several MPC trajectories and pause between each until next input 
-- save reference traj to plot against recorded later 
-
-
-
+- tune orientation gains to avoid oscillations but stay well oriented 
+- tune integrator to be quicker (is overshoot okay??) (to try : lower activation threshold, )
+- make offline plot functions for mpc trajectories
+- improve random positions of cbf traj plann
+- reduce cart position gains? increase acc??
+- reduce start_integrator_threshold (0.2?)
+- maybe clip integral and not torques ?? or both ?
+- set back to 0 when integral >0.1 ?
 
 ## Development
 

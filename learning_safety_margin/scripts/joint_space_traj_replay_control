@@ -2,14 +2,15 @@
 
 import numpy as np
 import pandas as pd
+import random
 import rospy
+import glob
 import time
 import sys
 import os
 import matplotlib.pyplot as plt
 import state_representation as sr
 from controllers import create_joint_controller, CONTROLLER_TYPE
-from dynamical_systems import create_cartesian_ds, DYNAMICAL_SYSTEM_TYPE
 from network_interfaces.control_type import ControlType
 from network_interfaces.zmq.network import CommandMessage
 from learning_safety_margin.robot_interface import RobotInterface
@@ -140,8 +141,7 @@ def plot_ref_vs_rec(df_ref, rec):
 
     plt.show()
 
-
-def control_loop(traj, robot, freq):
+def control_loop(fpath_list, robot, freq):
 
     # create publisher
     pub = rospy.Publisher('/joint_states', JointState, queue_size=10)
@@ -159,25 +159,36 @@ def control_loop(traj, robot, freq):
     ## SIMULATOR GAINS
     # ctrl.set_parameter_value("stiffness", [10., 5., 4., 2., 2, 2, 2], sr.ParameterType.DOUBLE_ARRAY)
     # ctrl.set_parameter_value("damping", [3., 2., 2., 1., .5, .5, .5], sr.ParameterType.DOUBLE_ARRAY)
+    ## FRANKALIB GAINS -- too high
+    # ctrl.set_parameter_value("stiffness", [600, 600, 600, 600, 250, 150, 50], sr.ParameterType.DOUBLE_ARRAY)
+    # ctrl.set_parameter_value("damping", [50, 50, 50, 50, 30, 25, 15], sr.ParameterType.DOUBLE_ARRAY)
 
     # SET UP variables
     desired_state = sr.JointState("franka", nb_joints)
     feedback_state = sr.JointState("franka", nb_joints)
 
     flag = 0
-    start_integrator_threshold = 0.5
-    init_pos_err_threshold = 0.02
-    initial_pos = traj['position'].at[0]
+
+    # integrator variables  [60, 50, 45, 40, 35, 25, 20]
+    inte_gain = [65, 55, 50, 45, 40, 30, 20]
+    start_integrator_threshold = 0.25
+    init_pos_err_threshold = 0.01
+    integrator_reset_threshold = 0.05
     time_period = 1. / freq
-    inte_gain = [22, 22, 22, 20, 18, 15, 12]
-    integral = np.zeros(7)
-    inte_torques = np.zeros(7)
+    integral = np.zeros(nb_joints)
+    inte_torques = np.zeros(nb_joints)
 
     alpha = 0.99
     dq_filtered = np.zeros(7)
 
     recorded_state = np.zeros((10000, 1 + nb_joints * 6))* np.nan
-    idx= 0
+    idx = 0
+
+    user_classification = []
+
+    traj_idx = 0
+    traj = pd.read_pickle(fpath_list[traj_idx])
+    initial_pos = traj['position'].at[0]
 
     rate = rospy.Rate(freq)
     while not rospy.is_shutdown():
@@ -185,21 +196,26 @@ def control_loop(traj, robot, freq):
 
         if not state:
             continue
-        print("EEF position: ", state.ee_state.get_position())
-        print("EEF orientation: ", state.ee_state.get_orientation())
-        print("FLAG : ", flag)
+
+        # Wait a bit so state is correct
+        elif state and checked_first_state:
+            print("EEF position: ", state.ee_state.get_position())
+            rospy.sleep(0.1)
+            checked_first_state = False
+            input("Waiting for user input... Press Enter to start")
+            print("Going to start position...")
+            continue
+
+
 
         if flag == 0:
             # ------GO TO START POSITION ------------------------
 
-            error = np.linalg.norm(initial_pos - state.joint_state.get_positions())
-            # print("q0: ", q0)
-            print("|q-q0| : ", abs(state.joint_state.get_positions() - initial_pos))
-            print("Error:", error)
+            error = abs(initial_pos - state.joint_state.get_positions())
 
-            if error < init_pos_err_threshold:
-                print("REACHED START POSITION : ", initial_pos)
-                print("ERROR :", error)
+            if all(error < init_pos_err_threshold):
+                print("Error :", error)
+                print("Reached start position ")
                 flag = 1
 
                 # Stop robot
@@ -207,23 +223,24 @@ def control_loop(traj, robot, freq):
                 command.joint_state.set_torques(np.zeros(7))
                 robot.send_command(command)
 
-                print("WAIT ...")
-                rospy.sleep(1.0)
+                input("Waiting for user input... Press Enter to start \n ")
+                rospy.sleep(0.3)
+                print("Replaying trajectory %s of %s " % (traj_idx+1, len(fpath_list)))
+                print("Traj name : ", fn_list[traj_idx])
                 timeZero = time.time()
                 continue
 
             # Adding integrator when getting close to target
-            if error < start_integrator_threshold :
-                print("Adding integrator for precise positioning")
+            if np.all(error < start_integrator_threshold):
+                # print("Adding integrator for precise positioning")
                 integral += (initial_pos - state.joint_state.get_positions()) * time_period
-                inte_torques = inte_gain * integral
-                # clip to avoid too big a compensation
-                inte_torques = np.clip(inte_torques, -2, 2)
 
-            # reset integral if overhsoot
-            if integral.any() != 0 and error > start_integrator_threshold:
-                integral *= 0
-                print("RESET INTEGRAL")
+                # reset integral if overhsoot
+                if np.any(abs(integral) > integrator_reset_threshold):
+                    integral *= 0
+                    print("RESET INTEGRAL \n")
+
+                inte_torques = inte_gain * integral
 
             # Extract form Yang code
             feedback_state.set_positions(state.joint_state.get_positions())
@@ -239,12 +256,11 @@ def control_loop(traj, robot, freq):
             pos_d = feedback_state.get_positions() + time_period * velo_d
             desired_state.set_positions(pos_d)
 
+            ## DEBUG PRINTS
             # print("Joint positions: ", feedback_state.get_positions())
             # print("Joint Velocities: ", feedback_state.get_velocities())
             # print("Desired positions: ", desired_state.get_positions())
             # print("Desired Velocities: ", desired_state.get_velocities())
-
-            # command = ctrl.compute_command(desired_state, state.joint_state)
 
             command_torques = sr.JointTorques(ctrl.compute_command(desired_state, feedback_state))
             command.joint_state = state.joint_state
@@ -258,14 +274,12 @@ def control_loop(traj, robot, freq):
             else :
                 robot.send_command(command)
 
-
-
         elif flag == 1:
             #-------FOLLOW TRAJECTORY ---------------------
 
             # GET current time
             nIter_time = time.time() - timeZero
-            print("Time : ", round(nIter_time,4))
+            # print("Time : ", round(nIter_time,4))
 
             # Check if reached end of traj
             if nIter_time > traj['time'].iat[-1]:
@@ -281,7 +295,7 @@ def control_loop(traj, robot, freq):
                 robot.send_command(command)
 
                 print("WAIT ...")
-                rospy.sleep(1.0)
+                rospy.sleep(0.5)
                 continue
 
             ## Feedback state
@@ -297,10 +311,10 @@ def control_loop(traj, robot, freq):
             desired_state.set_velocities(df_desired['velocity'])
 
             ## DEBUG prints
-            print("Joint positions: ", feedback_state.get_positions())
-            print("Joint Velocities: ", feedback_state.get_velocities())
-            print("Desired positions: ", desired_state.get_positions())
-            print("Desired Velocities: ", desired_state.get_velocities())
+            # print("Joint positions: ", feedback_state.get_positions())
+            # print("Joint Velocities: ", feedback_state.get_velocities())
+            # print("Desired positions: ", desired_state.get_positions())
+            # print("Desired Velocities: ", desired_state.get_velocities())
 
             # SAVE current state
             recorded_state[idx, 0] = nIter_time
@@ -310,16 +324,16 @@ def control_loop(traj, robot, freq):
             recorded_state[idx, 22:29] = df_desired['position']
             recorded_state[idx, 29:36] = df_desired['velocity']
             recorded_state[idx, 36:43] = df_desired['torques']
-            idx+=1
+            idx += 1
 
             # Set command torques
             command_torques = sr.JointTorques(ctrl.compute_command(desired_state, feedback_state))
             command.joint_state = state.joint_state
             command.joint_state.set_torques(command_torques.get_torques())
 
-            print("Command:", command.joint_state.get_torques())
             if np.any(command_torques.get_torques() > 30):
                 print("TORQUES TOO BIG !!!")
+                print("Command:", command.joint_state.get_torques())
                 break
 
             else:
@@ -329,11 +343,61 @@ def control_loop(traj, robot, freq):
             # ------------END OF TRAJ-> DO PLOTS ------------------------
             # remove zeros
             recorded_state = recorded_state[~np.isnan(recorded_state).any(axis=1)]
-            # save file
-            np.save(save_dir + "_replay_jointState", recorded_state, allow_pickle=False)
 
-            # call plot function
-            plot_ref_vs_rec(traj, recorded_state)
+            # save file, reuse same name
+            complete_fn = os.path.split(fpath_list[traj_idx])
+            safe_category = os.path.basename(os.path.normpath(complete_fn[0]))
+            fn = os.path.splitext(complete_fn[1])
+            save_fn = os.path.join(save_dir, safe_category, fn[0] + "_replay")
+            np.save(save_fn, recorded_state, allow_pickle=False)
+
+            # option to replay the same trajectory again
+            should_replay = input("Do you want to replay this trajectory again ? [y/n] \n")
+
+            if should_replay == 'n':
+
+                # Get user classification
+                classified_as = input("How would you classify this trajectory ? [safe/daring/unsafe] \n")
+                user_classification.append(classified_as)
+                print("Classified as :", classified_as)
+
+                np.savetxt(save_dir + "temp_list_of_labels.txt", np.array(user_classification), fmt='%s')
+
+                print("Setting up next trajectory... \n")
+                ## Set up next traj
+                if traj_idx < (len(fpath_list)-1):
+                    traj_idx += 1
+                else:
+                    print("PLAYED ALL TRAJECTORIES IN LIST \n")
+                    # Save names of replayed trajectories with corresponding labels
+                    dict2save = {'Replayed demo': fn_list, 'User Label': user_classification}
+                    df = pd.DataFrame.from_dict(dict2save)
+                    df.to_csv(save_dir+"Replayed_demos_and_labels.csv", index=False, header=True)
+                    os.remove(save_dir + "temp_list_of_labels.txt")
+                    os.remove(save_dir + "temp_list_of_replayed_trajectories.txt")
+
+                    # call plot function
+                    plot_ref_vs_rec(traj, recorded_state)
+
+                # plot_ref_vs_rec(traj, recorded_state)
+
+                traj = pd.read_pickle(fpath_list[traj_idx])
+                initial_pos = traj['position'].at[0]
+
+            elif should_replay == 'y':
+                print("Replaying same trajectory... \n")
+
+            # Reset recording list
+            recorded_state = np.zeros((10000, 1 + nb_joints * 6)) * np.nan
+            idx = 0
+
+            # Reset integrator
+            integral = np.zeros(7)
+
+            # Reset flag to start loop again
+            input("Waiting for user input... Press Enter to start")
+            print("Going to start position...")
+            flag = 0
 
         # Publish joint states for recording
         pub.publish(convert_joint_state_msg(state))
@@ -349,32 +413,48 @@ if __name__ == '__main__':
     # Check passed argument - User number
     if len(sys.argv) >= 2:
         user_number = sys.argv[1]
-        traj_number = sys.argv[2]
+        number_of_traj = sys.argv[2]
     else:
-        user_number = 0
-        traj_number = 1
+        user_number = '0'
+        number_of_traj = '2'
 
     if isinstance(user_number, str):
         print("Processing rosbags for User_" + user_number)
 
+    # Set up directories
     data_dir = "/home/ros/ros_ws/src/learning_safety_margin/data/User_"+user_number+"/"
-
-    ## TODO : choose random traj, same number fo traj for each safety category -> set save_dir accordingly
-    safe_category = "safe/"
-    traj_nbr = traj_number
-
-    fn = traj_nbr + "_jointState.pkl"
-    fpath = data_dir + "csv/"+ safe_category + fn
-
-    # Set save dir and create folder if needed
-    save_dir = data_dir + "replays/"+ safe_category
+    save_dir = data_dir + "replays/"
     if not os.path.isdir(save_dir):
         os.mkdir(save_dir)
 
-    save_dir += traj_nbr
+    # Make list of trajectories
+    traj_nbr_per_category = int(number_of_traj)
+    category_list = ["safe/", "daring/", "unsafe/"]
+    fpath_list = []
 
-    traj = pd.read_pickle(fpath)
-    print("DF shape :",  traj.shape, " \n DF columns :", traj.columns )
+    for category in category_list:
 
+        ## count nbr of traj in category folder, make a list
+        all_fn = glob.glob(data_dir + "csv/" + category + "*.pkl")
+
+        # Set save dir and create folder if needed
+        cat_save_dir = save_dir + category
+        if not os.path.isdir(cat_save_dir):
+            os.mkdir(cat_save_dir)
+
+        # Sample trajectories from category
+        fpath_list.append(random.sample(all_fn, traj_nbr_per_category))
+
+    # Reshape list to be 1D, then shuffle
+    fpath_list = sum(fpath_list, [])
+    random.shuffle(fpath_list)
+
+    # Save name and category of each traj in a txt file
+    fn_list = [os.path.join(os.path.basename(os.path.normpath(os.path.split(fn)[0])), os.path.splitext(os.path.split(fn)[1])[0]) for fn in fpath_list]
+    print(fpath_list)
+    print(fn_list)
+    np.savetxt(save_dir + "temp_list_of_replayed_trajectories.txt", np.array(fn_list), fmt='%s')
+
+    print("Going to start position...")
     robot_interface = RobotInterface("*:1701", "*:1702")
-    control_loop(traj, robot_interface, 200)
+    control_loop(fpath_list, robot_interface, 200)

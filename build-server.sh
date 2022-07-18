@@ -3,7 +3,7 @@ BASE_IMAGE_TAG=noetic
 #-develop
 
 IMAGE_NAME=learning-safety-margin
-
+USERNAME="ros"
 SERVE_REMOTE=false
 REMOTE_SSH_PORT=2280
 
@@ -38,6 +38,10 @@ docker pull ghcr.io/aica-technology/ros-control-libraries:"${BASE_IMAGE_TAG}"
 
 BUILD_FLAGS+=(--build-arg BASE_IMAGE_TAG="${BASE_IMAGE_TAG}")
 BUILD_FLAGS+=(-t "${IMAGE_NAME}:${BASE_IMAGE_TAG}")
+
+if [ ! $(id -g) = 1000 ]; then  # Pass only if it's not already 1000
+  BUILD_FLAGS+=(--build-arg HOST_GID=$(id -g))   # Pass the correct GID to avoid issues with mounted volumes
+fi
 
 DOCKER_BUILDKIT=1 docker build "${BUILD_FLAGS[@]}" .
 

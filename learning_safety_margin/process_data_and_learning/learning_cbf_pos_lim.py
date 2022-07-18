@@ -35,9 +35,9 @@ def pos_learning(user_number):
     nDaring = len(os.listdir(rosbag_dir+"daring"))
 
 
-    x_lim = [0., 1.]
-    y_lim = [-0.5, 0.5]
-    z_lim = [0., 0.5]
+    x_lim = [0.25, 0.75]
+    y_lim = [-0.45, 0.45]
+    z_lim = [0., 0.7]
     ws_lim = onp.vstack((x_lim, y_lim, z_lim))
 
     # Define Dynamical System
@@ -355,7 +355,7 @@ def pos_learning(user_number):
     art_safe_pts = []
     print(range(len(centers)))
     for i in range(len(centers)):
-        print(i, len(centers))
+        # print(i, len(centers))
         dist = np.linalg.norm(x_all-centers[i], axis=1)
         # dist = np.array([np.linalg.norm(x-centers[i]) for x in x_all])
         if np.all(dist > 3*rbf_std):
@@ -414,12 +414,12 @@ def pos_learning(user_number):
     print(safe_val.shape, unsafe_val.shape, semisafe_val.shape)  # , art_safe_val.shape)
     print(unsafe_val[0])
 
-    plt.plot(unsafe_tte)
-    plt.xlabel('Unsafe Points')
-    plt.ylabel('Time to End (TTE) value')
-    plt.title('Time to End (TTE) vs. Unsafe Points')
-    if save: plt.savefig(fig_path + 'unsafe_tte_list.pdf')
-    plt.show()
+    # plt.plot(unsafe_tte)
+    # plt.xlabel('Unsafe Points')
+    # plt.ylabel('Time to End (TTE) value')
+    # plt.title('Time to End (TTE) vs. Unsafe Points')
+    # if save: plt.savefig(fig_path + 'unsafe_tte_list.pdf')
+    # plt.show()
 
     # Initialize cost
     h_cost = 0
@@ -592,7 +592,7 @@ def pos_learning(user_number):
             "gamma_dyn": gamma_dyn
             }
 
-    pickle.dump(data, open( data_dir+"pos_data_dict.p", "wb" ) )
+    pickle.dump(data, open( data_dir+"pos_data_dict.p", "wb"))
     plt.show()
 
 
@@ -607,8 +607,8 @@ if __name__ == '__main__':
         print("Learning velocity cbf for User_"+user_number)
         pos_learning(user_number)
     else:
-        print("Learning velocity cbf for User_1 \n")
+        print("Learning velocity cbf for User_0 \n")
         print("To process other user, provide user number as sole argument: python3 bag2csv.py 2")
-        pos_learning("1")
+        pos_learning("0")
 
 
