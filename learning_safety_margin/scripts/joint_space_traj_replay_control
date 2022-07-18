@@ -159,19 +159,31 @@ def control_loop(fpath_list, robot, freq):
     ## SIMULATOR GAINS
     # ctrl.set_parameter_value("stiffness", [10., 5., 4., 2., 2, 2, 2], sr.ParameterType.DOUBLE_ARRAY)
     # ctrl.set_parameter_value("damping", [3., 2., 2., 1., .5, .5, .5], sr.ParameterType.DOUBLE_ARRAY)
+    ## FRANKALIB GAINS
+    # ctrl.set_parameter_value("stiffness", [600, 600, 600, 600, 250, 150, 50], sr.ParameterType.DOUBLE_ARRAY)
+    # ctrl.set_parameter_value("damping", [50, 50, 50, 50, 30, 25, 15], sr.ParameterType.DOUBLE_ARRAY)
 
     # SET UP variables
     desired_state = sr.JointState("franka", nb_joints)
     feedback_state = sr.JointState("franka", nb_joints)
 
     flag = 0
-    start_integrator_threshold = 0.5
-    init_pos_err_threshold = 0.01
+    # start_integrator_threshold = 0.5
+    # init_pos_err_threshold = 0.01
+    #
+    # time_period = 1. / freq
+    # inte_gain = [22, 22, 22, 20, 18, 15, 12] ## IRl gains ## [3., 2., 2., 1., .5, .5, .5] ##
+    # integral = np.zeros(7)
+    # inte_torques = np.zeros(7)
 
+    # integrator variables  [60, 50, 45, 40, 35, 25, 20]
+    inte_gain = [65, 55, 50, 45, 40, 30, 20]
+    start_integrator_threshold = 0.25
+    init_pos_err_threshold = 0.01
+    integrator_reset_threshold = 0.05
     time_period = 1. / freq
-    inte_gain = [22, 22, 22, 20, 18, 15, 12] ## IRl gains ## [3., 2., 2., 1., .5, .5, .5] ##
-    integral = np.zeros(7)
-    inte_torques = np.zeros(7)
+    integral = np.zeros(nb_joints)
+    inte_torques = np.zeros(nb_joints)
 
     alpha = 0.99
     dq_filtered = np.zeros(7)
@@ -195,6 +207,17 @@ def control_loop(fpath_list, robot, freq):
         # print("EEF orientation: ", state.ee_state.get_orientation())
         # print("FLAG : ", flag)
 
+        # Wait a bit so state is correct
+        elif state and checked_first_state:
+            print("EEF position: ", state.ee_state.get_position())
+            rospy.sleep(0.1)
+            checked_first_state = False
+            input("Waiting for user input... Press Enter to start")
+            print("Going to start position...")
+            continue
+
+
+
         if flag == 0:
             # ------GO TO START POSITION ------------------------
 
@@ -204,7 +227,7 @@ def control_loop(fpath_list, robot, freq):
             # print("Error:", error)
 
             if all(error < init_pos_err_threshold):
-                print("REACHED START POSITION : ", initial_pos)
+                # print("REACHED START POSITION : ", initial_pos)
                 print("ERROR :", error)
                 print("Reached start position ")
                 flag = 1
@@ -214,26 +237,24 @@ def control_loop(fpath_list, robot, freq):
                 command.joint_state.set_torques(np.zeros(7))
                 robot.send_command(command)
 
-                input("Waiting for user input... Press any key to start \n ")
-                rospy.sleep(1.0)
+                input("Waiting for user input... Press Enter to start \n ")
+                rospy.sleep(0.3)
                 print("Replaying trajectory %s of %s " % (traj_idx+1, len(fpath_list)))
                 print("Traj name : ", fn_list[traj_idx])
                 timeZero = time.time()
                 continue
 
             # Adding integrator when getting close to target
-            if all(error < start_integrator_threshold):
+            if np.all(error < start_integrator_threshold):
                 # print("Adding integrator for precise positioning")
                 integral += (initial_pos - state.joint_state.get_positions()) * time_period
-                inte_torques = inte_gain * integral
-                # clip to avoid too big a compensation
-                inte_torques = np.clip(inte_torques, -2, 2)
-                # print("INTERGRATOR TORQUES :", inte_torques)
 
-            # reset integral if overhsoot
-            if integral.any() != 0 and all(error > start_integrator_threshold):
-                integral *= 0
-                print("RESET INTEGRAL")
+                # reset integral if overhsoot
+                if np.any(abs(integral) > integrator_reset_threshold):
+                    integral *= 0
+                    print("RESET INTEGRAL \n")
+
+                inte_torques = inte_gain * integral
 
             # Extract form Yang code
             feedback_state.set_positions(state.joint_state.get_positions())
@@ -253,8 +274,6 @@ def control_loop(fpath_list, robot, freq):
             # print("Joint Velocities: ", feedback_state.get_velocities())
             # print("Desired positions: ", desired_state.get_positions())
             # print("Desired Velocities: ", desired_state.get_velocities())
-
-            # command = ctrl.compute_command(desired_state, state.joint_state)
 
             command_torques = sr.JointTorques(ctrl.compute_command(desired_state, feedback_state))
             command.joint_state = state.joint_state
@@ -325,9 +344,9 @@ def control_loop(fpath_list, robot, freq):
             command.joint_state = state.joint_state
             command.joint_state.set_torques(command_torques.get_torques())
 
-            # print("Command:", command.joint_state.get_torques())
             if np.any(command_torques.get_torques() > 30):
                 print("TORQUES TOO BIG !!!")
+                print("Command:", command.joint_state.get_torques())
                 break
 
             else:
@@ -373,6 +392,8 @@ def control_loop(fpath_list, robot, freq):
                     # call plot function
                     plot_ref_vs_rec(traj, recorded_state)
 
+                # plot_ref_vs_rec(traj, recorded_state)
+
                 traj = pd.read_pickle(fpath_list[traj_idx])
                 initial_pos = traj['position'].at[0]
 
@@ -387,6 +408,7 @@ def control_loop(fpath_list, robot, freq):
             integral = np.zeros(7)
 
             # Reset flag to start loop again
+            input("Waiting for user input... Press Enter to start")
             print("Going to start position...")
             flag = 0
 

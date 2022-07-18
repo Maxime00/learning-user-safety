@@ -117,24 +117,15 @@ If running an ssh container, you can connect to it using :
 aica-docker connect learning-safety-margin-noetic-ssh
 ```
 
-The trajectory replaying and following take in as argument the user_number and the number_of_traj to be played
+The trajectory replaying and following take in as argument the user_number and the number_of_traj per safety category to be played
 Default is "0 2"
 
-currently
 ```console
 bash build-server.sh
 aica-docker interactive learning-safety-margin:noetic -u ros --net host --no-hostname -v data_vol:/home/ros/ros_ws/src/learning_safety_margin/data
 roslaunch learning_safety_margin demo.launch demo:=joint_space_traj_replay_control args_for_control:="0 2"
 roslaunch learning_safety_margin demo.launch demo:=cartesian_space_traj_follow_control args_for_control:="1 2"
- robot_name:=franka
-roslaunch learning_safety_margin demo.launch demo:=cartesian_twist_control
 roslaunch learning_safety_margin demo.launch demo:=joint_space_velocity_control
-```
-future 
-```console
-bash build-server.sh
-aica-docker interactive learning-safety-margin:noetic -u ros --net host --no-hostname -v data_vol:/home/ros/ros_ws/src/learning_safety_margin/data
-roslaunch learning_safety_margin demo.launch demo:=joint_space_traj_replay_control args_for_control:="0 2"
 roslaunch learning_safety_margin mpc_control.launch robot_name:=franka args_for_planner:=0
 ```
 

@@ -284,7 +284,7 @@ def control_loop(traj_dict, robot, freq):
 
     # integrator variables  [60, 50, 45, 40, 35, 25, 20]
     inte_gain = [65, 55, 50, 45, 40, 30, 20]
-    start_integrator_threshold = 0.25
+    start_integrator_threshold = 0.3 # ideal 0.25 but doesn't reach that sometimes
     init_pos_err_threshold = 0.01
     integrator_reset_threshold = 0.05
     time_period = 1. / freq
@@ -701,7 +701,7 @@ if __name__ == '__main__':
                                    n=x_dim, k=n_dim_features, fixed_stds=True, std=rbf_std)
 
     # SET PARAMETERS FOR MPC CONTROL
-    freq = 100
+    freq = 200
     dt = 0.15  # 1./freq
     n_steps = 50
     nbr_demos = int(number_of_demos)
