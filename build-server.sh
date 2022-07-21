@@ -20,9 +20,12 @@ Options:
   -s, --serve              Start the remove development server.
 
   -h, --help               Show this help message.
+
+  Additional arguments are passed to the docker server command.
 "
 
 BUILD_FLAGS=()
+FWD_ARGS=()
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --base-tag) BASE_IMAGE_TAG=$2; shift 2;;
@@ -30,7 +33,7 @@ while [ "$#" -gt 0 ]; do
     -v|--verbose) BUILD_FLAGS+=(--progress=plain); shift 1;;
     -s|--serve) SERVE_REMOTE=true ; shift ;;
     -h|--help) echo "${HELP_MESSAGE}"; exit 0;;
-    *) echo "Unknown option: $1" >&2; echo "${HELP_MESSAGE}"; exit 1;;
+    *) FWD_ARGS+=("$1"); shift 1;; #echo "Unknown option: $1" >&2; echo "${HELP_MESSAGE}"; exit 1;;
   esac
 done
 
@@ -45,13 +48,18 @@ fi
 
 DOCKER_BUILDKIT=1 docker build "${BUILD_FLAGS[@]}" .
 
+if [ ${#FWD_ARGS[@]} -gt 0 ]; then
+  echo "Forwarding additional arguments to aica-docker server command:"
+  echo "${FWD_ARGS[@]}"
+fi
+
 # mount volume
 docker volume rm data_vol
 docker volume create --driver local \
     --opt type="none" \
     --opt device="${PWD}/learning_safety_margin/data" \
     --opt o="bind" \
-    "data_vol"
+    --name "data_vol"
 FWD_ARGS+=(--volume="data_vol:/home/${USERNAME}/ros_ws/src/learning_safety_margin/data")
 
 
