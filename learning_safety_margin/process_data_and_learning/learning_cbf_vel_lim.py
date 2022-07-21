@@ -7,6 +7,7 @@ import os
 import time
 from jax import random, vmap, jit, grad, ops, lax, tree_util, device_put, device_get, jacobian, jacfwd, jacrev, jvp
 import cvxpy as cp
+import mosek
 
 import seaborn as sns
 sns.set_style('darkgrid')
@@ -29,12 +30,21 @@ def vel_learning(user_number):
 
 
     # Velocity Limits
-    x_lim = [0., 1.]
-    y_lim = [-0.5, 0.5]
-    z_lim = [0., 0.5]
+    # x_lim = [0., 1.]
+    # y_lim = [-0.5, 0.5]
+    # z_lim = [0., 0.5]
+    # vdot_lim = [-1., 1.]
+    #
+    # ws_lim = onp.vstack((x_lim, y_lim, z_lim, vdot_lim, vdot_lim, vdot_lim))
+    x_lim = [0.2, 0.8]  # [0., 1.]
+    y_lim = [-0.4, 0.5]  # [-0.5, 0.5]
+    z_lim = [0.1, 0.6]  # [0., 1.]
     vdot_lim = [-1., 1.]
+    xdot_lim = [-0.5, 0.4]
+    ydot_lim = [-0.8, 0.8]
+    zdot_lim = [-0.8, 0.8]
 
-    ws_lim = onp.vstack((x_lim, y_lim, z_lim, vdot_lim, vdot_lim, vdot_lim))
+    ws_lim = np.vstack((x_lim, y_lim, z_lim, xdot_lim, ydot_lim, zdot_lim))  # vdot_lim, vdot_lim, vdot_lim))
 
     # Define Dynamical System
 
@@ -178,6 +188,9 @@ def vel_learning(user_number):
         unsafe_pts = onp.vstack((unsafe_pts, xtraj))
         unsafe_ttelist = onp.vstack((unsafe_ttelist, tte_list[i]))
 
+    ### Set unsafe tte list to all ones (no decay to end)
+    unsafe_ttelist = onp.ones(len(unsafe_pts))
+
 
     xtraj = onp.hstack((daring_traj[0], daring_vel[0]))
     semisafe_pts = xtraj
@@ -194,7 +207,6 @@ def vel_learning(user_number):
     unsafe_rewards = onp.ones(len(unsafe_pts))
     semisafe_rewards = onp.ones(len(semisafe_pts))* 0.5
 
-    # unsafe_ttelist = onp.ones(len(unsafe_pts))
 
     # Define h model (i.e., RBF)
 
@@ -286,7 +298,7 @@ def vel_learning(user_number):
     x_safe = safe_pts[::n_safe_sample]
     safe_rewards = safe_rewards[::n_safe_sample]
 
-    n_unsafe_sample = 50#20
+    n_unsafe_sample = 50#100#20
     x_unsafe = unsafe_pts[::n_unsafe_sample]
     unsafe_rewards = unsafe_rewards[::n_unsafe_sample]
     unsafe_tte = unsafe_ttelist[::n_unsafe_sample]
@@ -302,20 +314,21 @@ def vel_learning(user_number):
     n_safe = len(x_safe)
     n_unsafe = len(x_unsafe)
     n_semisafe = len(x_semisafe)
+    n_artificial = 0
 
     # Initialize RBF Parameters
-    n_dim_features = 5
+    n_dim_features = 4
     x_dim = 6
-    n_features = 1000#n_dim_features**x_dim
+    n_features = 2000#n_dim_features**x_dim
     u_dim = 2
     psi = 1.0
     dt = 0.1
     mu_dist = (ws_lim[:, 1]-ws_lim[:,0])/n_dim_features
     print("Check: ", mu_dist, onp.max(mu_dist)*0.5)
-    rbf_std = 0.4#onp.max(mu_dist) * 0.5 #0.1#1.0
+    rbf_std = 0.3#onp.max(mu_dist) * 0.5 #0.1#1.0
     print(rbf_std)
     # rbf_std = 0.5
-    centers, stds = rbf_means_stds(X=None, X_lim = np.array([x_lim,y_lim,z_lim, vdot_lim, vdot_lim, vdot_lim]),
+    centers, stds = rbf_means_stds(X=None, X_lim = ws_lim,
                                    n=x_dim, k=n_dim_features, set_means='random',fixed_stds=True, std=rbf_std, nCenters=n_features)
     print("rbf shapes", centers.shape, stds.shape)
 
@@ -359,9 +372,11 @@ def vel_learning(user_number):
     if is_semisafe:
         semisafe_val = semisafe_rewards#np.ones(n_semisafe) * 0.5  # np.array(onp.squeeze(semisafe_rewards)*r_scaling)#np.ones(n_semisafe)*0.
         gamma_dyn = np.ones(n_semisafe) * 0.1
-    unsafe_tte = unsafe_ttelist ** 3
+    # unsafe_tte = unsafe_ttelist ** 3
 
-    if is_artificial: art_safe_val = np.ones(len(art_safe_pts)) * 0.1  # *0.5
+    if is_artificial:
+        art_safe_val = np.ones(len(art_safe_pts)) * 0.1  # *0.5
+        n_artificial = len(art_safe_pts)
     print(safe_val.shape, unsafe_val.shape , semisafe_val.shape)#, art_safe_val.shape)
     print(unsafe_val[0])
 
@@ -450,20 +465,24 @@ def vel_learning(user_number):
     ## Define Objective
 
     param_cost = cp.sum_squares(theta) #+ bias ** 2 # l2-norm on parameters
-
+    param_norm = n_features
     if is_slack_both: slack_cost = cp.sum_squares(safe_slack) + cp.sum_squares(unsafe_slack)
     elif is_slack_safe: slack_cost = cp.sum_squares(safe_slack) # Norm on slack variables
     else: slack_cost = cp.sum_squares(unsafe_slack) # Norm on slack variables
     slack_weight = 10.
+    slack_norm = n_unsafe
     h_weight = 1.
+    h_norm = n_safe + n_unsafe + n_semisafe + n_artificial
     param_weight = 1.#500.
-    obj = cp.Minimize(param_weight * param_cost + slack_weight * slack_cost + h_weight * h_cost)
+    obj = cp.Minimize(param_weight * param_cost/param_norm + slack_weight * slack_cost / slack_norm + h_weight * h_cost / h_norm)
     print('All costs defined')
 
     params = None
     bias_param = None
     prob = cp.Problem(obj, constraints)
-    result = prob.solve(solver=cp.MOSEK, verbose=True)#, enforce_dpp=True)
+    mosek_params = {'mosek.iparam.intpnt_max_iterations': 1000000
+                    }
+    result = prob.solve(solver=cp.MOSEK, verbose=True, mosek_params={mosek.iparam.intpnt_solve_form: mosek.solveform.primal}, enforce_dpp=True)
 
     params = theta.value
     if is_bias: bias_param = bias.value

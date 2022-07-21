@@ -3,12 +3,15 @@ import casadi
 
 dt = 0.01
 
-x_lim = [0., 1.]
-y_lim = [-0.5, 0.5]
-z_lim = [0., 1.]
+x_lim = [0.2, 0.8]#[0., 1.]
+y_lim = [-0.4,0.5]#[-0.5, 0.5]
+z_lim = [0.1, 0.6]#[0., 1.]
 vdot_lim = [-1., 1.]
+xdot_lim = [-0.5, 0.4]
+ydot_lim = [-0.8,0.8]
+zdot_lim = [-0.8,0.8]
 
-ws_lim = np.vstack((x_lim, y_lim, z_lim, vdot_lim, vdot_lim, vdot_lim))
+ws_lim = np.vstack((x_lim, y_lim, z_lim, xdot_lim, ydot_lim, zdot_lim))#vdot_lim, vdot_lim, vdot_lim))
 
 # RBF Utils
 

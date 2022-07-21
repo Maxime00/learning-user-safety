@@ -42,6 +42,7 @@ set(DEMOS_SCRIPTS
     cartesian_impedance_cbfvel_control
     MPC_velocity_planner
     MPC_velocity_control
+
 )
 
 foreach(SCRIPT ${DEMOS_SCRIPTS})
