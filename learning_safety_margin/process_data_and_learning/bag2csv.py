@@ -85,7 +85,7 @@ def process_user_rosbags(user_num='0', smooth_flag = '1'):
 		# print(" BASE Frames : ", base_frame, "\n")
 		# print(" JOINT Frames : ", joint_frames, "\n")
 
-		print(bag.get_message_count())
+		# print(bag.get_message_count())
 		if bag.get_message_count() == 0:
 			print("Empty Bag")
 			bag.close()
@@ -134,9 +134,9 @@ def process_user_rosbags(user_num='0', smooth_flag = '1'):
 			for i in range(0,len(jointTorq2save[0,:])):
 				window_len = 100
 				if window_len > jointTorq2save[:,i].shape[0]: window_len = jointTorq2save[:,i].shape[0]
-				print(jointTorq2save[:, i].shape, len(jointTorq2save[0, :]), window_len)
+				# print(jointTorq2save[:, i].shape, len(jointTorq2save[0, :]), window_len)
 
-				smoothTorques[:,i] = signal.savgol_filter(x=jointTorq2save[:,i], window_length=window_len, polyorder = 3)
+				smoothTorques[:, i] = signal.savgol_filter(x=jointTorq2save[:, i], window_length=window_len, polyorder=3)
 				smoothJointVel[:, i] = signal.savgol_filter(x=jointVel2save[:, i], window_length=window_len, polyorder=3)
 
 			for i in range(0, len(twist2save[0, :])):
@@ -153,11 +153,13 @@ def process_user_rosbags(user_num='0', smooth_flag = '1'):
 			# plt.title("smooth")
 			# plt.show()
 
-			# compute accelerations -use smooth vel to avoid noise
+			# compute accelerations - use smooth vel to avoid noise
 			eeAcc = []
 			for i in range(0, len(smoothTwistVel[:-1, 0])):
 				acc = (smoothTwistVel[i + 1] - smoothTwistVel[i]) / (time_idx[i+1] - time_idx[i])
 				eeAcc.append(acc)
+			# add empty acc to match size of vel and position
+			eeAcc.append([0,0,0,0,0,0])
 			acc2save = np.array(eeAcc)
 
 			# convert to pandas
