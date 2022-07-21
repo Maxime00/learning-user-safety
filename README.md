@@ -114,10 +114,10 @@ Start docker container and launch controller from there
 
 If running an ssh container, you can connect to it using :
 ```console
-aica-docker connect learning-safety-margin-noetic-ssh
+aica-docker connect learning-safety-margin-noetic-ssh -u ros
 ```
+Note: the argument -u ros lets docker write files with local user permission
 
-TODO : add arguments to chose user_number and safety of replayed traj
 currently
 ```console
 bash build-server.sh
@@ -198,8 +198,8 @@ python3 pybullet_zmq/bin/zmq-simulator
 
 # Terminal 2 - run controller
 ```console
-bash build-server.sh -s
-aica-docker connect learning-safety-margin-noetic-ssh
+bash build-server.sh -s -u ros
+aica-docker connect learning-safety-margin-noetic-ssh -u ros
 roslaunch learning_safety_margin mpc_control.launch
 ```
 
