@@ -76,30 +76,33 @@ def process_user_rosbags(user_num='0', smooth_flag = '1'):
 		# print(" BASE Frames : ", base_frame, "\n")
 		# print(" JOINT Frames : ", joint_frames, "\n")
 
+		if bag.get_message_count() == 0:
+			print("Empty Bag")
+			bag.close()
+		else:
+			for topic, msg, t in bag.read_messages():
 
-		for topic, msg, t in bag.read_messages():
+				# positions
+				# must convert to sr to compute forward kinematics
+				# print(topic)
+				jointPos = sr.JointPositions("franka", np.array(msg.position))
+				eePos = robot.forward_kinematics(jointPos, 'panda_link8')  # outputs cartesian pose (7d)
+				# convert back from sr to save to list
+				eePositions.append(eePos.data()) # only saving transitional pos, not orientation
 
-			# positions
-			# must convert to sr to compute forward kinematics
-			# print(topic)
-			jointPos = sr.JointPositions("franka", np.array(msg.position))
-			eePos = robot.forward_kinematics(jointPos, 'panda_link8')  # outputs cartesian pose (7d)
-			# convert back from sr to save to list
-			eePositions.append(eePos.data()) # only saving transitional pos, not orientation
+				# velocities
+				# must convert to sr Joint state to compute forward velocities
+				temp_jointState.set_velocities( np.array(msg.velocity))
+				temp_jointState.set_positions( np.array(msg.position))
+				eeVel = robot.forward_velocity(temp_jointState, 'panda_link8')  # outputs cartesian twist (6d)
+				# convert back from sr to save to list
+				eeVelocities.append(eeVel.data())  # only saving transitional vel, not orientation
 
-			# velocities
-			# must convert to sr Joint state to compute forward velocities
-			temp_jointState.set_velocities( np.array(msg.velocity))
-			temp_jointState.set_positions( np.array(msg.position))
-			eeVel = robot.forward_velocity(temp_jointState, 'panda_link8')  # outputs cartesian twist (6d)
-			# convert back from sr to save to list
-			eeVelocities.append(eeVel.data())  # only saving transitional vel, not orientation
-
-			# Joint State
-			jointPositions.append(np.array(msg.position))#temp_jointState.get_positions())
-			jointVelocities.append(np.array(msg.velocity))
-			jointTorques.append(np.array(msg.effort))
-			time_idx.append(t.to_sec())
+				# Joint State
+				jointPositions.append(np.array(msg.position))#temp_jointState.get_positions())
+				jointVelocities.append(np.array(msg.velocity))
+				jointTorques.append(np.array(msg.effort))
+				time_idx.append(t.to_sec())
 
 
 		# Reshape lists
@@ -117,11 +120,15 @@ def process_user_rosbags(user_num='0', smooth_flag = '1'):
 		smoothJointVel = np.zeros(jointVel2save.shape)
 		smoothTwistVel = np.zeros(twist2save.shape)
 		for i in range(0,len(jointTorq2save[0,:])):
-			smoothTorques[:,i] = signal.savgol_filter(x=jointTorq2save[:,i], window_length=100, polyorder = 3)
-			smoothJointVel[:, i] = signal.savgol_filter(x=jointVel2save[:, i], window_length=100, polyorder=3)
+			window_len = 100
+			if window_len > jointTorq2save[:, i].shape[0]: window_len = jointTorq2save[:, i].shape[0]
+			# print(jointTorq2save[:, i].shape, len(jointTorq2save[0, :]), window_len)
+
+			smoothTorques[:, i] = signal.savgol_filter(x=jointTorq2save[:, i], window_length=window_len, polyorder=3)
+			smoothJointVel[:, i] = signal.savgol_filter(x=jointVel2save[:, i], window_length=window_len, polyorder=3)
 
 		for i in range(0, len(twist2save[0, :])):
-			smoothTwistVel[:, i] = signal.savgol_filter(x=twist2save[:, i], window_length=100, polyorder=3)
+			smoothTwistVel[:, i] = signal.savgol_filter(x=twist2save[:, i], window_length=window_len, polyorder=3)
 
 		# plot velocities
 		# plt.figure()
