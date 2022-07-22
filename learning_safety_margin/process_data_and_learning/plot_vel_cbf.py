@@ -7,6 +7,9 @@ from matplotlib import cm
 import matplotlib.colors as colors
 import sys
 import pickle
+from skimage.measure import marching_cubes
+from mpl_toolkits.mplot3d.art3d import Poly3DCollection
+from matplotlib.animation import FuncAnimation
 
 import casadi
 
@@ -182,6 +185,39 @@ class PlotCBF():
         ax.set_ylabel('$z$', fontsize=18)
         plt.show()
 
+    def plot_xz_pos_multiple(self, num_slices=9, xdot=0.1, ydot=0.1, zdot=0.1, num_pts=11):
+        x = np.linspace(x_lim[0], x_lim[1], num=num_pts)
+        z = np.linspace(z_lim[0], z_lim[1], num=num_pts)
+        y = np.linspace(y_lim[0], y_lim[1], num=num_slices)
+
+        xx, zz = np.meshgrid(x, z)
+        hvals = np.zeros(xx.shape)
+        xvec = xx.ravel()
+        zvec = zz.ravel()
+        hvec = hvals.ravel()
+
+        # divnorm = colors.TwoSlopeNorm(vmin=np.min(hvals), vcenter=0., vmax=np.max(hvals))
+
+        fig,axs = plt.subplots(3,3)
+        fig.suptitle("CBF centers as XZ slices for multiple y values")
+
+        for i, ax in enumerate(axs.ravel()):
+
+            for k in range(len(xvec)):
+                hvec[k] = self.h_fun([xvec[k], y[i], zvec[k], xdot, ydot, zdot])
+            hvals = hvec.reshape((num_pts, num_pts))
+
+            im = ax.imshow(hvals, extent=[x_lim[0], x_lim[1], z_lim[0], z_lim[1]], origin='lower', norm=self.norm,
+                           cmap=cm.coolwarm_r)
+            ax.set_xlabel('$x$', fontsize=6)
+            ax.set_ylabel('$z$', fontsize=6)
+            ax.set_title("y = {:0.2f}".format(y[i]), fontsize=10)
+
+        fig.colorbar(im)
+
+        plt.show()
+
+
     def plot_yz_pos(self, x=0.5, xdot=0.1, ydot=0.1, zdot=0.1, num_pts=11):
         y = np.linspace(y_lim[0], y_lim[1], num=num_pts)
         z = np.linspace(z_lim[0], z_lim[1], num=num_pts)
@@ -248,6 +284,37 @@ class PlotCBF():
         ax.set_ylabel('$\dot{z}$', fontsize=18)
         plt.show()
 
+    def plot_xz_vel_animate(self, x=0.5, y=0., z=0.25, num_slices=20, num_pts=11):
+
+        fig, ax = plt.subplots()
+
+        ani = FuncAnimation(fig, self.xz_vel_animate, fargs=(x,y,z,num_slices, num_pts, ax), frames=20, interval=500)
+
+        plt.show()
+
+    def xz_vel_animate(self, frame_number, x, y, z, num_slices, num_pts, ax):
+
+        xdot = np.linspace(vdot_lim[0], vdot_lim[1], num=num_pts)
+        zdot = np.linspace(vdot_lim[0], vdot_lim[1], num=num_pts)
+        ydot = np.linspace(y_lim[0], y_lim[1], num=num_slices)
+
+        xx, zz = np.meshgrid(xdot, zdot)
+        hvals = np.zeros(xx.shape)
+        xdvec = xx.ravel()
+        zdvec = zz.ravel()
+        hvec = hvals.ravel()
+        for i in range(len(xdvec)):
+            hvec[i] = self.h_fun([x, y, z, xdvec[i], ydot[frame_number], zdvec[i]])
+        hvals = hvec.reshape((num_pts, num_pts))
+
+        ax.clear()
+        im = ax.imshow(hvals, extent=[vdot_lim[0], vdot_lim[1], vdot_lim[0], vdot_lim[1]], origin='lower',
+                       norm=self.norm, cmap=cm.coolwarm_r)
+        ax.set_xlabel('$\dot{x}$', fontsize=18)
+        ax.set_ylabel('$\dot{z}$', fontsize=18)
+        ax.set_title('XZ velocity slice in [%s, %s ,%s] for y_dot=%0.2f' %(x,y,z, ydot[frame_number]))
+        # fig.colorbar(im)
+
     def plot_yz_vel(self, x=0.5, y=0., z=0.25, xdot=0., num_pts=11):
         ydot = np.linspace(vdot_lim[0], vdot_lim[1], num=num_pts)
         zdot = np.linspace(vdot_lim[0], vdot_lim[1], num=num_pts)
@@ -292,10 +359,24 @@ class PlotCBF():
         for i in range(len(xvec)):
             im = ax.scatter(xvec[i], yvec[i], zvec[i], c=hvec[i], norm=self.norm, cmap=cm.coolwarm_r)  # , marker=m)
 
+        # add isosurface
+        # dx = x1[1] - x1[0]
+        # dy = x2[1] - x2[0]
+        # dz = x3[1] - x3[0]
+        # verts, faces, _, _ = marching_cubes(hvals, 0, spacing=(dx, dy, dz), step_size=2)
+        # # verts *= np.array([dx, dy, dz])
+        # # verts -= np.array([x_lim[0], y_lim[0], z_lim[0]])
+        # # add as Poly3DCollection
+        # mesh = Poly3DCollection(verts[faces])
+        # mesh.set_facecolor('g')
+        # mesh.set_edgecolor('none')
+        # mesh.set_alpha(0.3)
+        # ax.add_collection3d(mesh)
+
         ax.set_xlabel('$x$', fontsize=18)
         ax.set_ylabel('$y$', fontsize=18)
         ax.set_zlabel('$z$', fontsize=18)
-
+        fig.colorbar(im)
         ax.set_title('Learned CBF')
         ax.view_init(10, 180)
         plt.show()
@@ -321,11 +402,26 @@ class PlotCBF():
         for i in range(len(xvec)):
             if hvec[i] < 0:
                 im = ax.scatter(xvec[i], yvec[i], zvec[i], c=hvec[i], norm=self.norm, cmap=cm.coolwarm_r)  # , marker=m)
+
+        # add isosurface
+        # dx = x1[1] - x1[0]
+        # dy = x2[1] - x2[0]
+        # dz = x3[1] - x3[0]
+        # verts, faces, _, _ = marching_cubes(hvals, 0, spacing=(1, 1, 1), step_size=2)
+        # verts *= np.array([dx, dy, dz])
+        # verts += np.array([x_lim[0], y_lim[0], z_lim[0]])
+        # # add as Poly3DCollection
+        # mesh = Poly3DCollection(verts[faces])
+        # mesh.set_facecolor('g')
+        # mesh.set_edgecolor('none')
+        # mesh.set_alpha(0.3)
+        # ax.add_collection3d(mesh)
+
         ax.set_xlabel('$x$', fontsize=18)
         ax.set_ylabel('$y$', fontsize=18)
         ax.set_zlabel('$z$', fontsize=18)
-
-        ax.set_title('Learned CBF')
+        fig.colorbar(im)
+        ax.set_title('Learned CBF neg')
         ax.view_init(10, 180)
 
         plt.show()
@@ -414,7 +510,7 @@ if __name__ == '__main__':
     if len(sys.argv) >= 2:
         user_number = sys.argv[1]
     else:
-        user_number = '0'
+        user_number = 'test'
 
     print("Running CBF Plotting for User_"+user_number+"\n")
 
@@ -429,15 +525,20 @@ if __name__ == '__main__':
     slack_param = data["unsafe_slack"]
     centers = data["rbf_centers"]
     stds = data["rbf_stds"]
+    # centers, stds = rbf_means_stds(X=None, X_lim=np.array([x_lim, y_lim, z_lim, vdot_lim, vdot_lim, vdot_lim]),
+    #                                n=x_dim, k=n_dim_features, fixed_stds=True, std=rbf_std)
+
     bias_param = 0.1
 
     plotter = PlotCBF(params, bias_param, centers, stds)
-    plotter.plot_xy_pos(num_pts=30)
-    plotter.plot_xz_pos(num_pts=30)
-    plotter.plot_yz_pos(num_pts=30)
-
-    plotter.plot_xy_vel(num_pts=30)
-    plotter.plot_xz_vel(num_pts=30)
-    plotter.plot_yz_vel(num_pts=30)
+    # plotter.plot_xy_pos(num_pts=30)
+    # plotter.plot_xz_pos(num_pts=30)
+    # plotter.plot_yz_pos(num_pts=30)
+    #
+    # plotter.plot_xy_vel(num_pts=30)
+    # plotter.plot_xz_vel(num_pts=30)
+    # plotter.plot_yz_vel(num_pts=30)
+    # plotter.plot_xz_pos_multiple()
+    plotter.plot_xz_vel_animate()
     # plotter.plot_xyz()
-    plotter.plot_xyz_neg(num_pts=30)
+    # plotter.plot_xyz_neg()#num_pts=30)
