@@ -7,7 +7,7 @@ from matplotlib import cm
 import matplotlib.colors as colors
 import sys
 import pickle
-from skimage.measure import marching_cubes
+# from skimage.measure import marching_cubes
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 from matplotlib.animation import FuncAnimation
 
@@ -425,6 +425,88 @@ class PlotCBF():
         ax.view_init(10, 180)
 
         plt.show()
+
+    def plot_xyz_quiver(self, xdot = .1, ydot=0.1, zdot=0.1, num_pts=6, num_arrows=3, random_points=False, alpha=0.75):
+
+        # Random distribution
+        if random_points:
+            x_mu = (x_lim[0]+x_lim[1])/2
+            x_sig = x_lim[1] - x_mu
+            x1 = np.random.normal(x_mu, x_sig, num_pts)
+            y_mu = (y_lim[0]+y_lim[1])/2
+            y_sig = y_lim[1] - y_mu
+            x2 = np.random.normal(y_mu, y_sig, num_pts)
+            z_mu = (z_lim[0]+z_lim[1])/2
+            z_sig = z_lim[1] - z_mu
+            x3 = np.random.normal(z_mu, z_sig, num_pts)
+        elif not random_points:
+            x1 = np.linspace(x_lim[0], x_lim[1], num=num_pts)
+            x2 = np.linspace(y_lim[0], y_lim[1], num=num_pts)
+            x3 = np.linspace(z_lim[0], z_lim[1], num=num_pts)
+
+        xdot = np.linspace(xdot_lim[0], xdot_lim[1], num=num_arrows)
+        ydot = np.linspace(ydot_lim[0], ydot_lim[1], num=num_arrows)
+        zdot = np.linspace(zdot_lim[0], zdot_lim[1], num=num_arrows)
+
+        xx, yy, zz = np.meshgrid(x1, x2, x3)
+        xvec = xx.ravel()
+        yvec = yy.ravel()
+        zvec = zz.ravel()
+
+        xxdot, yydot, zzdot = np.meshgrid(xdot, ydot, zdot)
+        hvals = np.zeros(xxdot.shape)
+        xdotvec= xxdot.ravel()
+        ydotvec = yydot.ravel()
+        zdotvec = zzdot.ravel()
+        hvec = hvals.ravel()
+
+        fig = plt.figure(figsize=(10, 10))
+        ax = plt.axes(projection='3d')
+        # ax = fig.add_subplot(projection='3d')
+        for i in range(len(xvec)):
+            xvec_rep = np.repeat(xvec[i], len(xdotvec))
+            yvec_rep = np.repeat(yvec[i], len(xdotvec))
+            zvec_rep = np.repeat(zvec[i], len(xdotvec))
+
+            for k in range(len(xdotvec)):
+                hvec[k] = self.h_fun([xvec[i], yvec[i], zvec[i], xdotvec[k], ydotvec[k], zdotvec[k]])
+
+            # Flatten and normalize
+            c = (hvec.ravel() - hvec.min()) / hvec.ptp()
+            # Repeat for each body line and two head lines
+            c = np.concatenate((c, np.repeat(c, 2)))
+            # Colormap
+            c = plt.cm.coolwarm_r(c)
+            # Set alpha
+            c[:, -1] = np.repeat(alpha, len(c[:, 0]))
+
+            im_quiver = ax.quiver3D(xvec_rep, yvec_rep, zvec_rep, xdotvec, ydotvec, zdotvec, colors=c,
+                                     normalize=True, length=0.05, cmap=cm.coolwarm_r)
+
+        im = ax.scatter3D(xvec, yvec, zvec, s=10)
+
+        # add isosurface
+        # dx = x1[1] - x1[0]
+        # dy = x2[1] - x2[0]
+        # dz = x3[1] - x3[0]
+        # verts, faces, _, _ = marching_cubes(hvals, 0, spacing=(dx, dy, dz), step_size=2)
+        # # verts *= np.array([dx, dy, dz])
+        # # verts -= np.array([x_lim[0], y_lim[0], z_lim[0]])
+        # # add as Poly3DCollection
+        # mesh = Poly3DCollection(verts[faces])
+        # mesh.set_facecolor('g')
+        # mesh.set_edgecolor('none')
+        # mesh.set_alpha(0.3)
+        # ax.add_collection3d(mesh)
+
+        ax.set_xlabel('$x$', fontsize=18)
+        ax.set_ylabel('$y$', fontsize=18)
+        ax.set_zlabel('$z$', fontsize=18)
+        fig.colorbar(im_quiver)
+        ax.set_title('Learned CBF with quiver')
+        ax.view_init(10, 180)
+        plt.show()
+
 # def plot_xz_vel(self, params, bias_param, x=0.5, y=0., z=0.25, ydot=0., num_pts=10):
 #     xdot = np.linspace(vdot_lim[0], vdot_lim[1], num=num_pts)
 #     zdot = np.linspace(vdot_lim[0], vdot_lim[1], num=num_pts)
@@ -539,6 +621,6 @@ if __name__ == '__main__':
     # plotter.plot_xz_vel(num_pts=30)
     # plotter.plot_yz_vel(num_pts=30)
     # plotter.plot_xz_pos_multiple()
-    plotter.plot_xz_vel_animate()
-    # plotter.plot_xyz()
+    # plotter.plot_xz_vel_animate()
+    plotter.plot_xyz_quiver()
     # plotter.plot_xyz_neg()#num_pts=30)
