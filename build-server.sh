@@ -60,5 +60,5 @@ FWD_ARGS+=(--volume="data_vol:/home/${USERNAME}/ros_ws/src/learning_safety_margi
 if [ "${SERVE_REMOTE}" = true ]; then
   aica-docker server "${IMAGE_NAME}:${BASE_IMAGE_TAG}" -u ros -p "${REMOTE_SSH_PORT}" \
   -p1601:1701 -p1602:1702 \
-  "${FWD_ARGS[@]}"
+  "${FWD_ARGS[@]}" --gpus all
 fi
