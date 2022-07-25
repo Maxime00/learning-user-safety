@@ -548,18 +548,26 @@ class PlotCBF():
             # Set color
             if '/safe/' in fpath:
                 traj_color = 'g'
+                traj_label = 'safe'
             elif '/daring/' in fpath:
                 traj_color = 'b'
+                traj_label = 'daring'
             elif 'unsafe' in fpath:
                 traj_color = 'r'
+                traj_label = 'unsafe'
             else:
                 traj_color = 'k'
-            ax.plot(pos_to_plot[:,0], pos_to_plot[:,1], pos_to_plot[:,2], traj_color)
+                traj_label = 'unknown'
+            ax.plot(pos_to_plot[:,0], pos_to_plot[:,1], pos_to_plot[:,2], traj_color, label=traj_label)
 
         ax.set_xlabel('$x$', fontsize=18)
         ax.set_ylabel('$y$', fontsize=18)
         ax.set_zlabel('$z$', fontsize=18)
         fig.colorbar(im_quiver)
+        # Legend without duplicates
+        handles, labels = ax.get_legend_handles_labels()
+        unique = [(h, l) for i, (h, l) in enumerate(zip(handles, labels)) if l not in labels[:i]]
+        ax.legend(*zip(*unique))
         ax.set_title('Learned CBF with quiver on recorded trajectories')
         ax.view_init(10, 180)
         plt.show()
