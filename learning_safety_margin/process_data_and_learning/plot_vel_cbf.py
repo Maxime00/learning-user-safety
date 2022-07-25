@@ -7,6 +7,11 @@ from matplotlib import cm
 import matplotlib.colors as colors
 import sys
 import pickle
+import glob
+import random
+# from skimage.measure import marching_cubes
+from mpl_toolkits.mplot3d.art3d import Poly3DCollection
+from matplotlib.animation import FuncAnimation
 
 import casadi
 
@@ -182,6 +187,39 @@ class PlotCBF():
         ax.set_ylabel('$z$', fontsize=18)
         plt.show()
 
+    def plot_xz_pos_multiple(self, num_slices=9, xdot=0.1, ydot=0.1, zdot=0.1, num_pts=11):
+        x = np.linspace(x_lim[0], x_lim[1], num=num_pts)
+        z = np.linspace(z_lim[0], z_lim[1], num=num_pts)
+        y = np.linspace(y_lim[0], y_lim[1], num=num_slices)
+
+        xx, zz = np.meshgrid(x, z)
+        hvals = np.zeros(xx.shape)
+        xvec = xx.ravel()
+        zvec = zz.ravel()
+        hvec = hvals.ravel()
+
+        # divnorm = colors.TwoSlopeNorm(vmin=np.min(hvals), vcenter=0., vmax=np.max(hvals))
+
+        fig,axs = plt.subplots(3,3)
+        fig.suptitle("CBF centers as XZ slices for multiple y values")
+
+        for i, ax in enumerate(axs.ravel()):
+
+            for k in range(len(xvec)):
+                hvec[k] = self.h_fun([xvec[k], y[i], zvec[k], xdot, ydot, zdot])
+            hvals = hvec.reshape((num_pts, num_pts))
+
+            im = ax.imshow(hvals, extent=[x_lim[0], x_lim[1], z_lim[0], z_lim[1]], origin='lower', norm=self.norm,
+                           cmap=cm.coolwarm_r)
+            ax.set_xlabel('$x$', fontsize=6)
+            ax.set_ylabel('$z$', fontsize=6)
+            ax.set_title("y = {:0.2f}".format(y[i]), fontsize=10)
+
+        fig.colorbar(im)
+
+        plt.show()
+
+
     def plot_yz_pos(self, x=0.5, xdot=0.1, ydot=0.1, zdot=0.1, num_pts=11):
         y = np.linspace(y_lim[0], y_lim[1], num=num_pts)
         z = np.linspace(z_lim[0], z_lim[1], num=num_pts)
@@ -248,6 +286,37 @@ class PlotCBF():
         ax.set_ylabel('$\dot{z}$', fontsize=18)
         plt.show()
 
+    def plot_xz_vel_animate(self, x=0.5, y=0., z=0.25, num_slices=20, num_pts=11):
+
+        fig, ax = plt.subplots()
+
+        ani = FuncAnimation(fig, self.xz_vel_animate, fargs=(x,y,z,num_slices, num_pts, ax), frames=20, interval=500)
+
+        plt.show()
+
+    def xz_vel_animate(self, frame_number, x, y, z, num_slices, num_pts, ax):
+
+        xdot = np.linspace(vdot_lim[0], vdot_lim[1], num=num_pts)
+        zdot = np.linspace(vdot_lim[0], vdot_lim[1], num=num_pts)
+        ydot = np.linspace(y_lim[0], y_lim[1], num=num_slices)
+
+        xx, zz = np.meshgrid(xdot, zdot)
+        hvals = np.zeros(xx.shape)
+        xdvec = xx.ravel()
+        zdvec = zz.ravel()
+        hvec = hvals.ravel()
+        for i in range(len(xdvec)):
+            hvec[i] = self.h_fun([x, y, z, xdvec[i], ydot[frame_number], zdvec[i]])
+        hvals = hvec.reshape((num_pts, num_pts))
+
+        ax.clear()
+        im = ax.imshow(hvals, extent=[vdot_lim[0], vdot_lim[1], vdot_lim[0], vdot_lim[1]], origin='lower',
+                       norm=self.norm, cmap=cm.coolwarm_r)
+        ax.set_xlabel('$\dot{x}$', fontsize=18)
+        ax.set_ylabel('$\dot{z}$', fontsize=18)
+        ax.set_title('XZ velocity slice in [%s, %s ,%s] for y_dot=%0.2f' %(x,y,z, ydot[frame_number]))
+        # fig.colorbar(im)
+
     def plot_yz_vel(self, x=0.5, y=0., z=0.25, xdot=0., num_pts=11):
         ydot = np.linspace(vdot_lim[0], vdot_lim[1], num=num_pts)
         zdot = np.linspace(vdot_lim[0], vdot_lim[1], num=num_pts)
@@ -292,10 +361,24 @@ class PlotCBF():
         for i in range(len(xvec)):
             im = ax.scatter(xvec[i], yvec[i], zvec[i], c=hvec[i], norm=self.norm, cmap=cm.coolwarm_r)  # , marker=m)
 
+        # add isosurface
+        # dx = x1[1] - x1[0]
+        # dy = x2[1] - x2[0]
+        # dz = x3[1] - x3[0]
+        # verts, faces, _, _ = marching_cubes(hvals, 0, spacing=(dx, dy, dz), step_size=2)
+        # # verts *= np.array([dx, dy, dz])
+        # # verts -= np.array([x_lim[0], y_lim[0], z_lim[0]])
+        # # add as Poly3DCollection
+        # mesh = Poly3DCollection(verts[faces])
+        # mesh.set_facecolor('g')
+        # mesh.set_edgecolor('none')
+        # mesh.set_alpha(0.3)
+        # ax.add_collection3d(mesh)
+
         ax.set_xlabel('$x$', fontsize=18)
         ax.set_ylabel('$y$', fontsize=18)
         ax.set_zlabel('$z$', fontsize=18)
-
+        fig.colorbar(im)
         ax.set_title('Learned CBF')
         ax.view_init(10, 180)
         plt.show()
@@ -321,14 +404,175 @@ class PlotCBF():
         for i in range(len(xvec)):
             if hvec[i] < 0:
                 im = ax.scatter(xvec[i], yvec[i], zvec[i], c=hvec[i], norm=self.norm, cmap=cm.coolwarm_r)  # , marker=m)
+
+        # add isosurface
+        # dx = x1[1] - x1[0]
+        # dy = x2[1] - x2[0]
+        # dz = x3[1] - x3[0]
+        # verts, faces, _, _ = marching_cubes(hvals, 0, spacing=(1, 1, 1), step_size=2)
+        # verts *= np.array([dx, dy, dz])
+        # verts += np.array([x_lim[0], y_lim[0], z_lim[0]])
+        # # add as Poly3DCollection
+        # mesh = Poly3DCollection(verts[faces])
+        # mesh.set_facecolor('g')
+        # mesh.set_edgecolor('none')
+        # mesh.set_alpha(0.3)
+        # ax.add_collection3d(mesh)
+
         ax.set_xlabel('$x$', fontsize=18)
         ax.set_ylabel('$y$', fontsize=18)
         ax.set_zlabel('$z$', fontsize=18)
-
-        ax.set_title('Learned CBF')
+        fig.colorbar(im)
+        ax.set_title('Learned CBF neg')
         ax.view_init(10, 180)
 
         plt.show()
+
+    def plot_3D_quiver_uniform(self, xdot = .1, ydot=0.1, zdot=0.1, num_pts=6, num_arrows=3, random_points=False, alpha=0.75):
+
+        # Random distribution
+        if random_points:
+            x_mu = (x_lim[0]+x_lim[1])/2
+            x_sig = x_lim[1] - x_mu
+            x1 = np.random.normal(x_mu, x_sig, num_pts)
+            y_mu = (y_lim[0]+y_lim[1])/2
+            y_sig = y_lim[1] - y_mu
+            x2 = np.random.normal(y_mu, y_sig, num_pts)
+            z_mu = (z_lim[0]+z_lim[1])/2
+            z_sig = z_lim[1] - z_mu
+            x3 = np.random.normal(z_mu, z_sig, num_pts)
+        elif not random_points:
+            x1 = np.linspace(x_lim[0], x_lim[1], num=num_pts)
+            x2 = np.linspace(y_lim[0], y_lim[1], num=num_pts)
+            x3 = np.linspace(z_lim[0], z_lim[1], num=num_pts)
+
+        xdot = np.linspace(xdot_lim[0], xdot_lim[1], num=num_arrows)
+        ydot = np.linspace(ydot_lim[0], ydot_lim[1], num=num_arrows)
+        zdot = np.linspace(zdot_lim[0], zdot_lim[1], num=num_arrows)
+
+        xx, yy, zz = np.meshgrid(x1, x2, x3)
+        xvec = xx.ravel()
+        yvec = yy.ravel()
+        zvec = zz.ravel()
+
+        xxdot, yydot, zzdot = np.meshgrid(xdot, ydot, zdot)
+        hvals = np.zeros(xxdot.shape)
+        xdotvec= xxdot.ravel()
+        ydotvec = yydot.ravel()
+        zdotvec = zzdot.ravel()
+        hvec = hvals.ravel()
+
+        fig = plt.figure(figsize=(10, 10))
+        ax = plt.axes(projection='3d')
+        # ax = fig.add_subplot(projection='3d')
+        for i in range(len(xvec)):
+            xvec_rep = np.repeat(xvec[i], len(xdotvec))
+            yvec_rep = np.repeat(yvec[i], len(xdotvec))
+            zvec_rep = np.repeat(zvec[i], len(xdotvec))
+
+            for k in range(len(xdotvec)):
+                hvec[k] = self.h_fun([xvec[i], yvec[i], zvec[i], xdotvec[k], ydotvec[k], zdotvec[k]])
+
+            # Flatten and normalize
+            c = (hvec.ravel() - hvec.min()) / hvec.ptp()
+            # Repeat for each body line and two head lines
+            c = np.concatenate((c, np.repeat(c, 2)))
+            # Colormap
+            c = plt.cm.coolwarm_r(c)
+            # Set alpha
+            c[:, -1] = np.repeat(alpha, len(c[:, 0]))
+
+            im_quiver = ax.quiver3D(xvec_rep, yvec_rep, zvec_rep, xdotvec, ydotvec, zdotvec, colors=c,
+                                     normalize=True, length=0.05, cmap=cm.coolwarm_r)
+
+        im = ax.scatter3D(xvec, yvec, zvec, s=10)
+
+        ax.set_xlabel('$x$', fontsize=18)
+        ax.set_ylabel('$y$', fontsize=18)
+        ax.set_zlabel('$z$', fontsize=18)
+        fig.colorbar(im_quiver)
+        ax.set_title('Learned CBF with quiver')
+        ax.view_init(10, 180)
+        plt.show()
+
+    def plot_3D_quiver_from_traj(self, fpath_list, xdot=.1, ydot=0.1, zdot=0.1, num_pts=6, num_arrows=3, alpha=0.75):
+
+        fig = plt.figure(figsize=(10, 10))
+        ax = plt.axes(projection='3d')
+
+        for fpath in fpath_list:
+            traj_pos = np.loadtxt(fpath, delimiter=',')[:, 0:3]
+
+            nb_sample_points = 100
+            step = round(len(traj_pos[:,0])/nb_sample_points)
+            pos_to_plot = traj_pos[::step]
+
+            step_for_quiv = round(len(traj_pos[:,0])/num_pts)
+            pos_for_mesh = traj_pos[::step_for_quiv]
+
+            xdot = np.linspace(xdot_lim[0], xdot_lim[1], num=num_arrows)
+            ydot = np.linspace(ydot_lim[0], ydot_lim[1], num=num_arrows)
+            zdot = np.linspace(zdot_lim[0], zdot_lim[1], num=num_arrows)
+
+            xvec = pos_for_mesh[:,0]
+            yvec = pos_for_mesh[:,1]
+            zvec = pos_for_mesh[:,2]
+
+            xxdot, yydot, zzdot = np.meshgrid(xdot, ydot, zdot)
+            hvals = np.zeros(xxdot.shape)
+            xdotvec = xxdot.ravel()
+            ydotvec = yydot.ravel()
+            zdotvec = zzdot.ravel()
+            hvec = hvals.ravel()
+
+            for i in range(len(xvec)):
+                xvec_rep = np.repeat(xvec[i], len(xdotvec))
+                yvec_rep = np.repeat(yvec[i], len(xdotvec))
+                zvec_rep = np.repeat(zvec[i], len(xdotvec))
+
+                for k in range(len(xdotvec)):
+                    hvec[k] = self.h_fun([xvec[i], yvec[i], zvec[i], xdotvec[k], ydotvec[k], zdotvec[k]])
+
+                # Flatten and normalize
+                c = (hvec.ravel() - hvec.min()) / hvec.ptp()
+                # Repeat for each body line and two head lines
+                c = np.concatenate((c, np.repeat(c, 2)))
+                # Colormap
+                c = plt.cm.coolwarm_r(c)
+                # Set alpha
+                c[:, -1] = np.repeat(alpha, len(c[:, 0]))
+
+                im_quiver = ax.quiver3D(xvec_rep, yvec_rep, zvec_rep, xdotvec, ydotvec, zdotvec, colors=c,
+                                        normalize=True, length=0.04, cmap=cm.coolwarm_r)
+
+            # Set color
+            if '/safe/' in fpath:
+                traj_color = 'g'
+                traj_label = 'safe'
+            elif '/daring/' in fpath:
+                traj_color = 'b'
+                traj_label = 'daring'
+            elif 'unsafe' in fpath:
+                traj_color = 'r'
+                traj_label = 'unsafe'
+            else:
+                traj_color = 'k'
+                traj_label = 'unknown'
+            ax.plot(pos_to_plot[:,0], pos_to_plot[:,1], pos_to_plot[:,2], traj_color, label=traj_label)
+
+        ax.set_xlabel('$x$', fontsize=18)
+        ax.set_ylabel('$y$', fontsize=18)
+        ax.set_zlabel('$z$', fontsize=18)
+        fig.colorbar(im_quiver)
+        # Legend without duplicates
+        handles, labels = ax.get_legend_handles_labels()
+        unique = [(h, l) for i, (h, l) in enumerate(zip(handles, labels)) if l not in labels[:i]]
+        ax.legend(*zip(*unique))
+        ax.set_title('Learned CBF with quiver on recorded trajectories')
+        ax.view_init(10, 180)
+        plt.show()
+
+
 # def plot_xz_vel(self, params, bias_param, x=0.5, y=0., z=0.25, ydot=0., num_pts=10):
 #     xdot = np.linspace(vdot_lim[0], vdot_lim[1], num=num_pts)
 #     zdot = np.linspace(vdot_lim[0], vdot_lim[1], num=num_pts)
@@ -411,10 +655,12 @@ class PlotCBF():
 if __name__ == '__main__':
 
     # Check passed argument - User number
-    if len(sys.argv) >= 2:
+    if len(sys.argv) >= 3:
         user_number = sys.argv[1]
+        number_of_traj = sys.argv[2]
     else:
         user_number = '0'
+        number_of_traj = '3'
 
     print("Running CBF Plotting for User_"+user_number+"\n")
 
@@ -432,12 +678,30 @@ if __name__ == '__main__':
     bias_param = 0.1
 
     plotter = PlotCBF(params, bias_param, centers, stds)
-    plotter.plot_xy_pos(num_pts=30)
-    plotter.plot_xz_pos(num_pts=30)
-    plotter.plot_yz_pos(num_pts=30)
 
-    plotter.plot_xy_vel(num_pts=30)
-    plotter.plot_xz_vel(num_pts=30)
-    plotter.plot_yz_vel(num_pts=30)
-    # plotter.plot_xyz()
-    plotter.plot_xyz_neg(num_pts=30)
+    ## Grab some random trajectories
+    traj_nbr_per_category = int(number_of_traj)
+    category_list = ["safe/", "daring/", "unsafe/"]
+    fpath_list = []
+
+    for category in category_list:
+        ## count nbr of traj in category folder, make a list
+        all_fn = glob.glob(data_dir + "csv/" + category + "*_eePosition.txt")
+        # Sample trajectories from category
+        fpath_list.append(random.sample(all_fn, traj_nbr_per_category))
+
+    # Reshape list to be 1D
+    fpath_list = sum(fpath_list, [])
+
+    # plotter.plot_xy_pos(num_pts=30)
+    # plotter.plot_xz_pos(num_pts=30)
+    # plotter.plot_yz_pos(num_pts=30)
+    #
+    # plotter.plot_xy_vel(num_pts=30)
+    # plotter.plot_xz_vel(num_pts=30)
+    # plotter.plot_yz_vel(num_pts=30)
+    # plotter.plot_xz_pos_multiple()
+    # plotter.plot_xz_vel_animate()
+    # plotter.plot_3D_quiver_uniform()
+    plotter.plot_3D_quiver_from_traj(fpath_list)
+    # plotter.plot_xyz_neg()#num_pts=30)
