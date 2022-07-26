@@ -117,7 +117,7 @@ def rbf_means_stds(X, X_lim, n, k, set_means='uniform', fixed_stds=True, std=0.1
 # Generate Casadi Functions for h(x) functions
 
 class PlotCBF():
-    def __init__(self, theta, bias, centers=None, stds =None):
+    def __init__(self, theta, bias, centers=None, stds =None, data_dir=None):
         self.theta = theta
         self.bias = bias
         # Set up variables
@@ -142,6 +142,7 @@ class PlotCBF():
         self.h = casadi.mtimes(self.phi, self.theta) + self.bias
         self.h_fun = casadi.Function('h_fun', [self.x], [self.h])
         self.norm = colors.TwoSlopeNorm(vmin=-1,vcenter=0.,vmax=1.)
+        self.data_dir = data_dir
 
 
     def plot_xy_pos(self, z=0.25, xdot=0.1, ydot=0.1, zdot=0.1, num_pts=11):
@@ -287,7 +288,18 @@ class PlotCBF():
         plt.show()
 
     def plot_xz_vel_animate(self, x=0.5, y=0., z=0.25, num_slices=20, num_pts=11):
+        """
+        Plots a loop animation of the cbf function for an xz slice in velocity space with an increasing y values,
+        in a given xyz position.
 
+        Args:
+            x: Position coordinates in x
+            y: Position coordinates in y
+            z: Position coordinates in z
+            num_slices: number steps in the animation (ie number of y values to plot)
+            num_pts: number of points to plot in xz velocity space
+
+        """
         fig, ax = plt.subplots()
 
         ani = FuncAnimation(fig, self.xz_vel_animate, fargs=(x,y,z,num_slices, num_pts, ax), frames=20, interval=500)
@@ -295,7 +307,9 @@ class PlotCBF():
         plt.show()
 
     def xz_vel_animate(self, frame_number, x, y, z, num_slices, num_pts, ax):
-
+        """
+        Animation function for 'plot_xz_vel_animate'
+        """
         xdot = np.linspace(vdot_lim[0], vdot_lim[1], num=num_pts)
         zdot = np.linspace(vdot_lim[0], vdot_lim[1], num=num_pts)
         ydot = np.linspace(y_lim[0], y_lim[1], num=num_slices)
@@ -428,7 +442,48 @@ class PlotCBF():
 
         plt.show()
 
-    def plot_3D_quiver_uniform(self, xdot = .1, ydot=0.1, zdot=0.1, num_pts=6, num_arrows=3, random_points=False, alpha=0.75):
+    def select_random_traj(self, num_traj):
+        """
+        Selects random trajectories from the provided User directory
+        Args:
+            num_traj: number of trajectories to grab per safety category
+
+        Returns:
+            A list of path to each trajectory end effector cartesian position file
+        """
+        traj_nbr_per_category = int(num_traj)
+        category_list = ["safe/", "daring/", "unsafe/"]
+        fpath_list = []
+
+        for category in category_list:
+            ## count nbr of traj in category folder, make a list
+            all_fn = glob.glob(self.data_dir + "csv/" + category + "*_eePosition.txt")
+            # Sample trajectories from category
+            fpath_list.append(random.sample(all_fn, traj_nbr_per_category))
+
+        # Reshape list to be 1D
+        return sum(fpath_list, [])
+
+    def plot_3D_quiver_uniform(self, num_pts=6, num_arrows=3, random_points=False, alpha=0.75):
+
+        """
+        This function plots the CBF h function over a 6D state space of positions and velocities.
+        Positions are represented in a 3D plot and for each position, quiver arrows represent the velocity in different
+        directions.
+        The coordinates of the positions is generated using either a linspace or random normal distribution.
+        The color gradient of the arrows represents the h_function in each direction
+
+        Args:
+            num_pts: number of points per position dimension -> total number of points in plot is num_pts^3
+            num_arrows: number of quiver arrows per velocity dimension -> total number of arrows per point is num_arrows^3
+            random_points: Whether to use random or uniform point generation for 3D positions
+            alpha: alpha value of the quiver arrows, used for visibility
+
+        Note :
+            num_pts and num_arrows is identical in each dimension -> different values for each dimension might provide
+            better readability in plots
+
+        """
 
         # Random distribution
         if random_points:
@@ -495,10 +550,28 @@ class PlotCBF():
         ax.view_init(10, 180)
         plt.show()
 
-    def plot_3D_quiver_from_traj(self, fpath_list, xdot=.1, ydot=0.1, zdot=0.1, num_pts=6, num_arrows=3, alpha=0.75):
+    def plot_3D_quiver_from_traj(self, num_pts=6, num_arrows=3, num_traj=3, alpha=0.75):
+        """
+        This function plots the CBF h function over a 6D state space of positions and velocities.
+        Positions are represented in a 3D plot and for each position, quiver arrows represent the velocity in different
+        directions.
+        The coordinates of the positions is based on the User's recorded trajectories
+        The color gradient of the arrows represents the h_function in each direction.
 
+        Args:
+            num_pts: The number of positions points to use for each trajectory (points for which to plot velocities)
+            num_arrows: The number of quiver arrows per velocity dimension -> total number of arrows per point is num_arrows^3
+            num_traj: The number of trajectories selected per category
+            alpha: the alpha values of the quiver arrows
+
+        Note : Same as above, different num_arrows for each dimension might yield improved visibility
+            Improving subsampling of points to use for quiver plotting might avoid clusters/improve readability
+
+        """
         fig = plt.figure(figsize=(10, 10))
         ax = plt.axes(projection='3d')
+
+        fpath_list = self.select_random_traj(num_traj)
 
         for fpath in fpath_list:
             traj_pos = np.loadtxt(fpath, delimiter=',')[:, 0:3]
@@ -657,10 +730,8 @@ if __name__ == '__main__':
     # Check passed argument - User number
     if len(sys.argv) >= 3:
         user_number = sys.argv[1]
-        number_of_traj = sys.argv[2]
     else:
         user_number = '0'
-        number_of_traj = '3'
 
     print("Running CBF Plotting for User_"+user_number+"\n")
 
@@ -677,31 +748,16 @@ if __name__ == '__main__':
     stds = data["rbf_stds"]
     bias_param = 0.1
 
-    plotter = PlotCBF(params, bias_param, centers, stds)
-
-    ## Grab some random trajectories
-    traj_nbr_per_category = int(number_of_traj)
-    category_list = ["safe/", "daring/", "unsafe/"]
-    fpath_list = []
-
-    for category in category_list:
-        ## count nbr of traj in category folder, make a list
-        all_fn = glob.glob(data_dir + "csv/" + category + "*_eePosition.txt")
-        # Sample trajectories from category
-        fpath_list.append(random.sample(all_fn, traj_nbr_per_category))
-
-    # Reshape list to be 1D
-    fpath_list = sum(fpath_list, [])
+    plotter = PlotCBF(params, bias_param, centers, stds, data_dir)
 
     # plotter.plot_xy_pos(num_pts=30)
     # plotter.plot_xz_pos(num_pts=30)
     # plotter.plot_yz_pos(num_pts=30)
-    #
     # plotter.plot_xy_vel(num_pts=30)
     # plotter.plot_xz_vel(num_pts=30)
     # plotter.plot_yz_vel(num_pts=30)
     # plotter.plot_xz_pos_multiple()
     # plotter.plot_xz_vel_animate()
     # plotter.plot_3D_quiver_uniform()
-    plotter.plot_3D_quiver_from_traj(fpath_list)
+    plotter.plot_3D_quiver_from_traj(num_traj=3)
     # plotter.plot_xyz_neg()#num_pts=30)
