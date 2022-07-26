@@ -55,10 +55,10 @@ docker volume create --driver local \
     --opt device="${PWD}/learning_safety_margin/data" \
     --opt o="bind" \
     --name "data_vol"
-FWD_ARGS+=(--volume="data_vol:/home/${USERNAME}/ros_ws/src/learning_safety_margin/data")
+FWD_ARGS+=(--volume="data_vol:/home/${USERNAME}/ros_ws/src/learning_safety_margin/data" )
 
 if [ "${SERVE_REMOTE}" = true ]; then
-  aica-docker server "${IMAGE_NAME}:${BASE_IMAGE_TAG}" -u ros -p "${REMOTE_SSH_PORT}" \
+  aica-docker server "${IMAGE_NAME}:${BASE_IMAGE_TAG}"  --gpus all -u ros -p "${REMOTE_SSH_PORT}" \
   -p1601:1701 -p1602:1702 \
   "${FWD_ARGS[@]}"
 fi

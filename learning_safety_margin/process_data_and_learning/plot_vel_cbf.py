@@ -761,3 +761,4 @@ if __name__ == '__main__':
     # plotter.plot_3D_quiver_uniform()
     plotter.plot_3D_quiver_from_traj(num_traj=3)
     # plotter.plot_xyz_neg()#num_pts=30)
+
