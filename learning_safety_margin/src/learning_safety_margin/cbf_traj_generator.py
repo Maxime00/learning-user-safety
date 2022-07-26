@@ -220,6 +220,6 @@ class trajGenerator():
         ax.set_xlim(x_lim)
         ax.set_ylim(y_lim)
         ax.set_zlim(z_lim)
-        plt.show()
+        # plt.show()
 
         return cbf_traj_data

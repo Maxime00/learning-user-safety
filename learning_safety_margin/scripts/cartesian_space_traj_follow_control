@@ -294,6 +294,7 @@ def control_loop(traj_dict, robot, freq):
 
     # filter parameters
     n_dim = 3  # cartesian space[x,y,z]]
+    alpha_f0 = 0.15
     alpha = 0.85
     alpha_ang = 0.8
     dx_filtered = np.zeros(n_dim)
@@ -427,7 +428,7 @@ def control_loop(traj_dict, robot, freq):
 
             # Set feedback state
             feedback_joint_state.set_positions(state.joint_state.get_positions())
-            dq_filtered = (1 - alpha) * dq_filtered + alpha * state.joint_state.get_velocities()
+            dq_filtered = alpha_f0 * dq_filtered + (1 - alpha_f0) * state.joint_state.get_velocities()
             feedback_joint_state.set_velocities(dq_filtered)
 
             # Set velocity and position error
@@ -693,12 +694,14 @@ if __name__ == '__main__':
     params = data["theta"]
     bias_param = data["bias"]
     slack_param = data["unsafe_slack"]
+    centers = data["rbf_centers"]
+    stds = data["rbf_stds"]
     bias_param = 0.1
 
     # Initialize RBF Parameters
     # print(ws_lim, x_dim, n_dim_features, rbf_std)
-    centers, stds = rbf_means_stds(X=None, X_lim=np.array([x_lim, y_lim, z_lim, vdot_lim, vdot_lim, vdot_lim]),
-                                   n=x_dim, k=n_dim_features, fixed_stds=True, std=rbf_std)
+    # centers, stds = rbf_means_stds(X=None, X_lim=np.array([x_lim, y_lim, z_lim, vdot_lim, vdot_lim, vdot_lim]),
+    #                                n=x_dim, k=n_dim_features, fixed_stds=True, std=rbf_std)
 
     # SET PARAMETERS FOR MPC CONTROL
     freq = 200

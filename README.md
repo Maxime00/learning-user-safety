@@ -155,8 +155,8 @@ to add to pycharm environment variable PYTHONPATH :
 $PYTHONPATH:/opt/ros/noetic/lib/python3/dist-packages:/home/ros/ros_ws/devel/lib/python3/dist-packages:/home/ros/.local/lib/python3.8/site-packages
 
 current working scripts : 
-- idle_control (recording) 
-- joint_space_traj_replay_control (successive replays)
+- idle_control (recording kinesthetic demonstrations) 
+- joint_space_traj_replay_control (successive replays of kinesthetic demonstrations)
 - cartesian_space_single_traj_follow_control (follows single trajectory from CBF planner)
 - cartesian_space_traj_follow_control (follow several trajectories from CBF planner)
 - cartesian twist control (demo script)
