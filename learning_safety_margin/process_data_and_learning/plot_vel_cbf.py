@@ -693,15 +693,15 @@ if __name__ == '__main__':
     # Reshape list to be 1D
     fpath_list = sum(fpath_list, [])
 
-    # plotter.plot_xy_pos(num_pts=30)
-    # plotter.plot_xz_pos(num_pts=30)
-    # plotter.plot_yz_pos(num_pts=30)
-    #
-    # plotter.plot_xy_vel(num_pts=30)
-    # plotter.plot_xz_vel(num_pts=30)
-    # plotter.plot_yz_vel(num_pts=30)
-    # plotter.plot_xz_pos_multiple()
-    # plotter.plot_xz_vel_animate()
-    # plotter.plot_3D_quiver_uniform()
+    plotter.plot_xy_pos(num_pts=30)
+    plotter.plot_xz_pos(num_pts=30)
+    plotter.plot_yz_pos(num_pts=30)
+
+    plotter.plot_xy_vel(num_pts=30)
+    plotter.plot_xz_vel(num_pts=30)
+    plotter.plot_yz_vel(num_pts=30)
+    plotter.plot_xz_pos_multiple()
+    plotter.plot_xz_vel_animate()
+    plotter.plot_xyz_neg()#num_pts=30)
+    plotter.plot_3D_quiver_uniform()
     plotter.plot_3D_quiver_from_traj(fpath_list)
-    # plotter.plot_xyz_neg()#num_pts=30)

@@ -40,9 +40,9 @@ def vel_learning(user_number):
     y_lim = [-0.4, 0.5]  # [-0.5, 0.5]
     z_lim = [0.1, 0.6]  # [0., 1.]
     vdot_lim = [-1., 1.]
-    xdot_lim = [-0.5, 0.4]
-    ydot_lim = [-0.8, 0.8]
-    zdot_lim = [-0.8, 0.8]
+    xdot_lim = [-0.6, 1.1]#[-0.5, 0.4]
+    ydot_lim = [-2., 1.5]#[-0.8, 0.8]
+    zdot_lim = [-1.1, 1.1]#[-0.8, 0.8]
 
     ws_lim = np.vstack((x_lim, y_lim, z_lim, xdot_lim, ydot_lim, zdot_lim))  # vdot_lim, vdot_lim, vdot_lim))
 
@@ -209,16 +209,16 @@ def vel_learning(user_number):
 
     ### Set up Minimization
     # Sample Data
-    n_safe_sample = 1000#300#50
+    n_safe_sample = 500#300#50
     x_safe = safe_pts[::n_safe_sample]
     safe_rewards = safe_rewards[::n_safe_sample]
 
-    n_unsafe_sample = 1000#50#100#20
+    n_unsafe_sample = 500#50#100#20
     x_unsafe = unsafe_pts[::n_unsafe_sample]
     unsafe_rewards = unsafe_rewards[::n_unsafe_sample]
     unsafe_tte = unsafe_ttelist[::n_unsafe_sample]
 
-    n_semisafe_sample = 1000#300#10
+    n_semisafe_sample = 500#300#10
     x_semisafe = semisafe_pts[::n_semisafe_sample]
     u_semisafe = semisafe_u[::n_semisafe_sample]
     semisafe_rewards = semisafe_rewards[::n_semisafe_sample]
@@ -231,21 +231,6 @@ def vel_learning(user_number):
     n_semisafe = len(x_semisafe)
     n_artificial = 0
 
-    # Initialize RBF Parameters
-    n_dim_features = 4
-    x_dim = 6
-    n_features = 2000#n_dim_features**x_dim
-    u_dim = 2
-    psi = 1.0
-    dt = 0.1
-    mu_dist = (ws_lim[:, 1]-ws_lim[:,0])/n_dim_features
-    print("Check: ", mu_dist, onp.max(mu_dist)*0.5)
-    rbf_std = .1#onp.max(mu_dist) * 0.5 #0.1#1.0
-    print(rbf_std)
-    # centers, stds = rbf_means_stds(X=None, X_lim = ws_lim,
-    #                                n=x_dim, k=n_dim_features, set_means='random',fixed_stds=True, std=rbf_std, nCenters=n_features)
-    # print("rbf shapes", centers.shape, stds.shape)
-    ### Trying RBF centers at data pts
     x_all = onp.vstack((x_safe, x_unsafe, x_semisafe))
     print("x-all", x_all.shape)
     x_out = onp.where((x_all[:,0]<= ws_lim[0,0]) | (ws_lim[0,1] <= x_all[:,0])) # and x_all[:,0] <= x_all[0,1])
@@ -359,6 +344,21 @@ def vel_learning(user_number):
     #     #     print(x.shape, phi(x).shape, theta.shape, phi(x).dot(theta).shape, bias.shape)
     #     #     print(x.type, theta.type, bias.type)
     #     return phi(x).dot(theta) + bias
+    # Initialize RBF Parameters
+    n_dim_features = 4
+    x_dim = 6
+    n_features = 2000#n_dim_features**x_dim
+    u_dim = 2
+    psi = 1.0
+    dt = 0.1
+    mu_dist = (ws_lim[:, 1]-ws_lim[:,0])/n_dim_features
+    print("Check: ", mu_dist, onp.max(mu_dist)*0.5)
+    rbf_std = .1#onp.max(mu_dist) * 0.5 #0.1#1.0
+    print(rbf_std)
+    # centers, stds = rbf_means_stds(X=None, X_lim = ws_lim,
+    #                                n=x_dim, k=n_dim_features, set_means='random',fixed_stds=True, std=rbf_std, nCenters=n_features)
+    # print("rbf shapes", centers.shape, stds.shape)
+    ### Trying RBF centers at data pts
 
 
     centers = onp.array(x_all)
