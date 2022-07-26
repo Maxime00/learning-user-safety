@@ -185,9 +185,9 @@ class trajGenerator():
         #    x, xt = self.make_trial_conditions()
         #    res = self.generate_daring_traj(x, xt)
         #    if res is not None:
-        #        x_daring.append(res[0])
-        #        u_daring.append(res[1])
-        #        t_daring.append(res[2])
+        #        x_list.append(res[0])
+        #        u_list.append(res[1])
+        #        t_list.append(res[2])
         #        labels.append('daring')
         #        num_daring += 1
         # print("Generated Daring Trajectories")
@@ -200,9 +200,9 @@ class trajGenerator():
         #    x, xt = self.make_trial_conditions()
         #    res = self.generate_unsafe_traj(x, xt)
         #    if res is not None:
-        #        x_unsafe.append(res[0])
-        #        u_unsafe.append(res[1])
-        #        t_unsafe.append(res[2])
+        #        x_list.append(res[0])
+        #        u_list.append(res[1])
+        #        t_list.append(res[2])
         #        num_unsafe += 1
         #print("Generated Unsafe Trajectories")
         cbf_traj_data = {
