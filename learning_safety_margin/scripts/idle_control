@@ -44,14 +44,21 @@ def control_loop(robot, freq):
     ctrl.set_parameter_value("angular_stiffness", 5., sr.ParameterType.DOUBLE)
     ctrl.set_parameter_value("angular_damping", 5., sr.ParameterType.DOUBLE)
 
+    print_count = 0
+
     rate = rospy.Rate(freq)
     while not rospy.is_shutdown():
         state = robot.get_state()
 
         if not state:
             continue
-        #print("EEF position: ", state.ee_state.get_position())
-        #print("EEF orientation: ", state.ee_state.get_orientation())
+
+        # debug print
+        if print_count % freq == 0:
+            print("EEF position: ", state.ee_state.get_position())
+            # print("EEF orientation: ", state.ee_state.get_orientation())
+        print_count += 1
+
         if not target_set:
             target = sr.CartesianPose(state.ee_state.get_name(), np.array([.5, .0, .5]), np.array([0., 1., 0., 0.]),
                                       state.ee_state.get_reference_frame())

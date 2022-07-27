@@ -16,6 +16,7 @@ Options:
                            build process
   -s, --serve              Start the remove development server.
   -h, --help               Show this help message.
+
   Additional arguments are passed to the docker server command.
 "
 

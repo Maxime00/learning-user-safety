@@ -28,17 +28,10 @@ def vel_learning(user_number):
     fig_path = '../franka_env/figures/vel_lim/'
     save = False
 
-
     # Velocity Limits
-    # x_lim = [0., 1.]
-    # y_lim = [-0.5, 0.5]
-    # z_lim = [0., 0.5]
-    # vdot_lim = [-1., 1.]
-    #
-    # ws_lim = onp.vstack((x_lim, y_lim, z_lim, vdot_lim, vdot_lim, vdot_lim))
-    x_lim = [0.2, 0.8]  # [0., 1.]
-    y_lim = [-0.4, 0.5]  # [-0.5, 0.5]
-    z_lim = [0.1, 0.6]  # [0., 1.]
+    x_lim = [0.25, 0.75]
+    y_lim = [-0.45, 0.45]
+    z_lim = [0., 0.7]
     vdot_lim = [-1., 1.]
     xdot_lim = [-0.6, 1.1]#[-0.5, 0.4]
     ydot_lim = [-2., 1.5]#[-0.8, 0.8]
@@ -636,6 +629,6 @@ if __name__ == '__main__':
         print("Learning velocity cbf for User_"+user_number)
         vel_learning(user_number)
     else:
-        print("Learning velocity cbf for User_1 \n")
+        print("Learning velocity cbf for User_0 \n")
         print("To process other user, provide user number as sole argument: python3 bag2csv.py 2")
-        vel_learning("1")
+        vel_learning("0")

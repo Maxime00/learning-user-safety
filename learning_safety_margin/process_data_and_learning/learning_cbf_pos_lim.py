@@ -35,9 +35,9 @@ def pos_learning(user_number):
     nDaring = len(os.listdir(rosbag_dir+"daring"))
 
 
-    x_lim = [0.2, 0.8]#[0., 1.]
-    y_lim = [-.45, .45]#[-0.5, 0.5]
-    z_lim = [0.1, 0.6]#[0., 0.5]
+    x_lim = [0.25, 0.75]
+    y_lim = [-0.45, 0.45]
+    z_lim = [0., 0.7]
     ws_lim = onp.vstack((x_lim, y_lim, z_lim))
 
     # Define Dynamical System
@@ -389,6 +389,33 @@ def pos_learning(user_number):
 
     x_all = np.vstack((x_safe, x_unsafe, x_semisafe))
     print(x_all.shape, x_safe.shape, x_unsafe.shape, x_semisafe.shape)
+    art_safe_pts = []
+    print(range(len(centers)))
+    for i in range(len(centers)):
+        # print(i, len(centers))
+        dist = np.linalg.norm(x_all-centers[i], axis=1)
+        # dist = np.array([np.linalg.norm(x-centers[i]) for x in x_all])
+        if np.all(dist > 3*rbf_std):
+            art_safe_pts.append(centers[i])
+    art_safe_pts = np.array(art_safe_pts)
+    print(art_safe_pts.shape)
+
+    fig = plt.figure(figsize=(6, 6))
+    ax = plt.axes(projection='3d')
+    ax.scatter(x_safe[:, 0], x_safe[:, 1], x_safe[:,2], 'g')#, marker=m)
+    ax.scatter(x_unsafe[:, 0], x_unsafe[:, 1], x_unsafe[:,2], 'r')
+    ax.scatter(x_semisafe[:, 0], x_semisafe[:, 1], x_semisafe[:,2], 'g')
+    ax.scatter(art_safe_pts[:, 0], art_safe_pts[:, 1], art_safe_pts[:,2], 'k')
+    # ax.axis('square')
+    ax.set_xlim(x_lim)
+    ax.set_ylim(y_lim)
+    ax.set_xlabel('x', fontsize=18)
+    ax.set_ylabel('y', fontsize=18)
+    ax.zaxis.set_rotate_label(False)  # disable automatic rotation
+    ax.set_zlabel(r'$\theta$', rotation=180, fontsize=18)
+    plt.title('Demo Data + Artificial Pts')
+    if save: plt.savefig(fig_path+'demodata_withartificialpts.pdf')
+    # plt.show()
 
     # Initialize variables
     is_bias = False
@@ -634,7 +661,7 @@ def pos_learning(user_number):
             "gamma_dyn": gamma_dyn
             }
 
-    pickle.dump(data, open( data_dir+"pos_data_dict.p", "wb" ) )
+    pickle.dump(data, open( data_dir+"pos_data_dict.p", "wb"))
     plt.show()
 
 
@@ -649,8 +676,8 @@ if __name__ == '__main__':
         print("Learning velocity cbf for User_"+user_number)
         pos_learning(user_number)
     else:
-        print("Learning velocity cbf for User_1 \n")
+        print("Learning velocity cbf for User_0 \n")
         print("To process other user, provide user number as sole argument: python3 bag2csv.py 2")
-        pos_learning("1")
+        pos_learning("0")
 
 

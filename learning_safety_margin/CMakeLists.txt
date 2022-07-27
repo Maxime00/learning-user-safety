@@ -30,22 +30,18 @@ catkin_package(
 
 include_directories(${catkin_INCLUDE_DIRS})
 
-set(DEMOS_SCRIPTS
+set(CONTROL_SCRIPTS
     joint_space_velocity_control
-    idle_control
     cartesian_twist_control
-    cartesian_impedance_MPC_control
-    joint_torque_control
-    joint_torque_traj_follow_control
-    joint_torque_one_traj_MPC_control
-    cartesian_twist_traj_follow_control
-    cartesian_impedance_cbfvel_control
+    idle_control
+    joint_space_traj_replay_control
+    cartesian_space_single_traj_follow_control
+    cartesian_space_traj_follow_control
     MPC_velocity_planner
     MPC_velocity_control
-
 )
 
-foreach(SCRIPT ${DEMOS_SCRIPTS})
+foreach(SCRIPT ${CONTROL_SCRIPTS})
     catkin_install_python(PROGRAMS scripts/${SCRIPT} DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION})
 endforeach()
 
