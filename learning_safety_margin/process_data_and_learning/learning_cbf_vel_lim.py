@@ -14,8 +14,8 @@ sns.set_style('darkgrid')
 palette = sns.color_palette()
 
 import jax
+print(jax.default_backend())
 print(jax.devices())
-
 def vel_learning(user_number):
 
     # benchmark
@@ -209,16 +209,16 @@ def vel_learning(user_number):
 
     ### Set up Minimization
     # Sample Data
-    n_safe_sample = 500#300#50
+    n_safe_sample = 200#300#50
     x_safe = safe_pts[::n_safe_sample]
     safe_rewards = safe_rewards[::n_safe_sample]
 
-    n_unsafe_sample = 500#50#100#20
+    n_unsafe_sample = 50#50#100#20
     x_unsafe = unsafe_pts[::n_unsafe_sample]
     unsafe_rewards = unsafe_rewards[::n_unsafe_sample]
     unsafe_tte = unsafe_ttelist[::n_unsafe_sample]
 
-    n_semisafe_sample = 500#300#10
+    n_semisafe_sample = 200#300#10
     x_semisafe = semisafe_pts[::n_semisafe_sample]
     u_semisafe = semisafe_u[::n_semisafe_sample]
     semisafe_rewards = semisafe_rewards[::n_semisafe_sample]
@@ -253,8 +253,8 @@ def vel_learning(user_number):
             if remove_indices is None: remove_indices = pts_out[i][0]
             else:
                 remove_indices = onp.hstack((remove_indices, pts_out[i][0]))
-
-    x_all = onp.delete(x_all, remove_indices, axis=0)
+    print(remove_indices, remove_indices is not None)
+    if remove_indices is not None: x_all = onp.delete(x_all, remove_indices, axis=0)
     print(x_out, y_out, z_out, xd_out, yd_out, zd_out, pts_out, remove_indices)
     print("new x_all", x_all.shape, len(x_all))
 
@@ -358,7 +358,7 @@ def vel_learning(user_number):
     # centers, stds = rbf_means_stds(X=None, X_lim = ws_lim,
     #                                n=x_dim, k=n_dim_features, set_means='random',fixed_stds=True, std=rbf_std, nCenters=n_features)
     # print("rbf shapes", centers.shape, stds.shape)
-    ### Trying RBF centers at data pts
+    ## Trying RBF centers at data pts
 
 
     centers = onp.array(x_all)
@@ -366,14 +366,14 @@ def vel_learning(user_number):
     # for i in range(len(x_all)):
     #     dist = np.linalg.norm(centers - x_all[i], axis=1)
     #     # print(i, centers.shape, dist.shape)
-    #     if np.all(dist > rbf_std):
+    #     if np.all(dist > 0.01):#rbf_std):
     #         centers = onp.vstack((centers, x_all[i]))
     # stds = np.ones(centers.shape[0])*rbf_std
-    print("Centers: {}".format(centers.shape))
+    # print("Centers: {}".format(centers.shape))
 
     # pts = []
     # for i in range(ws_lim.shape[0]):
-    #     pts.append(np.linspace(start=ws_lim[i, 0], stop=ws_lim[i, 1], num=10, endpoint=True))
+    #     pts.append(np.linspace(start=ws_lim[i, 0], stop=ws_lim[i, 1], num=5, endpoint=True))
     # pts = np.array(pts)
     # pts = tuple(pts)
     # D = np.meshgrid(*pts)
@@ -387,7 +387,7 @@ def vel_learning(user_number):
     stds = onp.ones((centers.shape[0], 1)) * rbf_std
     n_features = centers.shape[0]
     print("Centers: {}, Stds: {}, # Features: {}".format(centers.shape, stds.shape, n_features))
-    print("RBF CHECK", phi(np.ones(6)).shape, phi_vec(np.ones((1,6))).shape)
+    # print("RBF CHECK", phi(np.ones(6)).shape, phi_vec(np.ones((1,6))).shape)
 
 
     fig = plt.figure()
