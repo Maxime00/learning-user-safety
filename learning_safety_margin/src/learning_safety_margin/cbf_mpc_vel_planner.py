@@ -57,11 +57,13 @@ class CBFMPC_Controller(DoubleIntegrator):
         # Generate Casadi Functions for h(x) functions
         c = self.centers[0]
         s = self.stds[0]
-        self.phi = casadi.exp(-1 / (2 * s**2) * casadi.norm_2(self.x-c)**2)
+        # self.phi = casadi.exp(-1 / (2 * s**2) * casadi.norm_2(self.x-c)**2)
+        self.phi = casadi.exp(-1 / (2 * s**2) * casadi.sumsqr(self.x - c))
         for i in range(1,len(self.centers)):
             c = self.centers[i]
             s = self.stds[i]
-            rbf = casadi.exp(-1 / (2 * s**2) * casadi.norm_2(self.x-c)**2)
+            # rbf = casadi.exp(-1 / (2 * s**2) * casadi.norm_2(self.x-c)**2)
+            rbf = casadi.exp(-1 / (2 * s ** 2) * casadi.sumsqr(self.x - c))
             self.phi = casadi.horzcat(self.phi, rbf)
         self.h = casadi.mtimes(self.phi, self.theta)+ self.bias 
         self.h_fun = casadi.Function('h_fun', [self.x],  [self.h])
