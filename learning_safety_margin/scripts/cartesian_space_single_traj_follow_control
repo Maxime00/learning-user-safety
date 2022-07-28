@@ -186,7 +186,7 @@ def control_loop(planner, robot, freq):
     # ## IRL GAINS
     # ctrl.set_parameter_value("stiffness", [220, 220, 220, 180, 120, 120, 100], sr.ParameterType.DOUBLE_ARRAY)
     # ctrl.set_parameter_value("damping", [15, 15, 15, 13, 11, 10, 8], sr.ParameterType.DOUBLE_ARRAY)
-    ## SIMULATOR GAINS
+    # SIMULATOR GAINS
     # ctrl.set_parameter_value("stiffness", [10., 5., 4., 2., 2, 2, 2], sr.ParameterType.DOUBLE_ARRAY)
     # ctrl.set_parameter_value("damping", [3., 2., 2., 1., .5, .5, .5], sr.ParameterType.DOUBLE_ARRAY)
 
@@ -395,6 +395,7 @@ def control_loop(planner, robot, freq):
             recorded_state = recorded_state[~np.isnan(recorded_state).any(axis=1)]
             # save file
             np.save(save_dir + "_MPC_eeState", recorded_state, allow_pickle=False)
+            np.save(save_dir + "_MPC_refState", X, allow_pickle=False )
 
             print("MPC planned trajectory from %s \n to %s" % (start[0:3], target[0:3]))
             print("Followed traj from %s \n to %s" % (recorded_state[0,1:4], recorded_state[-1,1:4]))
@@ -429,12 +430,14 @@ if __name__ == '__main__':
     params = data["theta"]
     bias_param = data["bias"]
     slack_param = data["unsafe_slack"]
+    centers = data['rbf_centers']
+    stds = data["rbf_stds"]
     bias_param = 0.1
 
     # Initialize RBF Parameters
     # print(ws_lim, x_dim, n_dim_features, rbf_std)
-    centers, stds = rbf_means_stds(X=None, X_lim=np.array([x_lim, y_lim, z_lim, vdot_lim, vdot_lim, vdot_lim]),
-                                   n=x_dim, k=n_dim_features, fixed_stds=True, std=rbf_std)
+    # centers, stds = rbf_means_stds(X=None, X_lim=np.array([x_lim, y_lim, z_lim, vdot_lim, vdot_lim, vdot_lim]),
+    #                                n=x_dim, k=n_dim_features, fixed_stds=True, std=rbf_std)
 
 
     # SET PARAMETERS FOR MPC CONTROL

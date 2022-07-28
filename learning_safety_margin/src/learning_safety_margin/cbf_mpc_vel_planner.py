@@ -65,6 +65,7 @@ class CBFMPC_Controller(DoubleIntegrator):
             # rbf = casadi.exp(-1 / (2 * s**2) * casadi.norm_2(self.x-c)**2)
             rbf = casadi.exp(-1 / (2 * s ** 2) * casadi.sumsqr(self.x - c))
             self.phi = casadi.horzcat(self.phi, rbf)
+        print(self.theta.shape, self.phi.shape)
         self.h = casadi.mtimes(self.phi, self.theta)+ self.bias 
         self.h_fun = casadi.Function('h_fun', [self.x],  [self.h])
 
@@ -112,9 +113,10 @@ class CBFMPC_Controller(DoubleIntegrator):
                 'max_iter': 2000,
                 'print_level': 0,
                 'acceptable_tol': 1e-8,
-                'acceptable_obj_change_tol': 1e-6
-                },
-            'print_time': 0
+                'acceptable_obj_change_tol': 1e-6,
+                # 'warmstart': True
+            },
+            'print_time': 0,
             }
         self.solver = casadi.nlpsol('solver', 'ipopt', self.nlp, self.opts)
 
@@ -175,3 +177,15 @@ class CBFMPC_Controller(DoubleIntegrator):
 
         T = self.tlist + t0
         return X, U, T
+
+    def check_safety(self, X):
+        print(X.shape)
+        safe=True
+        for i in range(len(X)-1):
+            xi = X[i]
+            xnext = X[i+1]
+
+            if not (self.h_fun(xnext) - self.h_fun(xi) + self.gamma * self.h_fun(xi) >= 0.):
+                safe=False
+                print("Traj not Safe")
+        return safe
