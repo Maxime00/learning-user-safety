@@ -56,11 +56,11 @@ class trajGenerator():
 
         # Generate Planners
         self.safe_mpc_planner = CBFMPC_Controller(self.centers, self.stds, self.theta, self.bias, dt=self.dt, n_steps=self.n_steps,r_gains = self.r_gains, zero_acc_start=self.zero_acc_start)
-        self.daring_mpc_planner = CBFMPC_Controller(self.centers, self.stds, self.theta, self.daring_bias, dt=self.dt, n_steps=self.n_steps, r_gains = self.r_gains, zero_acc_start=self.zero_acc_start)
-        self.unsafe_mpc_planner = CBFMPC_Controller(self.centers, self.stds, self.theta, self.unsafe_bias, dt=self.dt, n_steps=self.n_steps, r_gains = self.r_gains, zero_acc_start=self.zero_acc_start)
+        # self.daring_mpc_planner = CBFMPC_Controller(self.centers, self.stds, self.theta, self.daring_bias, dt=self.dt, n_steps=self.n_steps, r_gains = self.r_gains, zero_acc_start=self.zero_acc_start)
+        # self.unsafe_mpc_planner = CBFMPC_Controller(self.centers, self.stds, self.theta, self.unsafe_bias, dt=self.dt, n_steps=self.n_steps, r_gains = self.r_gains, zero_acc_start=self.zero_acc_start)
 
-    def generate_safe_traj(self, start, target):
-        X, U, T = self.safe_mpc_planner.control(start, target)
+    def generate_safe_traj(self, start, target, ig_pos=None, ig_vel=None, ig_acc=None):
+        X, U, T = self.safe_mpc_planner.control(start, target, ig_pos=ig_pos, ig_vel=ig_vel, ig_acc=ig_acc)
         # convert into np arrays for reading ease
         X = np.array(X)  # pos + vel  (n_steps, 6)
         U = np.array(U)  # accel (n_steps, 3)
@@ -161,18 +161,30 @@ class trajGenerator():
 
         return x0, xt
 
-    def generate_all_trajectories(self, num_demos=5):
+    def generate_all_trajectories(self, num_demos=5, init_guess_list=None):
         x_list = []
         u_list = []
         t_list = []
         labels = []
         start_list = []
         end_list = []
+        ref_traj = []
 
         num_safe = 0
         while num_safe < num_demos:
-            x, xt = self.make_trial_conditions()
-            res = self.generate_safe_traj(x, xt)
+            if init_guess_list is None:
+                x, xt = self.make_trial_conditions()
+                res = self.generate_safe_traj(x, xt)
+            elif init_guess_list is not None:
+                # grab file
+                fn_acc, fn_pos, fn_vel = init_guess_list[num_safe]
+                initial_guess_pos = np.loadtxt(fn_pos, delimiter = ",")
+                initial_guess_vel = np.loadtxt(fn_vel, delimiter=",")
+                initial_guess_acc = np.loadtxt(fn_acc, delimiter=",")
+                x = np.concatenate((initial_guess_pos[0, 0:3], initial_guess_vel[0, 0:3]))
+                xt = np.concatenate((initial_guess_pos[-1, 0:3], initial_guess_vel[0, 0:3]))
+                res = self.generate_safe_traj(x, xt, initial_guess_pos, initial_guess_vel, initial_guess_acc)
+
             if res is not None:
                 x_list.append(res[0])
                 u_list.append(res[1])
@@ -180,6 +192,7 @@ class trajGenerator():
                 labels.append('safe')
                 start_list.append(x)
                 end_list.append(xt)
+                ref_traj.append(initial_guess_pos)
                 num_safe += 1
 
         print("Generated Safe Trajectories")
@@ -217,16 +230,22 @@ class trajGenerator():
         }
         fig = plt.figure()
         ax = plt.axes(projection='3d')
-        print(start_list, end_list)
+        print(ref_traj)
         for i in range(len(x_list)):
-            plt.plot(x_list[i][:,0],x_list[i][:,1], x_list[i][:,2])
-            plt.scatter(start_list[i][0],start_list[i][1], start_list[i][2])
-            plt.scatter(end_list[i][0], end_list[i][1], end_list[i][2])
+            plt.plot(x_list[i][:,0],x_list[i][:,1], x_list[i][:,2], label='planned')
+            plt.plot(ref_traj[i][:,0], ref_traj[i][:,1], ref_traj[i][:,2], label ='initial guess')
+            ax.scatter(start_list[i][0],start_list[i][1], start_list[i][2], s=3)
+            ax.scatter(end_list[i][0], end_list[i][1], end_list[i][2], s=3)
             print("start: ", x_list[i][0,0:3])
             print("end: ", x_list[i][-1, 0:3])
         ax.set_xlim(x_lim)
         ax.set_ylim(y_lim)
         ax.set_zlim(z_lim)
+        ax.set_xlabel("$x$")
+        ax.set_ylabel("$y$")
+        ax.set_zlabel("$z$")
+        fig.legend()
+        fig.suptitle("Planned trajectories")
         plt.show()
 
         return cbf_traj_data

@@ -142,7 +142,7 @@ class CBFMPC_Controller(DoubleIntegrator):
         self.ubx[self.n_states*(self.N+1):] = 1                # v upper bound for all V
 
 
-    def control(self, x0, xgoal, t0=0):
+    def control(self, x0, xgoal, t0=0, ig_pos=None, ig_vel=None, ig_acc=None):
         # Set up arg dictionary for optimization inputs
         args = {}
         args['lbg'] = self.lb_con
@@ -151,19 +151,52 @@ class CBFMPC_Controller(DoubleIntegrator):
         args['lbx'] = self.lbx
         args['ubx'] = self.ubx
 
+
+        ## NO MOVE initial guess
         # u0 = casadi.DM.zeros((self.n_controls, self.N))  # initial control
         # X0 = casadi.repmat(x0, 1, self.N+1)         # initial state full
-        X0 = np.linspace(x0, xgoal, self.N+1)
-        u0 = np.zeros((self.N, self.n_controls))
 
-        for i in range(self.N):
-            X0[i, 3:6] = (X0[i+1, 0:3] - X0[i, 0:3])/ self.dt
+        if ig_pos is None :
+            ## Straight line initial guess
+            X0 = np.linspace(x0, xgoal, self.N+1)
+            u0 = np.zeros((self.N, self.n_controls))
+            for i in range(self.N):
+                X0[i, 3:6] = (X0[i+1, 0:3] - X0[i, 0:3])/ self.dt
+            for i in range(self.N):
+                u0[i, :] = (X0[i+1, 3:6] - X0[i, 3:6]) / self.dt
+        elif ig_pos is not None:
+            # Demo traj initial guess
+            step_size = round(len(ig_pos[:,0])/(self.N+1))
 
-        for i in range(self.N):
-            u0[i, :] = (X0[i+1, 3:6] - X0[i, 3:6]) / self.dt
+            X0 = np.zeros((self.N+1, self.n_states))
+            sampled_pos = ig_pos[::step_size, 0:3]
+            sampled_vel = ig_vel[::step_size, 0:3]
 
-        X0 = casadi.DM(X0)
-        u0 = casadi.DM(u0)
+            print(sampled_pos.shape)
+            # if subsample off
+            while len(sampled_pos[:,0]) < self.N+1:
+                sampled_pos = np.append(sampled_pos, [ig_pos[-1, 0:3]], axis=0)
+                sampled_vel = np.append(sampled_vel, [ig_vel[-1, 0:3]], axis=0)
+            while len(sampled_pos[:, 0]) > self.N + 1:
+                sampled_pos = np.delete(sampled_pos, -1, axis=0 )
+                sampled_vel = np.delete(sampled_vel, -1, axis=0)
+
+            X0[:, 0:3] = sampled_pos
+            X0[:, 3:6] = sampled_vel
+
+            step_size = round(len(ig_acc[:, 0]) / self.N)
+            sampled_acc = ig_acc[::step_size, 0:3]
+
+            while len(sampled_acc[:,0]) < self.N:
+                np.append(sampled_acc, [ig_acc[-1, 0:3]], axis=0)
+            while len(sampled_acc[:,0]) > self.N:
+                sampled_acc = np.delete(sampled_acc, -1, axis=0)
+            u0 = sampled_acc
+
+        X0 = casadi.DM(X0.T)
+        u0 = casadi.DM(u0.T)
+
+        print(X0.shape, u0.shape)
 
         params = casadi.vertcat(
             x0,    # current state

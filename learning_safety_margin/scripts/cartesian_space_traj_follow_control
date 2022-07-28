@@ -5,7 +5,7 @@ import numpy as np
 import pickle
 import random
 import rospy
-import math
+import glob
 import time
 import sys
 import os
@@ -697,14 +697,23 @@ if __name__ == '__main__':
     stds = data["rbf_stds"]
     bias_param = 0.1
 
-    # Initialize RBF Parameters
-    # print(ws_lim, x_dim, n_dim_features, rbf_std)
-    # centers, stds = rbf_means_stds(X=None, X_lim=np.array([x_lim, y_lim, z_lim, vdot_lim, vdot_lim, vdot_lim]),
-    #                                n=x_dim, k=n_dim_features, fixed_stds=True, std=rbf_std)
+    ## Trajectories for initial guess
+    category_list = ["safe/"] #["safe/", "daring/", "unsafe/"]
+    traj_num_list = ["2", "4", "9", "10", "14", "18"]
+    fpath_list =[]
+
+    for category in category_list:
+        for traj_num in traj_num_list :
+            fn = glob.glob(data_dir + "csv/" + category + traj_num +"_ee*.txt")
+            fn.sort()
+            fpath_list.append(fn)
+    # Reshape list to be 1D
+    # fpath_list = sum(fpath_list, [])
+    print(fpath_list)
 
     # SET PARAMETERS FOR MPC CONTROL
     freq = 200
-    dt = 0.15  # 1./freq
+    dt = 0.1  # 1./freq
     n_steps = 50
     nbr_demos = int(number_of_demos)
 
@@ -716,7 +725,7 @@ if __name__ == '__main__':
 
     print("Planning %s trajectories... \n" % nbr_demos)
     plan_start = time.time()
-    cbf_traj = traj_generator.generate_all_trajectories(num_demos=nbr_demos)
+    cbf_traj = traj_generator.generate_all_trajectories(num_demos=nbr_demos, init_guess_list=fpath_list)
     print("FINISH planning trajectories in %s seconds \n" % (time.time() - plan_start))
 
     # Set save dir and create folder if needed
