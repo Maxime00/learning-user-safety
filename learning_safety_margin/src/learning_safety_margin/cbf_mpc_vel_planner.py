@@ -152,7 +152,14 @@ class CBFMPC_Controller(DoubleIntegrator):
         args['ubx'] = self.ubx
 
         u0 = casadi.DM.zeros((self.n_controls, self.N))  # initial control
-        X0 = casadi.repmat(x0, 1, self.N+1)         # initial state full
+        # X0 = casadi.repmat(x0, 1, self.N+1)         # initial state full
+        X0 = casadi.linspace(x0, xgoal, self.N+1)
+        for i in range(self.N):
+            X0[i, 3:6] = (X0[i+1,0:3] - X0[i,0:3])/ self.dt
+
+        for i in range(self.N):
+            u0[i, 0:3] = (X0[i + 1, 3:6] - X0[i , 3:6]) / self.dt
+
         params = casadi.vertcat(
             x0,    # current state
             xgoal   # target state

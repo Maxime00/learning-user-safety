@@ -618,11 +618,11 @@ def control_loop(traj_dict, robot, freq):
                     os.remove(save_dir + "temp_list_of_mpc_traj.txt")
 
                     # call plot function
-                    # plot_ref_vs_rec(full_desired_X, full_desired_U, full_desired_T, recorded_state)
+                    plot_ref_vs_rec(full_desired_X, full_desired_U, full_desired_T, recorded_state)
                     break
 
                 # call plot function
-                # plot_ref_vs_rec(full_desired_X, full_desired_U, full_desired_T, recorded_state)
+                plot_ref_vs_rec(full_desired_X, full_desired_U, full_desired_T, recorded_state)
 
                 ## Set up next traj
                 traj_idx = idx_list[idx_to_incr]
@@ -693,12 +693,14 @@ if __name__ == '__main__':
     params = data["theta"]
     bias_param = data["bias"]
     slack_param = data["unsafe_slack"]
+    centers =data["rbf_centers"]
+    stds = data["rbf_stds"]
     bias_param = 0.1
 
     # Initialize RBF Parameters
     # print(ws_lim, x_dim, n_dim_features, rbf_std)
-    centers, stds = rbf_means_stds(X=None, X_lim=np.array([x_lim, y_lim, z_lim, vdot_lim, vdot_lim, vdot_lim]),
-                                   n=x_dim, k=n_dim_features, fixed_stds=True, std=rbf_std)
+    # centers, stds = rbf_means_stds(X=None, X_lim=np.array([x_lim, y_lim, z_lim, vdot_lim, vdot_lim, vdot_lim]),
+    #                                n=x_dim, k=n_dim_features, fixed_stds=True, std=rbf_std)
 
     # SET PARAMETERS FOR MPC CONTROL
     freq = 200

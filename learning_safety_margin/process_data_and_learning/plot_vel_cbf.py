@@ -141,7 +141,7 @@ class PlotCBF():
             self.phi = casadi.horzcat(self.phi, rbf)
         self.h = casadi.mtimes(self.phi, self.theta) + self.bias
         self.h_fun = casadi.Function('h_fun', [self.x], [self.h])
-        self.norm = colors.TwoSlopeNorm(vmin=-1,vcenter=0.,vmax=1.)
+        self.norm = colors.TwoSlopeNorm(vmin=-10,vcenter=0.,vmax=10.)
         self.data_dir = data_dir
 
 
@@ -606,8 +606,11 @@ class PlotCBF():
                 for k in range(len(xdotvec)):
                     hvec[k] = self.h_fun([xvec[i], yvec[i], zvec[i], xdotvec[k], ydotvec[k], zdotvec[k]])
 
+                print(hvec)
+
                 # Flatten and normalize
-                c = (hvec.ravel() - hvec.min()) / hvec.ptp()
+                # c = (hvec.ravel() - hvec.min()) / hvec.ptp()
+                c = hvec.ravel()
                 # Repeat for each body line and two head lines
                 c = np.concatenate((c, np.repeat(c, 2)))
                 # Colormap
@@ -616,7 +619,7 @@ class PlotCBF():
                 c[:, -1] = np.repeat(alpha, len(c[:, 0]))
 
                 im_quiver = ax.quiver3D(xvec_rep, yvec_rep, zvec_rep, xdotvec, ydotvec, zdotvec, colors=c,
-                                        normalize=True, length=0.04, cmap=cm.coolwarm_r)
+                                        normalize=True, length=0.04, cmap=cm.coolwarm_r, norm=self.norm)
 
             # Set color
             if '/safe/' in fpath:

@@ -148,10 +148,10 @@ class trajGenerator():
                 yt = y + np.random.uniform(y_lim[0]-y, y_lim[1]-y)
 
             # check coordinates are reachable by robot
-            if np.linalg.norm([x,y]) <= .75: # .8 should do it
+            if  .25 <= np.linalg.norm([x,y]) <= .75: # .8 should do it
                 inRange = True
 
-        z = 0.2
+        z = 0.15
         xdot = 0
         ydot = 0
         zdot = 0
@@ -166,6 +166,8 @@ class trajGenerator():
         u_list = []
         t_list = []
         labels = []
+        start_list = []
+        end_list = []
 
         num_safe = 0
         while num_safe < num_demos:
@@ -176,6 +178,8 @@ class trajGenerator():
                 u_list.append(res[1])
                 t_list.append(res[2])
                 labels.append('safe')
+                start_list.append(x)
+                end_list.append(xt)
                 num_safe += 1
 
         print("Generated Safe Trajectories")
@@ -213,8 +217,11 @@ class trajGenerator():
         }
         fig = plt.figure()
         ax = plt.axes(projection='3d')
+        print(start_list, end_list)
         for i in range(len(x_list)):
             plt.plot(x_list[i][:,0],x_list[i][:,1], x_list[i][:,2])
+            plt.scatter(start_list[i][0],start_list[i][1], start_list[i][2])
+            plt.scatter(end_list[i][0], end_list[i][1], end_list[i][2])
             print("start: ", x_list[i][0,0:3])
             print("end: ", x_list[i][-1, 0:3])
         ax.set_xlim(x_lim)
