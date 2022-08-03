@@ -167,7 +167,6 @@ current working scripts :
 # TODO 
 - add option to start/stop integrator ? start thresh should be small but always reachable ( np.any instead? or start integrator if in same pos for too long )
 - add 'show_plots' option ?
-- make offline plot functions for mpc trajectories
 - improve random positions of cbf traj planner -> must stay in reachable space
 
 
