@@ -178,7 +178,7 @@ class trajGenerator():
             elif init_guess_list is not None:
                 # grab file
                 fn_acc, fn_pos, fn_vel = init_guess_list[num_safe]
-                initial_guess_pos = np.loadtxt(fn_pos, delimiter = ",")
+                initial_guess_pos = np.loadtxt(fn_pos, delimiter=",")
                 initial_guess_vel = np.loadtxt(fn_vel, delimiter=",")
                 initial_guess_acc = np.loadtxt(fn_acc, delimiter=",")
                 x = np.concatenate((initial_guess_pos[0, 0:3], initial_guess_vel[0, 0:3]))
@@ -232,8 +232,8 @@ class trajGenerator():
         ax = plt.axes(projection='3d')
         print(ref_traj)
         for i in range(len(x_list)):
-            plt.plot(x_list[i][:,0],x_list[i][:,1], x_list[i][:,2], label='planned')
             plt.plot(ref_traj[i][:,0], ref_traj[i][:,1], ref_traj[i][:,2], label ='initial guess')
+            plt.plot(x_list[i][:,0],x_list[i][:,1], x_list[i][:,2], label='planned')
             ax.scatter(start_list[i][0],start_list[i][1], start_list[i][2], s=3)
             ax.scatter(end_list[i][0], end_list[i][1], end_list[i][2], s=3)
             print("start: ", x_list[i][0,0:3])

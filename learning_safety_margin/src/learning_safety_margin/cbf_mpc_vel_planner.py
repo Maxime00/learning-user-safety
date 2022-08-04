@@ -2,7 +2,6 @@ import numpy as np
 import casadi
 from learning_safety_margin.vel_control_utils import *
 
-
 class DoubleIntegrator():
     def __init__(self, dt=0.1):
         self.dt = dt
@@ -156,7 +155,7 @@ class CBFMPC_Controller(DoubleIntegrator):
         # u0 = casadi.DM.zeros((self.n_controls, self.N))  # initial control
         # X0 = casadi.repmat(x0, 1, self.N+1)         # initial state full
 
-        if ig_pos is None :
+        if ig_pos is None:
             ## Straight line initial guess
             X0 = np.linspace(x0, xgoal, self.N+1)
             u0 = np.zeros((self.N, self.n_controls))
@@ -174,11 +173,11 @@ class CBFMPC_Controller(DoubleIntegrator):
 
             print(sampled_pos.shape)
             # if subsample off
-            while len(sampled_pos[:,0]) < self.N+1:
+            while len(sampled_pos[:, 0]) < self.N+1:
                 sampled_pos = np.append(sampled_pos, [ig_pos[-1, 0:3]], axis=0)
                 sampled_vel = np.append(sampled_vel, [ig_vel[-1, 0:3]], axis=0)
             while len(sampled_pos[:, 0]) > self.N + 1:
-                sampled_pos = np.delete(sampled_pos, -1, axis=0 )
+                sampled_pos = np.delete(sampled_pos, -1, axis=0)
                 sampled_vel = np.delete(sampled_vel, -1, axis=0)
 
             X0[:, 0:3] = sampled_pos
@@ -187,9 +186,9 @@ class CBFMPC_Controller(DoubleIntegrator):
             step_size = round(len(ig_acc[:, 0]) / self.N)
             sampled_acc = ig_acc[::step_size, 0:3]
 
-            while len(sampled_acc[:,0]) < self.N:
+            while len(sampled_acc[:, 0]) < self.N:
                 np.append(sampled_acc, [ig_acc[-1, 0:3]], axis=0)
-            while len(sampled_acc[:,0]) > self.N:
+            while len(sampled_acc[:, 0]) > self.N:
                 sampled_acc = np.delete(sampled_acc, -1, axis=0)
             u0 = sampled_acc
 

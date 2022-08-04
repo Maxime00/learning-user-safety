@@ -99,7 +99,7 @@ Run process_and_learn.py script inside docker container with the following argum
 -l <learning_algo> ['pos', 'vel']
 
 ```console 
-aica-docker connect learning-safety-margin-noetic-runtime 
+aica-docker connect learning-safety-margin-noetic-runtime -u ros 
 cd src/learning_safety_margin/process_data_and_learning
 python3 process_and_learn.py -u <user_number> -l <learning_algo> 
 ```
@@ -170,28 +170,6 @@ current working scripts :
 - improve random positions of cbf traj planner -> must stay in reachable space
 
 
-
-# Instructions for MPC-simulator pipeline
-
-## Terminal 1 - run simulator
-```console 
-cd Workspace/simulator-backend/pybullet_zmq
-bash build-server.sh
-aica-docker interactive aica-technology/zmq-simulator -u ros2 --net host --no-hostname
-python3 pybullet_zmq/bin/zmq-simulator
-```
-
-## Terminal 2 - run controller
-```console
-bash build-server.sh -s
-aica-docker connect learning-safety-margin-noetic-ssh
-roslaunch learning_safety_margin mpc_control.launch
-```
-
-Can edit code directly in pycharm without the need to rebuild, just ctrl+c in terminal 2 and do roslaunch again.
-The mpc_control.launch file runs MPC_velocity_control and MPC_velocity_planner as two communicating nodes
-
-
 ### Instructions for MPC-simulator pipeline
 
 # Terminal 1 - run simulator
@@ -211,3 +189,4 @@ roslaunch learning_safety_margin mpc_control.launch
 
 Can edit code directly in pycharm without the need to rebuild, just ctrl+c in terminal 2 and do roslaunch again
 launch file runs MPC_velocity_control and MPC_velocity_planner
+The mpc_control.launch file runs MPC_velocity_control and MPC_velocity_planner as two communicating nodes
