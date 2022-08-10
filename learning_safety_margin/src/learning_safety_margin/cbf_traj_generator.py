@@ -192,7 +192,8 @@ class trajGenerator():
                 labels.append('safe')
                 start_list.append(x)
                 end_list.append(xt)
-                ref_traj.append(initial_guess_pos)
+                if init_guess_list is not None:
+                    ref_traj.append(initial_guess_pos)
                 num_safe += 1
 
         print("Generated Safe Trajectories")
@@ -232,7 +233,8 @@ class trajGenerator():
         ax = plt.axes(projection='3d')
         print(ref_traj)
         for i in range(len(x_list)):
-            plt.plot(ref_traj[i][:,0], ref_traj[i][:,1], ref_traj[i][:,2], label ='initial guess')
+            if init_guess_list is not None:
+                plt.plot(ref_traj[i][:,0], ref_traj[i][:,1], ref_traj[i][:,2], label ='initial guess')
             plt.plot(x_list[i][:,0],x_list[i][:,1], x_list[i][:,2], label='planned')
             ax.scatter(start_list[i][0],start_list[i][1], start_list[i][2], s=3)
             ax.scatter(end_list[i][0], end_list[i][1], end_list[i][2], s=3)
@@ -246,6 +248,20 @@ class trajGenerator():
         ax.set_zlabel("$z$")
         fig.legend()
         fig.suptitle("Planned trajectories")
+
+        fig = plt.figure()
+        ax = plt.axes(projection='3d')
+        print(ref_traj)
+        for i in range(len(x_list)):
+            plt.plot(x_list[i][:,3],x_list[i][:,4], x_list[i][:,5], label='planned vel')
+        ax.set_xlim(xdot_lim)
+        ax.set_ylim(ydot_lim)
+        ax.set_zlim(zdot_lim)
+        ax.set_xlabel("$x$")
+        ax.set_ylabel("$y$")
+        ax.set_zlabel("$z$")
+        fig.legend()
+        fig.suptitle("Planned velocities")
         plt.show()
 
         return cbf_traj_data

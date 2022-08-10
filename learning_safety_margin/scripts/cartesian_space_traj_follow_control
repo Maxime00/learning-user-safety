@@ -705,7 +705,7 @@ if __name__ == '__main__':
     for category in category_list:
         for traj_num in traj_num_list :
             fn = glob.glob(data_dir + "csv/" + category + traj_num +"_ee*.txt")
-            fn = [x for x in fn if "Jerk" not in x]
+            fn = [x for x in fn if "Jerk" not in x] # remove Jerk.txt files
             fn.sort()
             fpath_list.append(fn)
     # Reshape list to be 1D
@@ -726,7 +726,7 @@ if __name__ == '__main__':
 
     print("Planning %s trajectories... \n" % nbr_demos)
     plan_start = time.time()
-    cbf_traj = traj_generator.generate_all_trajectories(num_demos=nbr_demos, init_guess_list=fpath_list)
+    cbf_traj = traj_generator.generate_all_trajectories(num_demos=nbr_demos)#, init_guess_list=fpath_list)
     print("FINISH planning trajectories in %s seconds \n" % (time.time() - plan_start))
 
     # Set save dir and create folder if needed

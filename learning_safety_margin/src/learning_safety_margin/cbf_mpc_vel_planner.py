@@ -1,6 +1,9 @@
 import numpy as np
 import casadi
 from learning_safety_margin.vel_control_utils import *
+import state_representation as sr
+from dynamical_systems import create_cartesian_ds, DYNAMICAL_SYSTEM_TYPE
+import matplotlib.pyplot as plt
 
 class DoubleIntegrator():
     def __init__(self, dt=0.1):
@@ -159,10 +162,52 @@ class CBFMPC_Controller(DoubleIntegrator):
             ## Straight line initial guess
             X0 = np.linspace(x0, xgoal, self.N+1)
             u0 = np.zeros((self.N, self.n_controls))
+
+            # Integrate for velocity
+            # for i in range(self.N):
+            #     X0[i, 3:6] = (X0[i+1, 0:3] - X0[i, 0:3])/ self.dt
+
+            # DS for velocity
+            ds = create_cartesian_ds(DYNAMICAL_SYSTEM_TYPE.POINT_ATTRACTOR)
+            ds.set_parameter_value("gain", [50., 50., 50., 10., 10., 10.], sr.ParameterType.DOUBLE_ARRAY)
+            target = sr.CartesianPose('panda_ee', xgoal[0:3], np.array([0., 1., 0., 0.]), 'panda_base')
+            ds.set_parameter_value("attractor", target, sr.ParameterType.STATE, sr.StateType.CARTESIAN_POSE)
+            print(ds.get_parameters())
+            curr_state = sr.CartesianState('panda_ee', 'panda_base')
+            curr_state.set_orientation(np.array([0., 1., 0., 0.]))
+
             for i in range(self.N):
-                X0[i, 3:6] = (X0[i+1, 0:3] - X0[i, 0:3])/ self.dt
+                curr_state.set_position(X0[i, 0:3])
+                ds_twist = sr.CartesianTwist(ds.evaluate(curr_state))
+                # TODO:  need clamping ?? Initial velocities are very high
+                # ds_twist.clamp(.25, .5)
+                X0[i, 3:6] = ds_twist.data()[0:3]
+
             for i in range(self.N):
                 u0[i, :] = (X0[i+1, 3:6] - X0[i, 3:6]) / self.dt
+
+
+            ## PLOTS DEBUG
+            # fig = plt.figure()
+            # ax = plt.axes(projection='3d')
+            # plt.plot(X0[:, 0], X0[:, 1], X0[:, 2], label='position')
+            # ax.set_xlim(x_lim)
+            # ax.set_ylim(y_lim)
+            # ax.set_zlim(z_lim)
+            # ax.set_xlabel("$x$")
+            # ax.set_ylabel("$y$")
+            # ax.set_zlabel("$z$")
+            # fig.legend()
+            # fig.suptitle("Initial guess position")
+            # fig = plt.figure()
+            # ax = plt.axes()
+            # plt.plot(self.tlist, X0[:, 3], label='vx')
+            # plt.plot(self.tlist, X0[:, 4], label='vy')
+            # plt.plot(self.tlist, X0[:, 5], label='vz')
+            # fig.legend()
+            # fig.suptitle("Initial guess velocity")
+            # plt.show()
+
         elif ig_pos is not None:
             # Demo traj initial guess
             step_size = round(len(ig_pos[:,0])/(self.N+1))
