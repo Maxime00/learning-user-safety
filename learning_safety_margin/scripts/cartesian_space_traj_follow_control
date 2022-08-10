@@ -700,7 +700,8 @@ if __name__ == '__main__':
     ## Trajectories for initial guess
     category_list = ["safe/"] #["safe/", "daring/", "unsafe/"]
     traj_num_list = ["2", "4", "9", "10", "14", "18"]
-    fpath_list =[]
+    fpath_list = []
+    show_plots = True
 
     for category in category_list:
         for traj_num in traj_num_list :
@@ -726,7 +727,7 @@ if __name__ == '__main__':
 
     print("Planning %s trajectories... \n" % nbr_demos)
     plan_start = time.time()
-    cbf_traj = traj_generator.generate_all_trajectories(num_demos=nbr_demos)#, init_guess_list=fpath_list)
+    cbf_traj = traj_generator.generate_all_trajectories(num_demos=nbr_demos, init_guess_list=fpath_list, plot_debug=show_plots)
     print("FINISH planning trajectories in %s seconds \n" % (time.time() - plan_start))
 
     # Set save dir and create folder if needed

@@ -59,8 +59,8 @@ class trajGenerator():
         # self.daring_mpc_planner = CBFMPC_Controller(self.centers, self.stds, self.theta, self.daring_bias, dt=self.dt, n_steps=self.n_steps, r_gains = self.r_gains, zero_acc_start=self.zero_acc_start)
         # self.unsafe_mpc_planner = CBFMPC_Controller(self.centers, self.stds, self.theta, self.unsafe_bias, dt=self.dt, n_steps=self.n_steps, r_gains = self.r_gains, zero_acc_start=self.zero_acc_start)
 
-    def generate_safe_traj(self, start, target, ig_pos=None, ig_vel=None, ig_acc=None):
-        X, U, T = self.safe_mpc_planner.control(start, target, ig_pos=ig_pos, ig_vel=ig_vel, ig_acc=ig_acc)
+    def generate_safe_traj(self, start, target, ig_time=None, ig_pos=None, ig_vel=None, ig_acc=None, num_safe=None, plot_debug=False):
+        X, U, T = self.safe_mpc_planner.control(start, target, ig_time=ig_time, ig_pos=ig_pos, ig_vel=ig_vel, ig_acc=ig_acc, count=num_safe, plot_vel_acc=plot_debug)
         # convert into np arrays for reading ease
         X = np.array(X)  # pos + vel  (n_steps, 6)
         U = np.array(U)  # accel (n_steps, 3)
@@ -161,7 +161,7 @@ class trajGenerator():
 
         return x0, xt
 
-    def generate_all_trajectories(self, num_demos=5, init_guess_list=None):
+    def generate_all_trajectories(self, num_demos=5, init_guess_list=None, plot_debug=False):
         x_list = []
         u_list = []
         t_list = []
@@ -177,13 +177,16 @@ class trajGenerator():
                 res = self.generate_safe_traj(x, xt)
             elif init_guess_list is not None:
                 # grab file
-                fn_acc, fn_pos, fn_vel = init_guess_list[num_safe]
+                fn_acc, fn_pos, fn_time, fn_vel = init_guess_list[num_safe]
+                initial_guess_time = np.loadtxt(fn_time, delimiter=",")
                 initial_guess_pos = np.loadtxt(fn_pos, delimiter=",")
                 initial_guess_vel = np.loadtxt(fn_vel, delimiter=",")
                 initial_guess_acc = np.loadtxt(fn_acc, delimiter=",")
                 x = np.concatenate((initial_guess_pos[0, 0:3], initial_guess_vel[0, 0:3]))
                 xt = np.concatenate((initial_guess_pos[-1, 0:3], initial_guess_vel[0, 0:3]))
-                res = self.generate_safe_traj(x, xt, initial_guess_pos, initial_guess_vel, initial_guess_acc)
+                res = self.generate_safe_traj(x, xt, ig_time=initial_guess_time, ig_pos=initial_guess_pos,
+                                              ig_vel=initial_guess_vel, ig_acc=initial_guess_acc, num_safe=num_safe,
+                                              plot_debug=plot_debug)
 
             if res is not None:
                 x_list.append(res[0])
@@ -231,13 +234,22 @@ class trajGenerator():
         }
         fig = plt.figure()
         ax = plt.axes(projection='3d')
-        print(ref_traj)
+        # print(ref_traj)
         for i in range(len(x_list)):
             if init_guess_list is not None:
-                plt.plot(ref_traj[i][:,0], ref_traj[i][:,1], ref_traj[i][:,2], label ='initial guess')
-            plt.plot(x_list[i][:,0],x_list[i][:,1], x_list[i][:,2], label='planned')
+                plt.plot(ref_traj[i][:,0], ref_traj[i][:,1], ref_traj[i][:,2], label =f'initial guess #{i+1}')
+            plt.plot(x_list[i][:,0],x_list[i][:,1], x_list[i][:,2], label=f'planned #{i+1}')
             ax.scatter(start_list[i][0],start_list[i][1], start_list[i][2], s=3)
             ax.scatter(end_list[i][0], end_list[i][1], end_list[i][2], s=3)
+
+            ## PLOT RBF centers
+            if plot_debug :
+                colors = np.zeros(self.centers[:, 3:].shape)
+                colors[:, 0] = (self.centers[:, 3] - ws_lim[3, 0]) / (ws_lim[3, 1] - ws_lim[3, 0])
+                colors[:, 1] = (self.centers[:, 4] - ws_lim[4, 0]) / (ws_lim[4, 1] - ws_lim[4, 0])
+                colors[:, 2] = (self.centers[:, 5] - ws_lim[5, 0]) / (ws_lim[5, 1] - ws_lim[5, 0])
+                ax.scatter(self.centers[:, 0], self.centers[:, 1], self.centers[:, 2], c=colors, alpha=0.5)
+
             print("start: ", x_list[i][0,0:3])
             print("end: ", x_list[i][-1, 0:3])
         ax.set_xlim(x_lim)
@@ -249,19 +261,39 @@ class trajGenerator():
         fig.legend()
         fig.suptitle("Planned trajectories")
 
-        fig = plt.figure()
-        ax = plt.axes(projection='3d')
-        print(ref_traj)
-        for i in range(len(x_list)):
-            plt.plot(x_list[i][:,3],x_list[i][:,4], x_list[i][:,5], label='planned vel')
-        ax.set_xlim(xdot_lim)
-        ax.set_ylim(ydot_lim)
-        ax.set_zlim(zdot_lim)
-        ax.set_xlabel("$x$")
-        ax.set_ylabel("$y$")
-        ax.set_zlabel("$z$")
-        fig.legend()
-        fig.suptitle("Planned velocities")
+        # fig = plt.figure()
+        # ax = plt.axes(projection='3d')
+        # print(ref_traj)
+        # for i in range(len(x_list)):
+        #     plt.plot(x_list[i][:,3],x_list[i][:,4], x_list[i][:,5], label='planned vel')
+        # ax.set_xlim(xdot_lim)
+        # ax.set_ylim(ydot_lim)
+        # ax.set_zlim(zdot_lim)
+        # ax.set_xlabel("$x$")
+        # ax.set_ylabel("$y$")
+        # ax.set_zlabel("$z$")
+        # fig.legend()
+        # fig.suptitle("Planned velocities")
+        # plt.show()
+
+        ## PLOTS DEBUG
+        if plot_debug:
+            for i in range(len(x_list)):
+                fig = plt.figure()
+                ax = plt.axes()
+                plt.plot(t_list[i], x_list[i][:, 3], label='vx')
+                plt.plot(t_list[i], x_list[i][:, 4], label='vy')
+                plt.plot(t_list[i], x_list[i][:, 5], label='vz')
+                fig.legend()
+                fig.suptitle(f"Planned velocity #{i+1}")
+
+                fig = plt.figure()
+                ax = plt.axes()
+                plt.plot(t_list[i][:-1], u_list[i][:, 0], label='ax')
+                plt.plot(t_list[i][:-1], u_list[i][:, 1], label='ay')
+                plt.plot(t_list[i][:-1], u_list[i][:, 2], label='az')
+                fig.legend()
+                fig.suptitle(f"Planned acceleration #{i+1}")
         plt.show()
 
         return cbf_traj_data

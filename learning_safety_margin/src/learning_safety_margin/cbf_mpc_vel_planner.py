@@ -4,6 +4,7 @@ from learning_safety_margin.vel_control_utils import *
 import state_representation as sr
 from dynamical_systems import create_cartesian_ds, DYNAMICAL_SYSTEM_TYPE
 import matplotlib.pyplot as plt
+from scipy import interpolate
 
 class DoubleIntegrator():
     def __init__(self, dt=0.1):
@@ -144,7 +145,7 @@ class CBFMPC_Controller(DoubleIntegrator):
         self.ubx[self.n_states*(self.N+1):] = 1                # v upper bound for all V
 
 
-    def control(self, x0, xgoal, t0=0, ig_pos=None, ig_vel=None, ig_acc=None):
+    def control(self, x0, xgoal, t0=0, ig_time=None, ig_pos=None, ig_vel=None, ig_acc=None, count=0, plot_vel_acc=False):
         # Set up arg dictionary for optimization inputs
         args = {}
         args['lbg'] = self.lb_con
@@ -186,56 +187,83 @@ class CBFMPC_Controller(DoubleIntegrator):
             for i in range(self.N):
                 u0[i, :] = (X0[i+1, 3:6] - X0[i, 3:6]) / self.dt
 
-
-            ## PLOTS DEBUG
-            # fig = plt.figure()
-            # ax = plt.axes(projection='3d')
-            # plt.plot(X0[:, 0], X0[:, 1], X0[:, 2], label='position')
-            # ax.set_xlim(x_lim)
-            # ax.set_ylim(y_lim)
-            # ax.set_zlim(z_lim)
-            # ax.set_xlabel("$x$")
-            # ax.set_ylabel("$y$")
-            # ax.set_zlabel("$z$")
-            # fig.legend()
-            # fig.suptitle("Initial guess position")
-            # fig = plt.figure()
-            # ax = plt.axes()
-            # plt.plot(self.tlist, X0[:, 3], label='vx')
-            # plt.plot(self.tlist, X0[:, 4], label='vy')
-            # plt.plot(self.tlist, X0[:, 5], label='vz')
-            # fig.legend()
-            # fig.suptitle("Initial guess velocity")
-            # plt.show()
-
         elif ig_pos is not None:
             # Demo traj initial guess
-            step_size = round(len(ig_pos[:,0])/(self.N+1))
-
             X0 = np.zeros((self.N+1, self.n_states))
-            sampled_pos = ig_pos[::step_size, 0:3]
-            sampled_vel = ig_vel[::step_size, 0:3]
 
-            print(sampled_pos.shape)
-            # if subsample off
-            while len(sampled_pos[:, 0]) < self.N+1:
-                sampled_pos = np.append(sampled_pos, [ig_pos[-1, 0:3]], axis=0)
-                sampled_vel = np.append(sampled_vel, [ig_vel[-1, 0:3]], axis=0)
-            while len(sampled_pos[:, 0]) > self.N + 1:
-                sampled_pos = np.delete(sampled_pos, -1, axis=0)
-                sampled_vel = np.delete(sampled_vel, -1, axis=0)
+            ## Interpolate method
+            if ig_time[-1] < self.tlist[-1]:  # recorded traj shorter than planner time
+                ig_time = np.linspace(0, self.N*self.dt, len(ig_time))
+                print("TRAJ FOR INITIAL GUESS SHORTER THAN PLANNER TIME ! \n")
+            print("Time of initial guess traj : ", ig_time[-1], " sec \n")
+
+            f_pos = interpolate.interp1d(ig_time, ig_pos[:, 0:3], axis=0)
+            f_vel = interpolate.interp1d(ig_time, ig_vel[:, 0:3],  axis=0)
+            f_acc = interpolate.interp1d(ig_time, ig_acc[:, 0:3], axis=0)
+
+            # resample time to match
+            sub_sampled_time = np.linspace(0, ig_time[-1], self.N+1)
+
+            sampled_pos = f_pos(sub_sampled_time)
+            sampled_vel = f_vel(sub_sampled_time)
+            sampled_acc = f_acc(sub_sampled_time[:-1])
+
+            ## Subsample method
+            # step_size = round(len(ig_pos[:,0])/(self.N+1))
+            # sampled_pos = ig_pos[::step_size, 0:3]
+            # sampled_vel = ig_vel[::step_size, 0:3]
+            #
+            # print(sampled_pos.shape)
+            # # if subsample off
+            # while len(sampled_pos[:, 0]) < self.N+1:
+            #     sampled_pos = np.append(sampled_pos, [ig_pos[-1, 0:3]], axis=0)
+            #     sampled_vel = np.append(sampled_vel, [ig_vel[-1, 0:3]], axis=0)
+            # while len(sampled_pos[:, 0]) > self.N + 1:
+            #     sampled_pos = np.delete(sampled_pos, -1, axis=0)
+            #     sampled_vel = np.delete(sampled_vel, -1, axis=0)
+            #
+            # step_size = round(len(ig_acc[:, 0]) / self.N)
+            # sampled_acc = ig_acc[::step_size, 0:3]
+            #
+            # while len(sampled_acc[:, 0]) < self.N:
+            #     np.append(sampled_acc, [ig_acc[-1, 0:3]], axis=0)
+            # while len(sampled_acc[:, 0]) > self.N:
+            #     sampled_acc = np.delete(sampled_acc, -1, axis=0)
 
             X0[:, 0:3] = sampled_pos
             X0[:, 3:6] = sampled_vel
-
-            step_size = round(len(ig_acc[:, 0]) / self.N)
-            sampled_acc = ig_acc[::step_size, 0:3]
-
-            while len(sampled_acc[:, 0]) < self.N:
-                np.append(sampled_acc, [ig_acc[-1, 0:3]], axis=0)
-            while len(sampled_acc[:, 0]) > self.N:
-                sampled_acc = np.delete(sampled_acc, -1, axis=0)
             u0 = sampled_acc
+
+        ## PLOTS DEBUG
+        # fig = plt.figure()
+        # ax = plt.axes(projection='3d')
+        # plt.plot(X0[:, 0], X0[:, 1], X0[:, 2], label='position')
+        # ax.set_xlim(x_lim)
+        # ax.set_ylim(y_lim)
+        # ax.set_zlim(z_lim)
+        # ax.set_xlabel("$x$")
+        # ax.set_ylabel("$y$")
+        # ax.set_zlabel("$z$")
+        # fig.legend()
+        # fig.suptitle(f"Initial guess position #{count+1}")
+
+        if plot_vel_acc:
+            fig = plt.figure()
+            ax = plt.axes()
+            plt.plot(self.tlist, X0[:, 3], label='vx')
+            plt.plot(self.tlist, X0[:, 4], label='vy')
+            plt.plot(self.tlist, X0[:, 5], label='vz')
+            fig.legend()
+            fig.suptitle(f"Initial guess velocity #{count+1}")
+
+            fig = plt.figure()
+            ax = plt.axes()
+            plt.plot(self.tlist[:-1], u0[:, 0], label='ax')
+            plt.plot(self.tlist[:-1], u0[:, 1], label='ay')
+            plt.plot(self.tlist[:-1], u0[:, 2], label='az')
+            fig.legend()
+            fig.suptitle(f"Initial guess acceleration #{count+1}")
+            # plt.show()
 
         X0 = casadi.DM(X0.T)
         u0 = casadi.DM(u0.T)

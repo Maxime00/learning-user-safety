@@ -167,6 +167,7 @@ def process_user_rosbags(user_num='0', smooth_flag = '1'):
 				np.savetxt(save_dir+"_eeVelocity.txt", twist2save, delimiter=",")
 
 			np.savetxt(save_dir + "_eeAcceleration.txt", acc2save, delimiter=",")
+			np.savetxt(save_dir + "_eeTime.txt", time_idx, delimiter=",")
 
 			trajectory_df.to_pickle(path = save_dir+"_jointState.pkl")
 
