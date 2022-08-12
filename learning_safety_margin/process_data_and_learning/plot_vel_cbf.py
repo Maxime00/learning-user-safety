@@ -141,7 +141,7 @@ class PlotCBF():
             self.phi = casadi.horzcat(self.phi, rbf)
         self.h = casadi.mtimes(self.phi, self.theta) + self.bias
         self.h_fun = casadi.Function('h_fun', [self.x], [self.h])
-        self.norm = colors.TwoSlopeNorm(vmin=-10,vcenter=0.,vmax=10.)
+        self.norm = colors.TwoSlopeNorm(vmin=-1,vcenter=0.,vmax=1.)
         self.data_dir = data_dir
 
 
@@ -156,6 +156,8 @@ class PlotCBF():
         hvec = hvals.ravel()
         for i in range(len(xvec)):
             hvec[i] = self.h_fun([xvec[i],yvec[i],z,xdot, ydot, zdot])
+
+        print(hvec)
         hvals = hvec.reshape((num_pts, num_pts))
         # divnorm = colors.TwoSlopeNorm(vmin=np.min(hvals), vcenter=0., vmax=np.max(hvals))
         divnorm = colors.TwoSlopeNorm(vmin=-3,vcenter=0.,vmax=3.)
@@ -219,7 +221,6 @@ class PlotCBF():
         fig.colorbar(im)
 
         plt.show()
-
 
     def plot_yz_pos(self, x=0.5, xdot=0.1, ydot=0.1, zdot=0.1, num_pts=11):
         y = np.linspace(y_lim[0], y_lim[1], num=num_pts)
@@ -538,7 +539,7 @@ class PlotCBF():
             c[:, -1] = np.repeat(alpha, len(c[:, 0]))
 
             im_quiver = ax.quiver3D(xvec_rep, yvec_rep, zvec_rep, xdotvec, ydotvec, zdotvec, colors=c,
-                                     normalize=True, length=0.05, cmap=cm.coolwarm_r)
+                                     normalize=True, length=0.05, cmap=cm.coolwarm_r, norm=self.norm)
 
         im = ax.scatter3D(xvec, yvec, zvec, s=10)
 
@@ -550,7 +551,7 @@ class PlotCBF():
         ax.view_init(10, 180)
         plt.show()
 
-    def plot_3D_quiver_from_traj(self, num_pts=6, num_arrows=3, num_traj=3, alpha=0.75):
+    def plot_3D_quiver_from_traj(self, num_pts=6, num_arrows=3, num_traj=3, alpha=0.75):#
         """
         This function plots the CBF h function over a 6D state space of positions and velocities.
         Positions are represented in a 3D plot and for each position, quiver arrows represent the velocity in different
@@ -610,7 +611,7 @@ class PlotCBF():
 
                 # Flatten and normalize
                 # c = (hvec.ravel() - hvec.min()) / hvec.ptp()
-                c = hvec.ravel()
+                c = self.norm(hvec.ravel())
                 # Repeat for each body line and two head lines
                 c = np.concatenate((c, np.repeat(c, 2)))
                 # Colormap
@@ -618,8 +619,9 @@ class PlotCBF():
                 # Set alpha
                 c[:, -1] = np.repeat(alpha, len(c[:, 0]))
 
-                im_quiver = ax.quiver3D(xvec_rep, yvec_rep, zvec_rep, xdotvec, ydotvec, zdotvec, colors=c,
-                                        normalize=True, length=0.04, cmap=cm.coolwarm_r, norm=self.norm)
+                # im_quiver = ax.quiver3D(xvec_rep, yvec_rep, zvec_rep, xdotvec, ydotvec, zdotvec, colors=c,
+                #                         normalize=True, length=0.04, cmap=cm.coolwarm_r)#, norm=self.norm)
+                im_quiver = ax.quiver(xvec_rep, yvec_rep, zvec_rep, xdotvec, ydotvec, zdotvec, colors=c, cmap=cm.coolwarm_r, length=0.04,normalize=True , norm=self.norm)
 
             # Set color
             if '/safe/' in fpath:
@@ -731,7 +733,7 @@ class PlotCBF():
 if __name__ == '__main__':
 
     # Check passed argument - User number
-    if len(sys.argv) >= 3:
+    if len(sys.argv) >= 2:
         user_number = sys.argv[1]
     else:
         user_number = '0'
@@ -749,7 +751,7 @@ if __name__ == '__main__':
     slack_param = data["unsafe_slack"]
     centers = data["rbf_centers"]
     stds = data["rbf_stds"]
-    bias_param = 0.1
+    bias_param = 0.1 #0.1
 
     plotter = PlotCBF(params, bias_param, centers, stds, data_dir)
 
