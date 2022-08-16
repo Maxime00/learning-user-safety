@@ -225,31 +225,31 @@ def vel_learning(user_number):
     n_artificial = 0
 
     x_all = onp.vstack((x_safe, x_unsafe, x_semisafe))
-    print("x-all", x_all.shape)
-    x_out = onp.where((x_all[:,0]<= ws_lim[0,0]) | (ws_lim[0,1] <= x_all[:,0])) # and x_all[:,0] <= x_all[0,1])
-    y_out = onp.where((x_all[:, 1] <= ws_lim[1, 0]) | (ws_lim[1, 1] <= x_all[:, 1]))
-    z_out = onp.where((x_all[:, 2] <= ws_lim[2, 0]) | (ws_lim[2, 1] <= x_all[:, 2]))
-    xd_out = onp.where((x_all[:, 3] <= ws_lim[3, 0]) | (ws_lim[3, 1] <= x_all[:, 3]))
-    yd_out = onp.where((x_all[:, 4] <= ws_lim[4, 0]) | (ws_lim[4, 1] <= x_all[:, 4]))
-    zd_out = onp.where((x_all[:, 5] <= ws_lim[5, 0]) | (ws_lim[5, 1] <= x_all[:, 5]))
-
-    pts_out = []
-    remove_indices = []
-    for i in range(len(ws_lim)):
-        out = onp.where((x_all[:, i] <= ws_lim[i, 0]) | (ws_lim[i, 1] <= x_all[:, i]))
-        pts_out.append(out)
-    remove_indices = None
-    for i in range(len(pts_out)):
-        print(pts_out[i][0])
-        print(len(pts_out[i][0]), pts_out[i][0].shape)
-        if len(pts_out[i][0]) > 0:
-            if remove_indices is None: remove_indices = pts_out[i][0]
-            else:
-                remove_indices = onp.hstack((remove_indices, pts_out[i][0]))
-    print(remove_indices, remove_indices is not None)
-    if remove_indices is not None: x_all = onp.delete(x_all, remove_indices, axis=0)
-    print(x_out, y_out, z_out, xd_out, yd_out, zd_out, pts_out, remove_indices)
-    print("new x_all", x_all.shape, len(x_all))
+    # print("x-all", x_all.shape)
+    # x_out = onp.where((x_all[:,0]<= ws_lim[0,0]) | (ws_lim[0,1] <= x_all[:,0])) # and x_all[:,0] <= x_all[0,1])
+    # y_out = onp.where((x_all[:, 1] <= ws_lim[1, 0]) | (ws_lim[1, 1] <= x_all[:, 1]))
+    # z_out = onp.where((x_all[:, 2] <= ws_lim[2, 0]) | (ws_lim[2, 1] <= x_all[:, 2]))
+    # xd_out = onp.where((x_all[:, 3] <= ws_lim[3, 0]) | (ws_lim[3, 1] <= x_all[:, 3]))
+    # yd_out = onp.where((x_all[:, 4] <= ws_lim[4, 0]) | (ws_lim[4, 1] <= x_all[:, 4]))
+    # zd_out = onp.where((x_all[:, 5] <= ws_lim[5, 0]) | (ws_lim[5, 1] <= x_all[:, 5]))
+    #
+    # pts_out = []
+    # remove_indices = []
+    # for i in range(len(ws_lim)):
+    #     out = onp.where((x_all[:, i] <= ws_lim[i, 0]) | (ws_lim[i, 1] <= x_all[:, i]))
+    #     pts_out.append(out)
+    # remove_indices = None
+    # for i in range(len(pts_out)):
+    #     print(pts_out[i][0])
+    #     print(len(pts_out[i][0]), pts_out[i][0].shape)
+    #     if len(pts_out[i][0]) > 0:
+    #         if remove_indices is None: remove_indices = pts_out[i][0]
+    #         else:
+    #             remove_indices = onp.hstack((remove_indices, pts_out[i][0]))
+    # print(remove_indices, remove_indices is not None)
+    # if remove_indices is not None: x_all = onp.delete(x_all, remove_indices, axis=0)
+    # print(x_out, y_out, z_out, xd_out, yd_out, zd_out, pts_out, remove_indices)
+    # print("new x_all", x_all.shape, len(x_all))
 
 
     # Define h model (i.e., RBF)
@@ -344,9 +344,10 @@ def vel_learning(user_number):
     u_dim = 2
     psi = 1.0
     dt = 0.1
+    dist_eps = 0.05
     mu_dist = (ws_lim[:, 1]-ws_lim[:,0])/n_dim_features
     print("Check: ", mu_dist, onp.max(mu_dist)*0.5)
-    rbf_std = .1#onp.max(mu_dist) * 0.5 #0.1#1.0
+    rbf_std = 0.1#.1#onp.max(mu_dist) * 0.5 #0.1#1.0
     print(rbf_std)
     # centers, stds = rbf_means_stds(X=None, X_lim = ws_lim,
     #                                n=x_dim, k=n_dim_features, set_means='random',fixed_stds=True, std=rbf_std, nCenters=n_features)
@@ -355,7 +356,7 @@ def vel_learning(user_number):
 
 
     centers = onp.array(x_all)
-    # centers = onp.array([x_all[0]])
+    # # centers = onp.array([x_all[0]])
     # for i in range(len(x_all)):
     #     dist = np.linalg.norm(centers - x_all[i], axis=1)
     #     # print(i, centers.shape, dist.shape)
@@ -383,25 +384,25 @@ def vel_learning(user_number):
     # print("RBF CHECK", phi(np.ones(6)).shape, phi_vec(np.ones((1,6))).shape)
 
 
-    fig = plt.figure()
-    ax = fig.add_subplot(111, projection='3d')
-    colors = onp.zeros(centers[:, 3:].shape)
-    colors[:,0] = (centers[:,3]-ws_lim[3,0])/(ws_lim[3,1]-ws_lim[3,0])
-    colors[:,1] = (centers[:,4]-ws_lim[4,0])/(ws_lim[4,1]-ws_lim[4,0])
-    colors[:,2] = (centers[:,5]-ws_lim[5,0])/(ws_lim[5,1]-ws_lim[5,0])
-    print(onp.amin(colors), onp.amax(colors))
-    ax.scatter(centers[:, 0], centers[:, 1], centers[:, 2], c=colors)
-    plt.show()
-
-    fig = plt.figure()
-    ax = fig.add_subplot(111, projection='3d')
-    colors = onp.zeros(centers[:, :3].shape)
-    colors[:,0] = (centers[:,0]-ws_lim[0,0])/(ws_lim[0,1]-ws_lim[0,0])
-    colors[:,1] = (centers[:,1]-ws_lim[1,0])/(ws_lim[1,1]-ws_lim[1,0])
-    colors[:,2] = (centers[:,2]-ws_lim[2,0])/(ws_lim[2,1]-ws_lim[2,0])
-    print(onp.amin(colors), onp.amax(colors))
-    ax.scatter(centers[:, 3], centers[:, 4], centers[:, 5], c=colors)
-    plt.show()
+    # fig = plt.figure()
+    # ax = fig.add_subplot(111, projection='3d')
+    # colors = onp.zeros(centers[:, 3:].shape)
+    # colors[:,0] = (centers[:,3]-ws_lim[3,0])/(ws_lim[3,1]-ws_lim[3,0])
+    # colors[:,1] = (centers[:,4]-ws_lim[4,0])/(ws_lim[4,1]-ws_lim[4,0])
+    # colors[:,2] = (centers[:,5]-ws_lim[5,0])/(ws_lim[5,1]-ws_lim[5,0])
+    # print(onp.amin(colors), onp.amax(colors))
+    # ax.scatter(centers[:, 0], centers[:, 1], centers[:, 2], c=colors)
+    # plt.show()
+    #
+    # fig = plt.figure()
+    # ax = fig.add_subplot(111, projection='3d')
+    # colors = onp.zeros(centers[:, :3].shape)
+    # colors[:,0] = (centers[:,0]-ws_lim[0,0])/(ws_lim[0,1]-ws_lim[0,0])
+    # colors[:,1] = (centers[:,1]-ws_lim[1,0])/(ws_lim[1,1]-ws_lim[1,0])
+    # colors[:,2] = (centers[:,2]-ws_lim[2,0])/(ws_lim[2,1]-ws_lim[2,0])
+    # print(onp.amin(colors), onp.amax(colors))
+    # ax.scatter(centers[:, 3], centers[:, 4], centers[:, 5], c=colors)
+    # plt.show()
     # print(x_all.shape, x_safe.shape, x_unsafe.shape, x_semisafe.shape)
     # art_safe_pts = []
     # print(range(len(centers)))
@@ -418,7 +419,7 @@ def vel_learning(user_number):
     is_bias = False
     is_slack_both = False
     is_slack_safe = False
-    is_semisafe = True
+    is_semisafe = False
     is_artificial = False
     theta = cp.Variable(n_features)  # , nonneg=True)
     print(theta.shape)
@@ -440,9 +441,9 @@ def vel_learning(user_number):
     r_scaling = 1.
     safe_val = safe_rewards#np.ones(n_safe) * 2.  # np.array(onp.squeeze(safe_rewards)*r_scaling)#np.ones(n_safe)*0.3
     unsafe_val = unsafe_rewards#np.ones(n_unsafe) * -1.0  # *-0.5#*-0.1
-    if is_semisafe:
-        semisafe_val = semisafe_rewards#np.ones(n_semisafe) * 0.5  # np.array(onp.squeeze(semisafe_rewards)*r_scaling)#np.ones(n_semisafe)*0.
-        gamma_dyn = np.ones(n_semisafe) * 0.1
+    # if is_semisafe:
+    semisafe_val = semisafe_rewards#np.ones(n_semisafe) * 0.5  # np.array(onp.squeeze(semisafe_rewards)*r_scaling)#np.ones(n_semisafe)*0.
+    gamma_dyn = np.ones(n_semisafe) * 0.1
     # unsafe_tte = unsafe_ttelist ** 3
 
     if is_artificial:
@@ -493,7 +494,14 @@ def vel_learning(user_number):
             h_cost += cp.sum_squares(theta @ phis_unsafe[i] + bias)  # cost of norm(alpha_i * phi(x,xi) + b)
             constraints.append(
                 (theta @ phis_unsafe[i] + bias) <= unsafe_val[i] + unsafe_tte[i] * unsafe_slack[i])
-            constraints.append(unsafe_slack[i] >= 0.)
+            # constraints.append(unsafe_slack[i] >= 0.)
+
+            dist = np.linalg.norm(x_unsafe[i]-x_safe, axis=1)
+            if np.any(dist) <= dist_eps:
+                constraints.append(unsafe_slack[i] >= 0.)
+            else:
+                constraints.append(unsafe_slack[i] == 0)
+                print('no slack allowed on neg constraint')
     else:
         print("adding no slack constraints")
         for i in range(n_unsafe):
