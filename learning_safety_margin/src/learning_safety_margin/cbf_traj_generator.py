@@ -74,6 +74,7 @@ class trajGenerator():
             print('Unsafe Trajectory')
             return None
         else:
+            print("Check if safe: ", self.safe_mpc_planner.check_safety(X))
             return [X,U,T]
 
     def generate_daring_traj(self, start, target):

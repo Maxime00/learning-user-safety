@@ -16,7 +16,6 @@ from dynamical_systems import create_cartesian_ds, DYNAMICAL_SYSTEM_TYPE
 from network_interfaces.control_type import ControlType
 from network_interfaces.zmq.network import CommandMessage
 from learning_safety_margin.robot_interface import RobotInterface
-
 from sensor_msgs.msg import JointState
 from std_msgs.msg import Header
 
@@ -708,6 +707,7 @@ if __name__ == '__main__':
             fn = glob.glob(data_dir + "csv/" + category + traj_num +"_ee*.txt")
             fn = [x for x in fn if "Jerk" not in x] # remove Jerk.txt files
             fn.sort()
+            print(fn)
             fpath_list.append(fn)
     # Reshape list to be 1D
     # fpath_list = sum(fpath_list, [])
