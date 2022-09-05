@@ -7,6 +7,8 @@ import glob
 import pickle
 import time
 
+import matplotlib.pyplot as plt
+
 from robot_model import Model, InverseKinematicsParameters, QPInverseVelocityParameters
 import state_representation as sr
 from scipy import signal
@@ -18,7 +20,7 @@ def process_user_rosbags(user_num='0', smooth_flag = '1'):
 
 	# Set up user dir
 	subject_dir = os.path.join(data_dir, "User_"+user_num)
-	# subject_dir = os.path.join(data_dir, "example_traj_to_replay")
+	# subject_dir = os.path.join(data_dir, "boundaries")
 	rosbag_dir = os.path.join(subject_dir, "rosbags")
 	csv_dir = os.path.join(subject_dir, "csv")
 
@@ -27,7 +29,9 @@ def process_user_rosbags(user_num='0', smooth_flag = '1'):
 	robot = Model("franka", urdf_path)
 
 	# Verify directory
-	listOfBagFiles = glob.glob(rosbag_dir + '/**/*.bag', recursive=True)
+	# listOfBagFiles = glob.glob(rosbag_dir + '/**/*.bag', recursive=True)
+	listOfBagFiles = glob.glob(data_dir + '/boundaries/obstacle-boundaries.bag', recursive=True)
+	csv_dir = os.path.join(data_dir, "boundaries")
 
 	# Loop for all bags in 'User_X' folder
 	numberOfFiles = str(len(listOfBagFiles))
@@ -64,6 +68,7 @@ def process_user_rosbags(user_num='0', smooth_flag = '1'):
 		jointTorques = []
 		time_idx = []
 		temp_jointState = sr.JointState("franka", robot.get_joint_frames())
+		obs_coordinates = []
 
 		# access bag
 		bag = rosbag.Bag(bagFile)
@@ -112,7 +117,14 @@ def process_user_rosbags(user_num='0', smooth_flag = '1'):
 			jointVel2save = np.array(jointVelocities)
 			jointTorq2save = np.array(jointTorques)
 
-
+			fig = plt.figure(figsize=(10, 10))
+			ax = plt.axes(projection='3d')
+			plt.plot(pose2save[:, 0], pose2save[:, 1], pose2save[:, 2])
+			ax.set_xlabel('$x$', fontsize=18)
+			ax.set_ylabel('$y$', fontsize=18)
+			ax.set_zlabel('$z$', fontsize=18)
+			fig.suptitle("Obstacle boundaries")
+			plt.show()
 
 			# make time relative to traj
 			time_idx = np.array(time_idx)
