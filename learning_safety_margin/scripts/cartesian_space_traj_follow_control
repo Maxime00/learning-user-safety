@@ -727,7 +727,7 @@ if __name__ == '__main__':
 
     print("Planning %s trajectories... \n" % nbr_demos)
     plan_start = time.time()
-    cbf_traj = traj_generator.generate_all_trajectories(num_demos=nbr_demos, init_guess_list=fpath_list, plot_debug=show_plots)
+    cbf_traj = traj_generator.generate_all_trajectories(num_demos=nbr_demos)#, init_guess_list=fpath_list)#, plot_debug=show_plots)
     print("FINISH planning trajectories in %s seconds \n" % (time.time() - plan_start))
 
     # Set save dir and create folder if needed

@@ -6,24 +6,25 @@ from dynamical_systems import create_cartesian_ds, DYNAMICAL_SYSTEM_TYPE
 import matplotlib.pyplot as plt
 from scipy import interpolate
 
+
 class DoubleIntegrator():
     def __init__(self, dt=0.1):
         self.dt = dt
 
     def forward_sim(self, x, u, steps=1):
-        return x + casadi.vertcat(x[3], x[4], x[5], u[0], u[1], u[2]) * self.dt*steps
-        
+        return x + casadi.vertcat(x[3], x[4], x[5], u[0], u[1], u[2]) * self.dt * steps
+
 
 class CBFMPC_Controller(DoubleIntegrator):
 
-    def __init__(self, centers, stds, theta, bias, dt=0.1, n_steps=10, v_gain = 10, r_gains =1, zero_acc_start = False):
+    def __init__(self, centers, stds, theta, bias, dt=0.1, n_steps=10, v_gain=10, r_gains=1, zero_acc_start=False):
 
         super().__init__(dt)
         # Set MPC Parameters
         self.N = n_steps
         self.dt = dt
-        self.tlist = np.linspace(0,self.N*self.dt, self.N+1)
-        
+        self.tlist = np.linspace(0, self.N * self.dt, self.N + 1)
+
         # Set up variables
         self.x = casadi.SX.sym('x', 6)
         self.u = casadi.SX.sym('u', 3)
@@ -32,8 +33,10 @@ class CBFMPC_Controller(DoubleIntegrator):
         self.n_controls = self.u.numel()
 
         # Initialize Trajectory State Variables
-        self.X = casadi.SX.sym('X',  self.n_states, self.N+1) # Horizontal vectors (nxN vector, n: dim of state, N steps in future)
-        self.U = casadi.SX.sym('U', self.n_controls, self.N) # Horizontal vectors (mxN vector, m: dim of control, N steps in future)
+        self.X = casadi.SX.sym('X', self.n_states,
+                               self.N + 1)  # Horizontal vectors (nxN vector, n: dim of state, N steps in future)
+        self.U = casadi.SX.sym('U', self.n_controls,
+                               self.N)  # Horizontal vectors (mxN vector, m: dim of control, N steps in future)
 
         # column vector for storing initial state and target state
         self.P = casadi.SX.sym('P', self.n_states + self.n_states)
@@ -47,11 +50,11 @@ class CBFMPC_Controller(DoubleIntegrator):
         self.R2 = r_gains
         self.R3 = r_gains
 
-        self.Q = casadi.diagcat(self.Q_x, self.Q_y, self.Q_theta, self.Q_v, self.Q_v, self.Q_v) # State Weights 
-        self.R = casadi.diagcat(self.R1, self.R2, self.R3) # Control Weights
+        self.Q = casadi.diagcat(self.Q_x, self.Q_y, self.Q_theta, self.Q_v, self.Q_v, self.Q_v)  # State Weights
+        self.R = casadi.diagcat(self.R1, self.R2, self.R3)  # Control Weights
 
         # CBF Parameters
-        self.gamma = 0.1#0.05 # CBF Parameter
+        self.gamma = 0.1  # 0.05 # CBF Parameter
         self.centers = centers
         self.stds = stds
         self.theta = theta
@@ -61,51 +64,53 @@ class CBFMPC_Controller(DoubleIntegrator):
         c = self.centers[0]
         s = self.stds[0]
         # self.phi = casadi.exp(-1 / (2 * s**2) * casadi.norm_2(self.x-c)**2)
-        self.phi = casadi.exp(-1 / (2 * s**2) * casadi.sumsqr(self.x - c))
-        for i in range(1,len(self.centers)):
+        self.phi = casadi.exp(-1 / (2 * s ** 2) * casadi.sumsqr(self.x - c))
+        for i in range(1, len(self.centers)):
             c = self.centers[i]
             s = self.stds[i]
             # rbf = casadi.exp(-1 / (2 * s**2) * casadi.norm_2(self.x-c)**2)
             rbf = casadi.exp(-1 / (2 * s ** 2) * casadi.sumsqr(self.x - c))
             self.phi = casadi.horzcat(self.phi, rbf)
-        self.h = casadi.mtimes(self.phi, self.theta)+ self.bias
-        self.h_fun = casadi.Function('h_fun', [self.x],  [self.h])
+        self.h = casadi.mtimes(self.phi, self.theta) + self.bias
+        self.h_fun = casadi.Function('h_fun', [self.x], [self.h])
 
         # Set up Cost Function and Constraint Expressions
         self.cost_fn = 0
-        self.constraints = self.X[:,0] - self.P[:self.n_states] # Initialize constraint list with x0 constraint
+        self.constraints = self.X[:, 0] - self.P[:self.n_states]  # Initialize constraint list with x0 constraint
         # adding zero acceleration at start constraint
         if zero_acc_start:
-            cmd_constraint = self.U[:,0] - np.zeros(self.n_controls)
+            cmd_constraint = self.U[:, 0] - np.zeros(self.n_controls)
             self.constraints = casadi.vertcat(self.constraints, cmd_constraint)
-            self.lb_con = np.array([0]*(self.n_states+self.n_controls))
-            self.ub_con = np.array([0]*(self.n_states+self.n_controls))
+            self.lb_con = np.array([0] * (self.n_states + self.n_controls))
+            self.ub_con = np.array([0] * (self.n_states + self.n_controls))
         else:
             self.lb_con = np.array([0] * self.n_states)
             self.ub_con = np.array([0] * self.n_states)
 
         for i in range(self.N):
             xi = self.X[:, i]
-            ui = self.U[:,i]
-            xnext = self.X[:, i+1]
+            ui = self.U[:, i]
+            xnext = self.X[:, i + 1]
             # Objective Function
-            self.cost_fn = self.cost_fn + (xi-self.P[self.n_states:]).T @ self.Q @ (xi-self.P[self.n_states:]) + ui.T @ self.R @ ui
+            self.cost_fn = self.cost_fn + (xi - self.P[self.n_states:]).T @ self.Q @ (
+                        xi - self.P[self.n_states:]) + ui.T @ self.R @ ui
 
             # Constraints
-            xnext_sim = self.forward_sim(xi, ui)#xi + ui * self.dt # Forward Sim
-            dyn_con = xnext-xnext_sim #Dynamics Constraint
-            self.constraints = casadi.vertcat(self.constraints, dyn_con) # Add Dynamics Constraint
-            self.lb_con=np.hstack((self.lb_con, np.array([0]*self.n_states))) # Add Equality lower bounds to lists
-            self.ub_con = np.hstack((self.ub_con, [0]*self.n_states)) # Add Equality lower bounds to lists
-            h_con = self.h_fun(xnext) - self.h_fun(xi) + self.gamma * self.h_fun(xi) #CBF constraint (grad(h(x)) >= -gamma * h(x) ==> h(x_{i+1}) - h(x_{i}) + gamma * h(x_{i}) >= 0
-            self.constraints = casadi.vertcat(self.constraints, h_con) # Add CBF Constraint
-            self.lb_con=np.hstack((self.lb_con, 0)) # Add Equality lower bounds to lists
-            self.ub_con = np.hstack((self.ub_con, casadi.inf)) # Add Inequality lower bounds to lists
+            xnext_sim = self.forward_sim(xi, ui)  # xi + ui * self.dt # Forward Sim
+            dyn_con = xnext - xnext_sim  # Dynamics Constraint
+            self.constraints = casadi.vertcat(self.constraints, dyn_con)  # Add Dynamics Constraint
+            self.lb_con = np.hstack((self.lb_con, np.array([0] * self.n_states)))  # Add Equality lower bounds to lists
+            self.ub_con = np.hstack((self.ub_con, [0] * self.n_states))  # Add Equality lower bounds to lists
+            h_con = self.h_fun(xnext) - self.h_fun(xi) + self.gamma * self.h_fun(
+                xi)  # CBF constraint (grad(h(x)) >= -gamma * h(x) ==> h(x_{i+1}) - h(x_{i}) + gamma * h(x_{i}) >= 0
+            self.constraints = casadi.vertcat(self.constraints, h_con)  # Add CBF Constraint
+            self.lb_con = np.hstack((self.lb_con, 0))  # Add Equality lower bounds to lists
+            self.ub_con = np.hstack((self.ub_con, casadi.inf))  # Add Inequality lower bounds to lists
 
         # Set up NLP Problem
         self.nlp = {}
-        self.nlp['x'] = casadi.vertcat(self.X.reshape((-1, 1)),   # Example: 3x11 ---> 33x1 where 3=states, 11=N+1
-            self.U.reshape((-1, 1)))
+        self.nlp['x'] = casadi.vertcat(self.X.reshape((-1, 1)),  # Example: 3x11 ---> 33x1 where 3=states, 11=N+1
+                                       self.U.reshape((-1, 1)))
         self.nlp['f'] = self.cost_fn
         self.nlp['g'] = self.constraints
         self.nlp['p'] = self.P
@@ -118,32 +123,32 @@ class CBFMPC_Controller(DoubleIntegrator):
                 'acceptable_obj_change_tol': 1e-6,
             },
             'print_time': 0,
-            }
+        }
         self.solver = casadi.nlpsol('solver', 'ipopt', self.nlp, self.opts)
 
         # Set Variable Limits
-        self.lbx = casadi.DM.zeros((self.n_states*(self.N+1) + self.n_controls*self.N, 1))
-        self.ubx = casadi.DM.zeros((self.n_states*(self.N+1) + self.n_controls*self.N, 1))       
+        self.lbx = casadi.DM.zeros((self.n_states * (self.N + 1) + self.n_controls * self.N, 1))
+        self.ubx = casadi.DM.zeros((self.n_states * (self.N + 1) + self.n_controls * self.N, 1))
 
-        self.lbx[0: self.n_states*(self.N+1): self.n_states] = ws_lim[0,0]     # X lower bound
-        self.lbx[1: self.n_states*(self.N+1): self.n_states] = ws_lim[1,0]     # Y lower bound
-        self.lbx[2: self.n_states*(self.N+1): self.n_states] = ws_lim[2,0]     # Z lower bound
-        self.lbx[3: self.n_states*(self.N+1): self.n_states] = ws_lim[3,0]     # VX lower bound
-        self.lbx[4: self.n_states*(self.N+1): self.n_states] = ws_lim[4,0]     # VY lower bound
-        self.lbx[5: self.n_states*(self.N+1): self.n_states] = ws_lim[5,0]     # VZ lower bound
+        self.lbx[0: self.n_states * (self.N + 1): self.n_states] = ws_lim[0, 0]  # X lower bound
+        self.lbx[1: self.n_states * (self.N + 1): self.n_states] = ws_lim[1, 0]  # Y lower bound
+        self.lbx[2: self.n_states * (self.N + 1): self.n_states] = ws_lim[2, 0]  # Z lower bound
+        self.lbx[3: self.n_states * (self.N + 1): self.n_states] = ws_lim[3, 0]  # VX lower bound
+        self.lbx[4: self.n_states * (self.N + 1): self.n_states] = ws_lim[4, 0]  # VY lower bound
+        self.lbx[5: self.n_states * (self.N + 1): self.n_states] = ws_lim[5, 0]  # VZ lower bound
 
-        self.ubx[0: self.n_states*(self.N+1): self.n_states] = ws_lim[0,1]     # X lower bound
-        self.ubx[1: self.n_states*(self.N+1): self.n_states] = ws_lim[1,1]     # Y lower bound
-        self.ubx[2: self.n_states*(self.N+1): self.n_states] = ws_lim[2,1]     # Z lower bound
-        self.ubx[3: self.n_states*(self.N+1): self.n_states] = ws_lim[3,1]     # VX lower bound
-        self.ubx[4: self.n_states*(self.N+1): self.n_states] = ws_lim[4,1]     # VY lower bound
-        self.ubx[5: self.n_states*(self.N+1): self.n_states] = ws_lim[5,1]     # VZ lower bound
+        self.ubx[0: self.n_states * (self.N + 1): self.n_states] = ws_lim[0, 1]  # X lower bound
+        self.ubx[1: self.n_states * (self.N + 1): self.n_states] = ws_lim[1, 1]  # Y lower bound
+        self.ubx[2: self.n_states * (self.N + 1): self.n_states] = ws_lim[2, 1]  # Z lower bound
+        self.ubx[3: self.n_states * (self.N + 1): self.n_states] = ws_lim[3, 1]  # VX lower bound
+        self.ubx[4: self.n_states * (self.N + 1): self.n_states] = ws_lim[4, 1]  # VY lower bound
+        self.ubx[5: self.n_states * (self.N + 1): self.n_states] = ws_lim[5, 1]  # VZ lower bound
 
-        self.lbx[self.n_states*(self.N+1):] = -1                 # v lower bound for all V
-        self.ubx[self.n_states*(self.N+1):] = 1                # v upper bound for all V
+        self.lbx[self.n_states * (self.N + 1):] = -1  # v lower bound for all V
+        self.ubx[self.n_states * (self.N + 1):] = 1  # v upper bound for all V
 
-
-    def control(self, x0, xgoal, t0=0, ig_time=None, ig_pos=None, ig_vel=None, ig_acc=None, count=0, plot_vel_acc=False):
+    def control(self, x0, xgoal, t0=0, ig_time=None, ig_pos=None, ig_vel=None, ig_acc=None, count=0,
+                plot_vel_acc=False):
         # Set up arg dictionary for optimization inputs
         args = {}
         args['lbg'] = self.lb_con
@@ -151,7 +156,6 @@ class CBFMPC_Controller(DoubleIntegrator):
 
         args['lbx'] = self.lbx
         args['ubx'] = self.ubx
-        print("goal: ", xgoal)
 
         ## NO MOVE initial guess
         # u0 = casadi.DM.zeros((self.n_controls, self.N))  # initial control
@@ -159,7 +163,7 @@ class CBFMPC_Controller(DoubleIntegrator):
 
         if ig_pos is None:
             ## Straight line initial guess
-            X0 = np.linspace(x0, xgoal, self.N+1)
+            X0 = np.linspace(x0, xgoal, self.N + 1)
             u0 = np.zeros((self.N, self.n_controls))
 
             # Integrate for velocity
@@ -183,24 +187,24 @@ class CBFMPC_Controller(DoubleIntegrator):
                 X0[i, 3:6] = ds_twist.data()[0:3]
 
             for i in range(self.N):
-                u0[i, :] = (X0[i+1, 3:6] - X0[i, 3:6]) / self.dt
+                u0[i, :] = (X0[i + 1, 3:6] - X0[i, 3:6]) / self.dt
 
         elif ig_pos is not None:
             # Demo traj initial guess
-            X0 = np.zeros((self.N+1, self.n_states))
+            X0 = np.zeros((self.N + 1, self.n_states))
 
             ## Interpolate method
             if ig_time[-1] < self.tlist[-1]:  # recorded traj shorter than planner time
-                ig_time = np.linspace(0, self.N*self.dt, len(ig_time))
+                ig_time = np.linspace(0, self.N * self.dt, len(ig_time))
                 print("TRAJ FOR INITIAL GUESS SHORTER THAN PLANNER TIME ! \n")
             print("Time of initial guess traj : ", ig_time[-1], " sec \n")
 
             f_pos = interpolate.interp1d(ig_time, ig_pos[:, 0:3], axis=0)
-            f_vel = interpolate.interp1d(ig_time, ig_vel[:, 0:3],  axis=0)
+            f_vel = interpolate.interp1d(ig_time, ig_vel[:, 0:3], axis=0)
             f_acc = interpolate.interp1d(ig_time, ig_acc[:, 0:3], axis=0)
 
             # resample time to match
-            sub_sampled_time = np.linspace(0, ig_time[-1], self.N+1)
+            sub_sampled_time = np.linspace(0, ig_time[-1], self.N + 1)
 
             sampled_pos = f_pos(sub_sampled_time)
             sampled_vel = f_vel(sub_sampled_time)
@@ -252,7 +256,7 @@ class CBFMPC_Controller(DoubleIntegrator):
             plt.plot(self.tlist, X0[:, 4], label='vy')
             plt.plot(self.tlist, X0[:, 5], label='vz')
             fig.legend()
-            fig.suptitle(f"Initial guess velocity #{count+1}")
+            fig.suptitle(f"Initial guess velocity #{count + 1}")
 
             fig = plt.figure()
             ax = plt.axes()
@@ -260,48 +264,49 @@ class CBFMPC_Controller(DoubleIntegrator):
             plt.plot(self.tlist[:-1], u0[:, 1], label='ay')
             plt.plot(self.tlist[:-1], u0[:, 2], label='az')
             fig.legend()
-            fig.suptitle(f"Initial guess acceleration #{count+1}")
+            fig.suptitle(f"Initial guess acceleration #{count + 1}")
             # plt.show()
 
         X0 = casadi.DM(X0.T)
         u0 = casadi.DM(u0.T)
 
         print(X0.shape, u0.shape)
+
         params = casadi.vertcat(
-            x0,    # current state
-            xgoal   # target state
+            x0,  # current state
+            xgoal  # target state
         )
         args['p'] = params
 
         args['x0'] = casadi.vertcat(
-            casadi.reshape(X0, self.n_states*(self.N+1), 1),
-            casadi.reshape(u0, self.n_controls*(self.N), 1)
-            )
+            casadi.reshape(X0, self.n_states * (self.N + 1), 1),
+            casadi.reshape(u0, self.n_controls * (self.N), 1)
+        )
         sol = self.solver(
             x0=args['x0'],
             lbx=args['lbx'],
             ubx=args['ubx'],
             lbg=args['lbg'],
             ubg=args['ubg'],
-            p=args['p']    
-                )
+            p=args['p']
+        )
         # print("Initial Cost: ", self.cost_fn(["x0"]))
 
         print("Optimal Cost: ", float(sol["f"], ))
-        U = casadi.reshape(sol['x'][self.n_states * (self.N+1):], self.n_controls, self.N).T
-        X = casadi.reshape(sol['x'][:self.n_states * (self.N+1)], self.n_states, self.N+1).T
+        U = casadi.reshape(sol['x'][self.n_states * (self.N + 1):], self.n_controls, self.N).T
+        X = casadi.reshape(sol['x'][:self.n_states * (self.N + 1)], self.n_states, self.N + 1).T
 
         T = self.tlist + t0
         return X, U, T
 
     def check_safety(self, X):
         print(X.shape)
-        safe=True
+        safe = True
         hvals = np.zeros(X.shape[0])
         for i in range(len(X)):
             hvals[i] = self.h_fun(X[i])
         if np.any(hvals <= 0.):
-            safe=False
+            safe = False
             print("Traj not Safe")
 
         # for i in range(len(X)-1):

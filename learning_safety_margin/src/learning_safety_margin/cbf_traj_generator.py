@@ -153,12 +153,14 @@ class trajGenerator():
                 inRange = True
 
         z = 0.15
+        z0 = np.random.uniform(0.14, 0.4)
+        zt = np.random.uniform(0.14, 0.4)
         xdot = 0
         ydot = 0
         zdot = 0
         print("x, y and xt, yt : ", x, y, xt, yt)
-        x0 = np.hstack((x, y, z, xdot, ydot, zdot))
-        xt = np.hstack((xt, yt, z, xdot, ydot, zdot))
+        x0 = np.hstack((x, y, z0, xdot, ydot, zdot))
+        xt = np.hstack((xt, yt, zt, xdot, ydot, zdot))
 
         return x0, xt
 
