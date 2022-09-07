@@ -2,8 +2,9 @@ import numpy as np
 import matplotlib.pyplot as plt
 from vel_control_utils import *
 import matplotlib.colors as colors
+import pickle
+# from jax import vmap
 
-from jax import vmap
 bottom_box_corners = np.array([[0.44, 0.145], [0.44, -0.12], [0.69, -0.12],[0.69, 0.145]])
 bottom_box_heights = np.array([0.14, 0.23])
 bbox_lims = np.array([[0.44,0.69], [-0.12, 0.145], [0.14, 0.23]])
@@ -187,32 +188,149 @@ def phi(x):
 def h_function(x, theta, bias=0.1):
     return phi(x).dot(theta) + bias
 
+# # Initialize RBF Parameters
+# x_dim = 3
+# n_features = 1000#n_dim_features**x_dim
+# u_dim = 2
+# rbf_std = 0.1#.1#onp.max(mu_dist) * 0.5 #0.1#1.0
+# centers, stds = rbf_means_stds(X=None, X_lim = ws_lim[:3],
+#                                n=x_dim, k=n_dim_features, set_means='random',fixed_stds=True, std=rbf_std, nCenters=n_features)
+# print("rbf shapes", centers.shape, stds.shape)
+# bias = 0.#0.1
+#
+# # Calculate RBF theta parameters
+# theta = np.array([(b_ell.cbf_val(pt) + t_ell.cbf_val(pt))*5 for pt in centers])
+#
+# theta = np.clip(theta, -10, 1)
+# print(theta.shape)
+#
+# fig = plt.figure()
+# ax = fig.add_subplot(111, projection='3d')
+# draw_box(bbox_coords, fig, ax)
+# draw_box(tbox_coords, fig, ax, color='b')
+#
+# ax.scatter3D(centers[:, 0], centers[:, 1], centers[:, 2], c=theta, norm=divnorm, cmap='RdBu')
+# plt.show()
+#
+# hvals = [h_function(pt, theta, bias) for pt in centers]#test_pts]
+# fig = plt.figure()
+# ax = fig.add_subplot(111, projection='3d')
+# draw_box(bbox_coords, fig, ax)
+# draw_box(tbox_coords, fig, ax, color='b')
+# divnorm = colors.TwoSlopeNorm(vmin=-5., vcenter=0, vmax=1.)
+#
+# im= ax.scatter3D(centers[:, 0], centers[:, 1], centers[:, 2], c=hvals, norm=divnorm, cmap='RdBu')
+# fig.colorbar(im)
+# plt.show()
+
+
+# hvals = [h_function(pt, theta, bias) for pt in test_pts]
+# fig = plt.figure()
+# ax = fig.add_subplot(111, projection='3d')
+# draw_box(bbox_coords, fig, ax)
+# draw_box(tbox_coords, fig, ax, color='b')
+# divnorm = colors.TwoSlopeNorm(vmin=-5., vcenter=0, vmax=1.)
+#
+# im= ax.scatter3D(test_pts[:, 0], test_pts[:, 1], test_pts[:, 2], c=hvals, norm=divnorm, cmap='RdBu')
+# fig.colorbar(im)
+# plt.show()
+#
+# is_bias = True
+# data = {
+#     "theta": theta,
+#     "bias": bias,
+#     "rbf_centers": centers,
+#     "rbf_stds": stds,
+#     "is_bias": is_bias,
+# }
+#
+# data_dir = "/home/ros/ros_ws/src/learning_safety_margin/data/cbf_tests/"
+#
+# pickle.dump(data, open(data_dir + "manual_rbfcbf_vel_data_dict.p", "wb"))
+# plt.show()
+
+# Define Velocity CBF functions
+
+def sigmoid(x, a):
+    z = 1./((1.+np.exp(2*(x-a))))
+    return z
+
+xdot_lim = 1.
+ydot_lim = 1.
+zdot_lim = 1.
+
+
+def xd_cbf(pt):
+    h = 3*sigmoid(pt, xdot_lim) - 3*sigmoid(pt, -xdot_lim) - 1.
+    return h
+def yd_cbf(pt):
+    h = 3*sigmoid(pt, ydot_lim) - 3*sigmoid(pt, -ydot_lim) - 1.
+    return h
+def zd_cbf(pt):
+    h = 3*sigmoid(pt, zdot_lim) - 3*sigmoid(pt, -zdot_lim) - 1.
+    return h
+
+pts = np.linspace(-5,5, 20)
+xd_pts = np.array([xd_cbf(pt) for pt in pts])
+plt.plot(pts, xd_pts)
+
+yd_pts = np.array([yd_cbf(pt) for pt in pts])
+plt.plot(pts, yd_pts)
+
+zd_pts = np.array([zd_cbf(pt) for pt in pts])
+plt.plot(pts, zd_pts)
+
+plt.show()
+
+X, Y, Z = np.meshgrid(pts, pts, pts)
+
+xx = X.ravel()
+yy = Y.ravel()
+zz = Z.ravel()
+vel_pts = np.vstack((xx, yy, zz)).T
+print(X.shape, Y.shape, Z.shape, xx.shape, yy.shape, zz.shape, vel_pts.shape)
+
+
+def vel_cbf(pt):
+    val = xd_cbf(pt[0]) + yd_cbf(pt[1]) + zd_cbf(pt[2])#(b_ell.cbf_val(pt) + t_ell.cbf_val(pt))*5 +
+    return val**2
+
+hvals = np.array([vel_cbf(pt) for pt in vel_pts])
+fig = plt.figure()
+ax = fig.add_subplot(111, projection='3d')
+# divnorm = colors.TwoSlopeNorm(vmin=-5., vcenter=0, vmax=1.)
+
+im= ax.scatter3D(vel_pts[:, 0], vel_pts[:, 1], vel_pts[:, 2], c=hvals, norm=divnorm, cmap='RdBu')
+fig.colorbar(im)
+plt.show()
+
 # Initialize RBF Parameters
-x_dim = 3
+x_dim = 6
 n_features = 1000#n_dim_features**x_dim
 u_dim = 2
-# psi = 1.0
-# dt = 0.1
-# dist_eps = 0.05
 rbf_std = 0.1#.1#onp.max(mu_dist) * 0.5 #0.1#1.0
-centers, stds = rbf_means_stds(X=None, X_lim = ws_lim[:3],
+centers, stds = rbf_means_stds(X=None, X_lim = ws_lim,
                                n=x_dim, k=n_dim_features, set_means='random',fixed_stds=True, std=rbf_std, nCenters=n_features)
 print("rbf shapes", centers.shape, stds.shape)
 bias = 0.#0.1
 
 # Calculate RBF theta parameters
+theta_p = np.array([(b_ell.cbf_val(pt[:3]) + t_ell.cbf_val(pt[:3]))*5 for pt in centers])
+theta = np.clip(theta_p, -10, 1.)
 
-theta = np.array([(b_ell.cbf_val(pt) + t_ell.cbf_val(pt))*5 for pt in centers])
+theta_v = np.array([vel_cbf(pt[3:])for pt in centers])
+theta = np.clip(theta_p, -10, 1.)
 
-theta = np.clip(theta, -10, 1)
+theta = np.clip(theta_p + theta_v, -10, 1.)
 print(theta.shape)
 
 fig = plt.figure()
 ax = fig.add_subplot(111, projection='3d')
 draw_box(bbox_coords, fig, ax)
 draw_box(tbox_coords, fig, ax, color='b')
-
-ax.scatter3D(centers[:, 0], centers[:, 1], centers[:, 2], c=theta, norm=divnorm, cmap='RdBu')
+plt.title('theta vals')
+im = ax.scatter3D(centers[:, 0], centers[:, 1], centers[:, 2], c=theta)#, norm=divnorm, cmap='RdBu')
+fig.colorbar(im)
 plt.show()
 
 hvals = [h_function(pt, theta, bias) for pt in centers]#test_pts]
@@ -222,10 +340,13 @@ draw_box(bbox_coords, fig, ax)
 draw_box(tbox_coords, fig, ax, color='b')
 divnorm = colors.TwoSlopeNorm(vmin=-5., vcenter=0, vmax=1.)
 
-im= ax.scatter3D(centers[:, 0], centers[:, 1], centers[:, 2], c=hvals, norm=divnorm, cmap='RdBu')
+im= ax.scatter3D(centers[:, 0], centers[:, 1], centers[:, 2], c=hvals)#, norm=divnorm, cmap='RdBu')
 fig.colorbar(im)
+plt.title('centers hvals')
 plt.show()
 
+test_pts = np.random.uniform(ws_lim[:, 0], ws_lim[:, 1], (1000, 6))
+print(test_pts.shape)
 
 hvals = [h_function(pt, theta, bias) for pt in test_pts]
 fig = plt.figure()
@@ -234,7 +355,20 @@ draw_box(bbox_coords, fig, ax)
 draw_box(tbox_coords, fig, ax, color='b')
 divnorm = colors.TwoSlopeNorm(vmin=-5., vcenter=0, vmax=1.)
 
-im= ax.scatter3D(test_pts[:, 0], test_pts[:, 1], test_pts[:, 2], c=hvals, norm=divnorm, cmap='RdBu')
+im= ax.scatter3D(test_pts[:, 0], test_pts[:, 1], test_pts[:, 2], c=hvals)#, norm=divnorm, cmap='RdBu')
 fig.colorbar(im)
+plt.title('test pts: hvals')
 plt.show()
 
+is_bias = True
+data = {
+    "theta": theta,
+    "bias": bias,
+    "rbf_centers": centers,
+    "rbf_stds": stds,
+    "is_bias": is_bias,
+}
+
+data_dir = "/home/ros/ros_ws/src/learning_safety_margin/data/cbf_tests/"
+
+pickle.dump(data, open(data_dir + "manual_rbfcbf_vel_data_dict.p", "wb"))
