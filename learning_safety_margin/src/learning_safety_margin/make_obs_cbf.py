@@ -1,8 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from vel_control_utils import *
-from itertools import combinations
-
+import matplotlib.colors as colors
 bottom_box_corners = np.array([[0.44, 0.145], [0.44, -0.12], [0.69, -0.12],[0.69, 0.145]])
 bottom_box_heights = np.array([0.14, 0.23])
 bbox_lims = np.array([[0.44,0.69], [-0.12, 0.145], [0.14, 0.23]])
@@ -26,15 +25,6 @@ tbox_coords = np.array(tbox_coords)
 
 print(tbox_coords.shape, tbox_coords)
 print(bbox_coords[:,0])
-# fig = plt.figure()
-# ax = plt.axes(projection='3d')
-# ax.plot3D(bbox_coords[:,0], bbox_coords[:,1],bbox_coords[:,2],  'g*')
-# ax.plot3D(tbox_coords[:,0], tbox_coords[:,1], tbox_coords[:,2], 'b.')
-# ax.set_xlim(x_lim)
-# ax.set_ylim(y_lim)
-# ax.set_zlim(z_lim)
-#
-# plt.show()
 
 def check_pt_interior(pt, lims=bbox_lims):
     interior=False
@@ -51,21 +41,15 @@ def draw_box(coords, fig, ax, color='g' ):
         line = np.vstack((coords[:4][i],coords[4:][i]))
         ax.plot3D(line[:,0], line[:,1], line[:,2], color)
 
-    # lines = combinations(coords, 2)
-    # for ind in list(lines):
-    #     line = np.vstack(ind)
-    #     # print(line)
-    #     ax.plot3D(line[:,0], line[:,1], line[:,2], color)
-
-fig = plt.figure()
-ax = plt.axes(projection='3d')
-draw_box(bbox_coords, fig, ax)
-draw_box(tbox_coords, fig, ax, color='b')
-
-ax.set_xlim(x_lim)
-ax.set_ylim(y_lim)
-ax.set_zlim(z_lim)
-plt.show()
+# fig = plt.figure()
+# ax = plt.axes(projection='3d')
+# draw_box(bbox_coords, fig, ax)
+# draw_box(tbox_coords, fig, ax, color='b')
+#
+# ax.set_xlim(x_lim)
+# ax.set_ylim(y_lim)
+# ax.set_zlim(z_lim)
+# plt.show()
 
 test_pts = np.random.uniform(ws_lim[:3, 0], ws_lim[:3, 1], (1000, 3))
 print(test_pts.shape)
@@ -81,12 +65,104 @@ for i in range(len(test_pts)):
     else:
         c='y'
     pt_colors.append(c)
+# fig = plt.figure()
+# ax = plt.axes(projection='3d')
+# draw_box(bbox_coords, fig, ax)
+# draw_box(tbox_coords, fig, ax, color='b')
+# ax.scatter3D(test_pts[:,0], test_pts[:,1], test_pts[:,2], c=pt_colors)
+# ax.set_xlim(x_lim)
+# ax.set_ylim(y_lim)
+# ax.set_zlim(z_lim)
+# plt.show()
+
+# Define ellipse for each obstacle
+
+class Ellipse:
+
+    def __init__(self, axes, center=[0,0,0]):
+
+        self.center = center
+
+        self.xc = center[0]
+        self.yc = center[1]
+        self.zc = center[2]
+
+        self.a = axes[0]
+        self.b = axes[1]
+        self.c = axes[2]
+
+    def plot_ellipse(self, fig, ax, color='g'):
+        u = np.linspace(0,2*np.pi, 100)
+        v = np.linspace(0, np.pi, 100)
+
+        x = self.a * np.outer(np.cos(u), np.sin(v)) + self.xc
+        y = self.b * np.outer(np.sin(u), np.sin(v)) + self.yc
+        z = self.c * np.outer(np.ones_like(u), np.cos(v)) + self.zc
+
+        ax.plot_surface(x,y,z, rstride=4, cstride=4, color=color, alpha=0.5)
+
+
+    def check_dist(self, pt):
+        x = pt[0]
+        y = pt[1]
+        z = pt[2]
+        dist = (x - self.xc) ** 2 / self.a ** 2 \
+               + (y - self.yc) ** 2 / self.b ** 2 \
+               + (z - self.zc) ** 2 / self.c ** 2
+
+        return dist
+
+    def check_collision(self, pt):
+        dist = self.check_dist(pt)
+        if dist <= 1: collision = True
+        else: collision = False
+
+        return dist, collision
+
+    def cbf_val(self, pt):
+        h = self.check_dist(pt) - 2
+        return h
+
+
+
+b_center = (bbox_lims[:,1]-bbox_lims[:,0])/2 + bbox_lims[:,0]
+b_axes = (.15, .15, .12)
+b_ell = Ellipse(b_axes, center=b_center)
+
+t_center = (tbox_lims[:,1]-tbox_lims[:,0])/2 + tbox_lims[:,0]
+t_axes = (.15, .1, .1)
+t_ell = Ellipse(t_axes, center=t_center)
+
 fig = plt.figure()
 ax = plt.axes(projection='3d')
 draw_box(bbox_coords, fig, ax)
 draw_box(tbox_coords, fig, ax, color='b')
-ax.scatter3D(test_pts[:,0], test_pts[:,1], test_pts[:,2], c=pt_colors)
+b_ell.plot_ellipse(fig=fig, ax=ax)
+t_ell.plot_ellipse(fig=fig, ax=ax, color='b')
+
 ax.set_xlim(x_lim)
 ax.set_ylim(y_lim)
 ax.set_zlim(z_lim)
 plt.show()
+
+# Test CBF values
+
+fig = plt.figure()
+ax = plt.axes(projection='3d')
+draw_box(bbox_coords, fig, ax)
+draw_box(tbox_coords, fig, ax, color='b')
+
+h_vals = [b_ell.cbf_val(pt) + t_ell.cbf_val(pt) for pt in test_pts]
+
+divnorm = colors.TwoSlopeNorm(vmin=-5., vcenter=0, vmax=40)
+im = ax.scatter3D(test_pts[:,0], test_pts[:,1], test_pts[:,2], c=h_vals, norm=divnorm, cmap='RdBu')
+
+ax.set_xlim(x_lim)
+ax.set_ylim(y_lim)
+ax.set_zlim(z_lim)
+fig.colorbar(im)
+plt.show()
+
+
+
+
