@@ -2,6 +2,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 from vel_control_utils import *
 import matplotlib.colors as colors
+
+from jax import vmap
 bottom_box_corners = np.array([[0.44, 0.145], [0.44, -0.12], [0.69, -0.12],[0.69, 0.145]])
 bottom_box_heights = np.array([0.14, 0.23])
 bbox_lims = np.array([[0.44,0.69], [-0.12, 0.145], [0.14, 0.23]])
@@ -163,6 +165,76 @@ ax.set_zlim(z_lim)
 fig.colorbar(im)
 plt.show()
 
+### Make Manual CBF using RBF centers
+def rbf(x,c,s):
+    return np.exp(-1/(2 *s**2) * np.sum((x-c)**2))# np.linalg.norm(x - c) ** 2)#
+
+def phi(x):
+    #a = rbf(x,centers, stds)
+    a = np.array([rbf(x, c, s) for c, s, in zip(centers, stds)])
+    return a
+# def _rbf(x, c, s):
+#     # return np.exp(-1 / (2 * s[0] ** 2) * np.linalg.norm(x - c) ** 2)
+#     return np.exp(-1 / (2 * s[0] ** 2) * np.sum((x - c) ** 2))
+# rbf = vmap(_rbf, in_axes=(None, 0, 0))
+#
+# def phi(x):
+#     # a = np.array([rbf(x, c, s) for c, s, in zip(centers, stds)])
+#     a = rbf(x, centers, stds)
+#     return a  # np.array(y)
+# phi_vec = vmap(phi)
+
+def h_function(x, theta, bias=0.1):
+    return phi(x).dot(theta) + bias
+
+# Initialize RBF Parameters
+x_dim = 3
+n_features = 1000#n_dim_features**x_dim
+u_dim = 2
+# psi = 1.0
+# dt = 0.1
+# dist_eps = 0.05
+rbf_std = 0.1#.1#onp.max(mu_dist) * 0.5 #0.1#1.0
+centers, stds = rbf_means_stds(X=None, X_lim = ws_lim[:3],
+                               n=x_dim, k=n_dim_features, set_means='random',fixed_stds=True, std=rbf_std, nCenters=n_features)
+print("rbf shapes", centers.shape, stds.shape)
+bias = 0.#0.1
+
+# Calculate RBF theta parameters
+
+theta = np.array([(b_ell.cbf_val(pt) + t_ell.cbf_val(pt))*5 for pt in centers])
+
+theta = np.clip(theta, -10, 1)
+print(theta.shape)
+
+fig = plt.figure()
+ax = fig.add_subplot(111, projection='3d')
+draw_box(bbox_coords, fig, ax)
+draw_box(tbox_coords, fig, ax, color='b')
+
+ax.scatter3D(centers[:, 0], centers[:, 1], centers[:, 2], c=theta, norm=divnorm, cmap='RdBu')
+plt.show()
+
+hvals = [h_function(pt, theta, bias) for pt in centers]#test_pts]
+fig = plt.figure()
+ax = fig.add_subplot(111, projection='3d')
+draw_box(bbox_coords, fig, ax)
+draw_box(tbox_coords, fig, ax, color='b')
+divnorm = colors.TwoSlopeNorm(vmin=-5., vcenter=0, vmax=1.)
+
+im= ax.scatter3D(centers[:, 0], centers[:, 1], centers[:, 2], c=hvals, norm=divnorm, cmap='RdBu')
+fig.colorbar(im)
+plt.show()
 
 
+hvals = [h_function(pt, theta, bias) for pt in test_pts]
+fig = plt.figure()
+ax = fig.add_subplot(111, projection='3d')
+draw_box(bbox_coords, fig, ax)
+draw_box(tbox_coords, fig, ax, color='b')
+divnorm = colors.TwoSlopeNorm(vmin=-5., vcenter=0, vmax=1.)
+
+im= ax.scatter3D(test_pts[:, 0], test_pts[:, 1], test_pts[:, 2], c=hvals, norm=divnorm, cmap='RdBu')
+fig.colorbar(im)
+plt.show()
 
