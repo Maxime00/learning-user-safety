@@ -686,8 +686,8 @@ if __name__ == '__main__':
     print("\n Running single trajectory MPC Controller for User_"+user_number+"\n")
 
     # Get data
-    # data_dir = "/home/ros/ros_ws/src/learning_safety_margin/data/User_"+user_number+"/"
-    data_dir = "/home/ros/ros_ws/src/learning_safety_margin/data/cbf_tests/manual_rbfcbf_"
+    data_dir = "/home/ros/ros_ws/src/learning_safety_margin/data/User_"+user_number+"/"
+    # data_dir = "/home/ros/ros_ws/src/learning_safety_margin/data/cbf_tests/"#manual_rbfcbf_"
 
     data = pickle.load(open(data_dir + "vel_data_dict.p", "rb"))
     params = data["theta"]
@@ -695,8 +695,8 @@ if __name__ == '__main__':
     # slack_param = data["unsafe_slack"]
     centers =data["rbf_centers"]
     stds = data["rbf_stds"]
-    bias_param = 0.1
-
+    if bias_param is None: bias_param = 0.1
+    print("BIAS:", bias_param)
     ## Trajectories for initial guess
     category_list = ["safe/"] #["safe/", "daring/", "unsafe/"]
     traj_num_list = ["2", "4", "9", "10", "14", "18"]

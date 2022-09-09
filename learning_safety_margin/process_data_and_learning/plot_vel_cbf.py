@@ -2,6 +2,7 @@
 
 import numpy as np
 import matplotlib.pyplot as plt
+import matplotlib.colors as cm
 from mpl_toolkits.mplot3d import Axes3D
 from matplotlib import cm
 import matplotlib.colors as colors
@@ -222,6 +223,49 @@ class PlotCBF():
 
         plt.show()
 
+    def plot_xz_pos_animate(self, xdot=0.1, ydot=0.1, zdot=0.1, num_slices=20, num_pts=11):
+        """
+        Plots a loop animation of the cbf function for an xz slice in velocity space with an increasing y values,
+        in a given xyz position.
+
+        Args:
+            x: Position coordinates in x
+            y: Position coordinates in y
+            z: Position coordinates in z
+            num_slices: number steps in the animation (ie number of y values to plot)
+            num_pts: number of points to plot in xz velocity space
+
+        """
+        fig, ax = plt.subplots()
+
+        ani = FuncAnimation(fig, self.xz_pos_animate, fargs=(xdot,ydot,zdot,num_slices, num_pts, ax), frames=20, interval=500)
+
+        plt.show()
+    def xz_pos_animate(self, frame_number, xdot, ydot, zdot, num_slices, num_pts, ax):
+        """
+        Animation function for 'plot_xz_vel_animate'
+        """
+        x = np.linspace(x_lim[0], x_lim[1], num=num_pts)
+        z = np.linspace(z_lim[0], z_lim[1], num=num_pts)
+        y = np.linspace(y_lim[0], y_lim[1], num=num_slices)
+
+        xx, zz = np.meshgrid(x, z)
+        hvals = np.zeros(xx.shape)
+        xvec = xx.ravel()
+        zvec = zz.ravel()
+        hvec = hvals.ravel()
+        for i in range(len(xvec)):
+            hvec[i] = self.h_fun([xvec[i], y[frame_number], zvec[i], xdot, ydot, zdot])
+        hvals = hvec.reshape((num_pts, num_pts))
+
+        ax.clear()
+        im = ax.imshow(hvals, extent=[x_lim[0], x_lim[1], z_lim[0], z_lim[1]], origin='lower',
+                       norm=self.norm, cmap=cm.coolwarm_r)
+        ax.set_xlabel('$x$', fontsize=18)
+        ax.set_ylabel('$z$', fontsize=18)
+        # ax.set_title('XZ position slice in [%s, %s ,%s] for y_dot=%0.2f' % (x, y[frame_number], z))
+        # fig.colorbar(im)
+
     def plot_yz_pos(self, x=0.5, xdot=0.1, ydot=0.1, zdot=0.1, num_pts=11):
         y = np.linspace(y_lim[0], y_lim[1], num=num_pts)
         z = np.linspace(z_lim[0], z_lim[1], num=num_pts)
@@ -243,6 +287,7 @@ class PlotCBF():
         ax.set_xlabel('$y$', fontsize=18)
         ax.set_ylabel('$z$', fontsize=18)
         plt.show()
+
 
     def plot_xy_vel(self, x=0.5, y=0., z=0.25, zdot=0., num_pts=11):
         xdot = np.linspace(vdot_lim[0], vdot_lim[1], num=num_pts)
@@ -443,6 +488,93 @@ class PlotCBF():
 
         plt.show()
 
+    def plot_xyz_neg_animate(self,  xdot=0.1, ydot=0.1, zdot=0.1, num_slices=11, num_pts=11):
+        """
+        Plots a loop animation of the cbf function for an xz slice in velocity space with an increasing y values,
+        in a given xyz position.
+
+        Args:
+            x: Position coordinates in x
+            y: Position coordinates in y
+            z: Position coordinates in z
+            num_slices: number steps in the animation (ie number of y values to plot)
+            num_pts: number of points to plot in xz velocity space
+
+        """
+        fig = plt.figure(figsize=(10, 10))
+        ax = plt.axes(projection='3d')
+
+        ani = FuncAnimation(fig, self.xyz_neg_animate, fargs=(xdot, ydot, zdot, num_slices, num_pts, ax), frames=20, interval=100, repeat=False)
+
+        plt.show()
+    def xyz_neg_animate(self, frame_number, xdot, ydot, zdot, num_slices, num_pts, ax):
+
+        x1 = np.linspace(x_lim[0], x_lim[1], num=num_pts)
+        x2 = np.linspace(y_lim[0], y_lim[1], num=num_pts)
+        x3 = np.linspace(z_lim[0], z_lim[1], num=num_slices)
+
+        xx, yy, zz = np.meshgrid(x1, x2, x3)
+        hvals = np.zeros(xx.shape)
+        xvec = xx.ravel()
+        yvec = yy.ravel()
+        zvec = zz.ravel()
+        hvec = hvals.ravel()
+        for i in range(len(xvec)):
+            hvec[i] = self.h_fun([xvec[i], yvec[i], zvec[frame_number], xdot, ydot, zdot])
+
+        # hvals = hvec.reshape((num_pts, num_pts, num_pts))
+        neg_ind = np.where(hvec < 0.)
+        # print(neg_ind)
+        ax.clear()
+        im = ax.scatter3D(xvec[neg_ind], yvec[neg_ind], zvec[neg_ind], c=hvec[neg_ind], norm=self.norm, cmap=cm.coolwarm_r)  # , marker=m)
+        ax.set_xlabel('$x$', fontsize=18)
+        ax.set_ylabel('$y$', fontsize=18)
+        ax.set_zlabel('$z$', fontsize=18)
+        # fig.colorbar(im)
+
+
+    def plot_xyz_animate(self, xdot=0.1, ydot=0.1, zdot=0.1, num_slices=11, num_pts=11):
+        """
+        Plots a loop animation of the cbf function for an xz slice in velocity space with an increasing y values,
+        in a given xyz position.
+
+        Args:
+            x: Position coordinates in x
+            y: Position coordinates in y
+            z: Position coordinates in z
+            num_slices: number steps in the animation (ie number of y values to plot)
+            num_pts: number of points to plot in xz velocity space
+
+        """
+        fig = plt.figure(figsize=(10, 10))
+        ax = plt.axes(projection='3d')
+
+        ani = FuncAnimation(fig, self.xyz_animate, fargs=(xdot, ydot, zdot, num_slices, num_pts, ax), frames=20, interval=100, repeat=False)
+
+        plt.show()
+    def xyz_animate(self, frame_number, xdot, ydot, zdot, num_slices, num_pts, ax):
+
+        x1 = np.linspace(x_lim[0], x_lim[1], num=num_pts)
+        x2 = np.linspace(y_lim[0], y_lim[1], num=num_pts)
+        x3 = np.linspace(z_lim[0], z_lim[1], num=num_slices)
+
+        xx, yy, zz = np.meshgrid(x1, x2, x3)
+        hvals = np.zeros(xx.shape)
+        xvec = xx.ravel()
+        yvec = yy.ravel()
+        zvec = zz.ravel()
+        hvec = hvals.ravel()
+        for i in range(len(xvec)):
+            hvec[i] = self.h_fun([xvec[i], yvec[i], zvec[frame_number], xdot, ydot, zdot])
+
+        hvals = hvec.reshape((num_pts, num_pts, num_pts))
+
+        ax.clear()
+        im = ax.scatter3D(xvec, yvec, zvec, c=hvec, norm=self.norm, cmap=cm.coolwarm_r)  # , marker=m)
+        ax.set_xlabel('$x$', fontsize=18)
+        ax.set_ylabel('$y$', fontsize=18)
+        ax.set_zlabel('$z$', fontsize=18)
+        # fig.colorbar(im)
     def select_random_traj(self, num_traj):
         """
         Selects random trajectories from the provided User directory
@@ -650,6 +782,29 @@ class PlotCBF():
         ax.view_init(10, 180)
         plt.show()
 
+    def plot_centers_hvals(self):
+        colors = np.zeros(self.centers.shape[0])
+        for i in range(len(self.centers)):
+            colors[i] = self.h_fun(self.centers[i])
+        print("CENTERS SHAPE: ", self.centers.shape, self.centers[0], colors[0], self.theta[0], self.bias)
+
+        fig = plt.figure()
+        ax = plt.axes(projection='3d')
+
+        # divnorm = cm.TwoSlopeNorm(vcenter=0.)
+        im = ax.scatter(self.centers[:, 0], self.centers[:, 1], self.centers[:, 2], c=colors, alpha=0.5, norm=self.norm,
+                        cmap="RdBu")
+
+        # print("start: ", x_list[i][0,0:3])
+        # print("end: ", x_list[i][-1, 0:3])
+        ax.set_xlim(x_lim)
+        ax.set_ylim(y_lim)
+        ax.set_zlim(z_lim)
+        ax.set_xlabel("$x$")
+        ax.set_ylabel("$y$")
+        ax.set_zlabel("$z$")
+        fig.legend()
+        fig.colorbar(im)
 
 # def plot_xz_vel(self, params, bias_param, x=0.5, y=0., z=0.25, ydot=0., num_pts=10):
 #     xdot = np.linspace(vdot_lim[0], vdot_lim[1], num=num_pts)
@@ -741,7 +896,8 @@ if __name__ == '__main__':
     print("Running CBF Plotting for User_"+user_number+"\n")
 
     # Get data
-    data_dir = "/home/ros/ros_ws/src/learning_safety_margin/data/User_"+user_number+"/"
+    # data_dir = "/home/ros/ros_ws/src/learning_safety_margin/data/User_"+user_number+"/"
+    data_dir = "/home/ros/ros_ws/src/learning_safety_margin/data/cbf_tests/"
 
     data = pickle.load(open(data_dir + "vel_data_dict.p", "rb"))
     print(data.keys())
@@ -761,9 +917,16 @@ if __name__ == '__main__':
     # plotter.plot_xy_vel(num_pts=30)
     # plotter.plot_xz_vel(num_pts=30)
     # plotter.plot_yz_vel(num_pts=30)
-    # plotter.plot_xz_pos_multiple()
+    plotter.plot_centers_hvals()
+    v = 0.4
+    plotter.plot_xyz_animate(xdot=v, ydot=v, zdot=v, num_slices=11, num_pts=11)
+    # plotter.plot_xyz_neg_animate(num_slices=11, num_pts=11)
+
+    # # plotter.plot_xz_pos_multiple()
+    # plotter.plot_xz_pos_animate()
+    #
     # plotter.plot_xz_vel_animate()
-    # plotter.plot_3D_quiver_uniform()
-    plotter.plot_3D_quiver_from_traj(num_traj=3)
-    # plotter.plot_xyz_neg()#num_pts=30)
+    # # plotter.plot_3D_quiver_uniform()
+    # plotter.plot_3D_quiver_from_traj(num_traj=3)
+    # # plotter.plot_xyz_neg()#num_pts=30)
 

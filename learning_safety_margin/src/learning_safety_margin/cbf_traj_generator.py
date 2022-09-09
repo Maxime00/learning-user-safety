@@ -1,3 +1,4 @@
+import matplotlib.colors
 import numpy as np
 import pickle
 import rospy
@@ -19,11 +20,12 @@ class trajGenerator():
         self.stds = stds
         self.theta = theta
         self.bias = bias
+        print("TRAJ BIAS:", bias, self.bias)
         self.daring_offset=daring_offset
         self.unsafe_offset = unsafe_offset
 
         self.daring_bias = self.bias + self.daring_offset
-        self.unsafe_bias = self.bias = self.unsafe_offset
+        self.unsafe_bias = self.bias + self.unsafe_offset
 
         self.dt = dt
         self.n_steps = n_steps
@@ -247,14 +249,22 @@ class trajGenerator():
 
             ## PLOT RBF centers
             if plot_debug :
-                colors = np.zeros(self.centers[:, 3:].shape)
-                colors[:, 0] = (self.centers[:, 3] - ws_lim[3, 0]) / (ws_lim[3, 1] - ws_lim[3, 0])
-                colors[:, 1] = (self.centers[:, 4] - ws_lim[4, 0]) / (ws_lim[4, 1] - ws_lim[4, 0])
-                colors[:, 2] = (self.centers[:, 5] - ws_lim[5, 0]) / (ws_lim[5, 1] - ws_lim[5, 0])
-                ax.scatter(self.centers[:, 0], self.centers[:, 1], self.centers[:, 2], c=colors, alpha=0.5)
+                # colors = np.zeros(self.centers[:, 3:].shape)
+                # colors[:, 0] = (self.centers[:, 3] - ws_lim[3, 0]) / (ws_lim[3, 1] - ws_lim[3, 0])
+                # colors[:, 1] = (self.centers[:, 4] - ws_lim[4, 0]) / (ws_lim[4, 1] - ws_lim[4, 0])
+                # colors[:, 2] = (self.centers[:, 5] - ws_lim[5, 0]) / (ws_lim[5, 1] - ws_lim[5, 0])
+                # ax.scatter(self.centers[:, 0], self.centers[:, 1], self.centers[:, 2], c=colors, alpha=0.5)
+                colors = np.zeros(self.centers.shape[0])
+                for i in range(len(self.centers)):
+                    colors[i] = self.h_fun(self.centers[i])
+                print("CENTERS SHAPE: ", self.centers.shape, self.centers[0], colors[0], self.theta[0], self.bias)
 
-            print("start: ", x_list[i][0,0:3])
-            print("end: ", x_list[i][-1, 0:3])
+                divnorm = matplotlib.colors.TwoSlopeNorm(vmin=-1,vcenter=0.,vmax=1.)
+                im = ax.scatter(self.centers[:, 0], self.centers[:, 1], self.centers[:, 2], c=colors, alpha=0.5, norm=divnorm, cmap="RdBu")
+                fig.colorbar(im)
+
+            # print("start: ", x_list[i][0,0:3])
+            # print("end: ", x_list[i][-1, 0:3])
         ax.set_xlim(x_lim)
         ax.set_ylim(y_lim)
         ax.set_zlim(z_lim)

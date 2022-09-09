@@ -22,9 +22,8 @@ def vel_learning(user_number):
     start_time = time.time()
 
     # Set up data path
-    data_dir = "/home/ros/ros_ws/src/learning_safety_margin/data/User_"+user_number+"/"
-    csv_dir = data_dir + 'csv/'
-    rosbag_dir = data_dir + "rosbags/"
+    # data_dir = "/home/ros/ros_ws/src/learning_safety_margin/data/User_"+user_number+"/"
+    data_dir = "/home/ros/ros_ws/src/learning_safety_margin/data/cbf_tests/"
     fig_path = '../franka_env/figures/vel_lim/'
     save = False
 
@@ -50,168 +49,47 @@ def vel_learning(user_number):
         # (xdot=[u1*cos(theta), u1*sin(theta), u2], x = x0 + xdot*dt)
         return np.array([x[3], x[4], x[5], u[0], u[1], u[2]])
 
+    all_pts = onp.loadtxt(data_dir + "center_pts.txt")
+    all_vals = onp.loadtxt(data_dir + "theta_hvals.txt")
 
-    nSafe = len(os.listdir(rosbag_dir+"safe"))
-    nUnsafe = len(os.listdir(rosbag_dir+"unsafe"))
-    nDaring = len(os.listdir(rosbag_dir+"daring"))
-
-    fig = plt.figure()
-    ax = fig.add_subplot(111, projection='3d')
-    safe_traj = []
-    nInvalidSafe = 0
-    for i in range(0, nSafe):
-        fname = csv_dir + 'safe/' + str(i + 1) + '_eePosition.txt'
-        if os.path.exists(fname):
-            pos = onp.loadtxt(fname, delimiter=',')[:,0:3]
-            safe_traj.append(pos)
-            ax.plot(pos[:, 0], pos[:, 1], pos[:, 2], 'g')
-        else:
-            print("Safe Demo {} File Path does not exist: {}".format(i, fname))
-            nInvalidSafe += 1
-
-    unsafe_traj = []
-    tte_list = []
-    nInvalidUnsafe = 0
-    for i in range(0, nUnsafe):
-        fname = csv_dir + 'unsafe/' + str(i + 1) + '_eePosition.txt'
-        if os.path.exists(fname):
-            pos = onp.loadtxt(fname, delimiter=',')[:,0:3]
-            tte = onp.expand_dims(onp.ones(pos.shape[0]), axis=1)
-            for j in range(pos.shape[0]):
-                tte[j] = float((pos.shape[0] - (j + 1)) / pos.shape[0])
-            unsafe_traj.append(pos)
-            tte_list.append(tte)
-            ax.plot(pos[:, 0], pos[:, 1], pos[:, 2], 'r')
-        else:
-            print("Unsafe Demo {} File Path does not exist: {}".format(i, fname))
-            nInvalidUnsafe += 1
-
-
-    daring_traj = []
-    nInvalidDaring = 0
-    for i in range(0, nDaring):
-        fname = csv_dir + 'daring/' + str(i + 1) + '_eePosition.txt'
-        if os.path.exists(fname):
-            pos = onp.loadtxt(fname, delimiter=',')[:, 0:3]
-            daring_traj.append(pos)
-            ax.plot(pos[:, 0], pos[:, 1], pos[:, 2], 'b')
-        else:
-            print("Daring Demo {} File Path does not exist: {}".format(i, fname))
-            nInvalidDaring += 1
-
-
-    ax.set_xlabel('$x$')
-    ax.set_ylabel('$y$')
-    ax.set_zlabel('$z$')
-    ax.set_title('Franka CBF Vel_lim: Position Data')
-    if save: plt.savefig(fig_path + 'demonstration_data.pdf')
-    # plt.show()
-
-    fig = plt.figure()
-    ax = fig.add_subplot(111, projection='3d')
-    safe_vel = []
-    for i in range(0, nSafe):
-        fname = csv_dir + 'safe/' + str(i+1) + '_eeVelocity.txt'
-        if os.path.exists(fname):
-            vel = onp.loadtxt(fname, delimiter=',')[:,0:3]
-            safe_vel.append(vel)
-            ax.plot(vel[:,0], vel[:,1], vel[:,2], 'g')
-        else:
-            print("Safe Demo {} File Path does not exist: {}".format(i, fname))
-
-    unsafe_vel = []
-    for i in range(0, nUnsafe):
-        fname = csv_dir + 'unsafe/' + str(i+1) + '_eeVelocity.txt'
-        if os.path.exists(fname):
-            vel = onp.loadtxt(fname, delimiter=',')[:,0:3]
-            unsafe_vel.append(vel)
-            ax.plot(vel[:,0], vel[:,1], vel[:,2], 'r')
-        else:
-            print("Unsafe Demo {} File Path does not exist: {}".format(i, fname))
-
-    daring_vel = []
-    for i in range(0, nDaring):
-        fname = csv_dir + 'daring/' + str(i+1) + '_eeVelocity.txt'
-        if os.path.exists(fname):
-            vel = onp.loadtxt(fname, delimiter=',')[:,0:3]
-            daring_vel.append(vel)
-            ax.plot(vel[:,0], vel[:,1], vel[:,2], 'b')
-        else:
-            print("Daring Demo {} File Path does not exist: {}".format(i, fname))
-
-    daring_acc = []
-    for i in range(0, nDaring):
-        fname = csv_dir + 'daring/' + str(i+1) + '_eeAcceleration.txt'
-        if os.path.exists(fname):
-            acc = onp.loadtxt(fname, delimiter=',')[:,0:3]
-            daring_acc.append(acc)
-            # ax.plot(acc[:,0], acc[:,1], acc[:,2], 'b')
-        else:
-            print("Daring Demo {} File Path does not exist: {}".format(i, fname))
-
-        # vel = daring_vel[i]
-        # acc = []
-        # for t in range(len(vel)-1):
-        #     dt = 1./200.#time[t+1]-time[t]
-        #     acc.append((vel[t+1]-vel[t])/dt)
-        # daring_acc.append(acc)
-        # ax.plot(acc[:,0], acc[:,1], acc[:,2], 'b')
-
-    ax.set_xlabel('$\dot{x}$')
-    ax.set_ylabel('$\dot{y}$')
-    ax.set_zlabel('$\dot{z}$')
-    ax.set_title('Franka CBF Velocity Limits: Velocity Data')
-    # plt.show()
-
-    nSafe = nSafe-nInvalidSafe
-    nUnsafe = nUnsafe-nInvalidUnsafe
-    nDaring = nDaring-nInvalidDaring
-
-    xtraj = onp.hstack((safe_traj[0], safe_vel[0]))
-    safe_pts = xtraj
-    for i in range(1, nSafe):
-        xtraj = onp.hstack((safe_traj[i], safe_vel[i]))
-        safe_pts = onp.vstack((safe_pts, xtraj))
-
-    xtraj = onp.hstack((unsafe_traj[0], unsafe_vel[0]))
-    unsafe_pts = xtraj
-    unsafe_ttelist = tte_list[0]
-    for i in range(1, nUnsafe):
-        xtraj = onp.hstack((unsafe_traj[i], unsafe_vel[i]))
-        unsafe_pts = onp.vstack((unsafe_pts, xtraj))
-        unsafe_ttelist = onp.vstack((unsafe_ttelist, tte_list[i]))
+    print(all_pts.shape, all_vals.shape)
+    safe_condition = np.where(all_vals >= 1.)
+    safe_pts = np.squeeze(all_pts[safe_condition, :])
+    safe_vals = all_vals[safe_condition]
+    print(safe_pts.shape, safe_vals.shape)
+    semisafe_condition = np.where(np.logical_and(0. < all_vals, all_vals <= 1.))
+    semisafe_pts = np.squeeze(all_pts[semisafe_condition, :])
+    semisafe_vals = all_vals[semisafe_condition]
+    print(semisafe_pts.shape, semisafe_vals.shape)
+    unsafe_condition = np.where(all_vals <= 0.)
+    unsafe_pts = np.squeeze(all_pts[unsafe_condition, :])
+    unsafe_vals = all_vals[unsafe_condition]
+    print(unsafe_pts.shape, unsafe_vals.shape)
 
     ### Set unsafe tte list to all ones (no decay to end)
     unsafe_ttelist = onp.ones(len(unsafe_pts))
 
-
-    xtraj = onp.hstack((daring_traj[0], daring_vel[0]))
-    semisafe_pts = xtraj
-    semisafe_u = daring_acc[0]
-    for i in range(1, nDaring):
-        xtraj = onp.hstack((daring_traj[i], daring_vel[i]))
-        semisafe_pts = onp.vstack((semisafe_pts, xtraj))
-        semisafe_u = onp.vstack((semisafe_u, daring_acc[i]))
+    semisafe_u = np.ones((semisafe_pts.shape[0], 3))
 
     print(safe_pts.shape, unsafe_pts.shape, semisafe_pts.shape, semisafe_u.shape)
-
+    print(np.min(safe_vals), np.max(safe_vals), np.min(unsafe_vals), np.max(unsafe_vals), np.min(semisafe_vals), np.max(semisafe_vals))
     # Define reward lists
-    safe_rewards = onp.ones(len(safe_pts))*2.
-    unsafe_rewards = onp.ones(len(unsafe_pts)) * -1.
-    semisafe_rewards = onp.ones(len(semisafe_pts))* 0.5
+    safe_rewards = safe_vals#onp.ones(len(safe_pts))*2.
+    unsafe_rewards = unsafe_vals#onp.ones(len(unsafe_pts)) * -1.
+    semisafe_rewards = semisafe_vals#onp.ones(len(semisafe_pts))* 0.5
 
     ### Set up Minimization
     # Sample Data
-    n_safe_sample = 200#300#50
+    n_safe_sample = 1#200#300#50
     x_safe = safe_pts[::n_safe_sample]
     safe_rewards = safe_rewards[::n_safe_sample]
 
-    n_unsafe_sample = 50#50#100#20
+    n_unsafe_sample = 1#50#50#100#20
     x_unsafe = unsafe_pts[::n_unsafe_sample]
     unsafe_rewards = unsafe_rewards[::n_unsafe_sample]
     unsafe_tte = unsafe_ttelist[::n_unsafe_sample]
 
-    n_semisafe_sample = 200#300#10
+    n_semisafe_sample = 1#200#300#10
     x_semisafe = semisafe_pts[::n_semisafe_sample]
     u_semisafe = semisafe_u[::n_semisafe_sample]
     semisafe_rewards = semisafe_rewards[::n_semisafe_sample]
@@ -344,10 +222,10 @@ def vel_learning(user_number):
     u_dim = 2
     psi = 1.0
     dt = 0.1
-    dist_eps = 0.05
+    dist_eps = 0.01#0.05
     mu_dist = (ws_lim[:, 1]-ws_lim[:,0])/n_dim_features
     print("Check: ", mu_dist, onp.max(mu_dist)*0.5)
-    rbf_std = 0.1#.1#onp.max(mu_dist) * 0.5 #0.1#1.0
+    rbf_std = 0.2#.1#onp.max(mu_dist) * 0.5 #0.1#1.0
     print(rbf_std)
     # centers, stds = rbf_means_stds(X=None, X_lim = ws_lim,
     #                                n=x_dim, k=n_dim_features, set_means='random',fixed_stds=True, std=rbf_std, nCenters=n_features)
