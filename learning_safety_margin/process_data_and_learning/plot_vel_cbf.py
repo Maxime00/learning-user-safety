@@ -347,9 +347,7 @@ class PlotCBF():
 
         """
         fig, ax = plt.subplots()
-
         ani = FuncAnimation(fig, self.xz_vel_animate, fargs=(x,y,z,num_slices, num_pts, ax), frames=20, interval=500)
-
         plt.show()
 
     def xz_vel_animate(self, frame_number, x, y, z, num_slices, num_pts, ax):
