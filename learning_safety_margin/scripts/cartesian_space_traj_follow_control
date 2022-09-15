@@ -36,11 +36,9 @@ def convert_joint_state_msg(state):
     vel = state.joint_state.get_velocities()
     effort = state.joint_state.get_torques()
     msg = JointState(header, names, pos, vel, effort)
-
     return msg
 
 def plot_ref_vs_rec(pos_vel, acc, t, rec):
-
     traj_name ="test"
 
     # Formatting for ease
