@@ -706,11 +706,9 @@ if __name__ == '__main__':
             fn = glob.glob(data_dir + "csv/" + category + traj_num +"_ee*.txt")
             fn = [x for x in fn if "Jerk" not in x] # remove Jerk.txt files
             fn.sort()
-            print(fn)
             fpath_list.append(fn)
     # Reshape list to be 1D
     # fpath_list = sum(fpath_list, [])
-    print(fpath_list)
 
     # SET PARAMETERS FOR MPC CONTROL
     freq = 200

@@ -14,14 +14,14 @@ from learning_safety_margin.vel_control_utils import *
 
 class trajGenerator():
 
-    def __init__(self, centers, stds, theta, bias, daring_offset=1.0, unsafe_offset=30., dt=0.1, n_steps=50, r_gains = 1, zero_acc_start = False):
+    def __init__(self, centers, stds, theta, bias, daring_offset=1.0, unsafe_offset=30., dt=0.1, n_steps=50, r_gains = .01, zero_acc_start = False):
 
         self.centers = centers
         self.stds = stds
         self.theta = theta
         self.bias = bias
-        self.safe = False
-        self.unsafe = True
+        self.safe = True
+        self.unsafe = False
         self.semisafe = False
         if self.semisafe: self.daring_offset = daring_offset
         if self.unsafe: self.unsafe_offset = unsafe_offset

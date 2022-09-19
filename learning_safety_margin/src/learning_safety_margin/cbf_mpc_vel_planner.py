@@ -16,7 +16,7 @@ class DoubleIntegrator():
 
 class CBFMPC_Controller(DoubleIntegrator):
 
-    def __init__(self, centers, stds, theta, bias, dt=0.1, n_steps=10, v_gain = 10, r_gains =1, zero_acc_start = False):
+    def __init__(self, centers, stds, theta, bias, dt=0.1, n_steps=10, v_gain = 10, r_gains =.01, zero_acc_start = False):
 
         super().__init__(dt)
         # Set MPC Parameters
@@ -36,12 +36,12 @@ class CBFMPC_Controller(DoubleIntegrator):
         self.U = casadi.SX.sym('U', self.n_controls, self.N) # Horizontal vectors (mxN vector, m: dim of control, N steps in future)
 
         # column vector for storing initial state and target state
-        self.P = casadi.SX.sym('P', self.n_states + self.n_states)
+        self.P = casadi.SX.sym('P', self.n_states + self.n_states + self.n_controls*self.N)
 
         # Optimization weights' variables
-        self.Q_x = 100
-        self.Q_y = 100
-        self.Q_theta = 100
+        self.Q_x = 1
+        self.Q_y = 1
+        self.Q_theta = 1
         self.Q_v = v_gain
         self.R1 = r_gains
         self.R2 = r_gains
@@ -88,8 +88,10 @@ class CBFMPC_Controller(DoubleIntegrator):
             xi = self.X[:, i]
             ui = self.U[:,i]
             xnext = self.X[:, i+1]
+            # print((2*self.n_states + i*self.n_controls),(2*self.n_states + i*self.n_controls + self.n_controls))
+            # udes = self.P[(2*self.n_states + i*self.n_controls):(2*self.n_states + i*self.n_controls + self.n_controls) ]
             # Objective Function
-            self.cost_fn = self.cost_fn + (xi-self.P[self.n_states:]).T @ self.Q @ (xi-self.P[self.n_states:]) + ui.T @ self.R @ ui
+            self.cost_fn = self.cost_fn + (xi-self.P[self.n_states:(2*self.n_states)]).T @ self.Q @ (xi-self.P[self.n_states:(2*self.n_states)]) + ui.T @ self.R @ ui #+ (ui-udes).T @ self.R @ (ui-udes)
 
             # Constraints
             xnext_sim = self.forward_sim(xi, ui)#xi + ui * self.dt # Forward Sim
@@ -263,15 +265,17 @@ class CBFMPC_Controller(DoubleIntegrator):
             fig.suptitle(f"Initial guess acceleration #{count+1}")
             # plt.show()
 
+        udes = u0.flatten()
         X0 = casadi.DM(X0.T)
         u0 = casadi.DM(u0.T)
-
-        print(X0.shape, u0.shape)
+        # print("Initial Vars (X0, u0) shape: ", X0.shape, u0.shape, udes.shape)
         params = casadi.vertcat(
             x0,    # current state
-            xgoal   # target state
+            xgoal,    # target state
+            udes # desired u (here, u0)
         )
         args['p'] = params
+        # print("Initial params shape: ", x0.shape, xgoal.shape, u0.shape, params.shape)
 
         args['x0'] = casadi.vertcat(
             casadi.reshape(X0, self.n_states*(self.N+1), 1),
