@@ -171,7 +171,6 @@ class CBFMPC_Controller(DoubleIntegrator):
             ds.set_parameter_value("gain", [50., 50., 50., 10., 10., 10.], sr.ParameterType.DOUBLE_ARRAY)
             target = sr.CartesianPose('panda_ee', xgoal[0:3], np.array([0., 1., 0., 0.]), 'panda_base')
             ds.set_parameter_value("attractor", target, sr.ParameterType.STATE, sr.StateType.CARTESIAN_POSE)
-            print(ds.get_parameters())
             curr_state = sr.CartesianState('panda_ee', 'panda_base')
             curr_state.set_orientation(np.array([0., 1., 0., 0.]))
 

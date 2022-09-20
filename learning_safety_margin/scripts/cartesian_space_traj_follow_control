@@ -261,11 +261,11 @@ def control_loop(traj_dict, robot, freq):
     joint_ctrl = create_joint_controller(CONTROLLER_TYPE.IMPEDANCE, nb_joints)
 
     ## IRL GAINS
-    joint_ctrl.set_parameter_value("stiffness", [220, 200, 200, 180, 120, 100, 80], sr.ParameterType.DOUBLE_ARRAY)
-    joint_ctrl.set_parameter_value("damping", [15, 15, 15, 13, 9, 8, 6], sr.ParameterType.DOUBLE_ARRAY)
+    # joint_ctrl.set_parameter_value("stiffness", [220, 200, 200, 180, 120, 100, 80], sr.ParameterType.DOUBLE_ARRAY)
+    # joint_ctrl.set_parameter_value("damping", [15, 15, 15, 13, 9, 8, 6], sr.ParameterType.DOUBLE_ARRAY)
     ## SIMULATOR GAINS
-    # joint_ctrl.set_parameter_value("stiffness", [10., 5., 4., 2., 2, 2, 2], sr.ParameterType.DOUBLE_ARRAY)
-    # joint_ctrl.set_parameter_value("damping", [3., 2., 2., 1., .5, .5, .5], sr.ParameterType.DOUBLE_ARRAY)
+    joint_ctrl.set_parameter_value("stiffness", [10., 5., 4., 2., 2, 2, 2], sr.ParameterType.DOUBLE_ARRAY)
+    joint_ctrl.set_parameter_value("damping", [3., 2., 2., 1., .5, .5, .5], sr.ParameterType.DOUBLE_ARRAY)
 
     # SET UP state variables
     desired_state = sr.CartesianState('panda_ee', 'panda_base')
@@ -280,7 +280,7 @@ def control_loop(traj_dict, robot, freq):
     flag = 0
 
     # integrator variables  [60, 50, 45, 40, 35, 25, 20]
-    inte_gain = [65, 55, 50, 45, 40, 30, 20]
+    inte_gain =[3, 2.5, 2, 1.8, 1.5, 1.3, 1] # IRL GAINS [65, 55, 50, 45, 40, 30, 20]
     start_integrator_threshold = 0.3 # ideal 0.25 but doesn't reach that sometimes
     init_pos_err_threshold = 0.01
     integrator_reset_threshold = 0.05
@@ -315,6 +315,8 @@ def control_loop(traj_dict, robot, freq):
     idx_list = list(range(0, len(traj_dict['Labels'])))
     random.shuffle(idx_list)
     idx_to_incr = 0
+
+    #TODO : print idx_list to check out error
 
     # Set up first trajectory
     traj_idx = idx_list[idx_to_incr]
@@ -581,6 +583,7 @@ def control_loop(traj_dict, robot, freq):
             # count number of MPC trajectories and set name for this traj accordingly
             count_prev_traj = sum(len(files) for _, _, files in os.walk(save_dir))
             save_fn = str(count_prev_traj) + "_" + desired_label + "_MPC_eeState"
+            print("Traj name : ", save_fn)
 
             # save file
             np.save(save_dir+save_fn, recorded_state, allow_pickle=False)
@@ -615,11 +618,11 @@ def control_loop(traj_dict, robot, freq):
                     os.remove(save_dir + "temp_list_of_mpc_traj.txt")
 
                     # call plot function
-                    plot_ref_vs_rec(full_desired_X, full_desired_U, full_desired_T, recorded_state)
+                    # plot_ref_vs_rec(full_desired_X, full_desired_U, full_desired_T, recorded_state)
                     break
 
                 # call plot function
-                plot_ref_vs_rec(full_desired_X, full_desired_U, full_desired_T, recorded_state)
+                # plot_ref_vs_rec(full_desired_X, full_desired_U, full_desired_T, recorded_state)
 
                 ## Set up next traj
                 traj_idx = idx_list[idx_to_incr]

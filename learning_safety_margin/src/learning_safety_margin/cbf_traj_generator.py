@@ -22,7 +22,7 @@ class trajGenerator():
         self.bias = bias
         print("TRAJ BIAS:", bias, self.bias)
         self.safe = True
-        self.unsafe = False
+        self.unsafe = True
         self.semisafe = False
         if self.semisafe: self.daring_offset = daring_offset
         if self.unsafe: self.unsafe_offset = unsafe_offset
@@ -176,29 +176,13 @@ class trajGenerator():
 
     def generate_all_trajectories(self, num_demos=5, init_guess_list=None, plot_debug=False):
         labels = []
-        safe_x_list = []
-        safe_u_list = []
-        safe_t_list = []
+        x_list = []
+        u_list = []
+        t_list = []
 
-        safe_start_list = []
-        safe_end_list = []
-        safe_ref_traj = []
-
-        semisafe_x_list = []
-        semisafe_u_list = []
-        semisafe_t_list = []
-
-        semisafe_start_list = []
-        semisafe_end_list = []
-        semisafe_ref_traj = []
-
-        unsafe_x_list = []
-        unsafe_u_list = []
-        unsafe_t_list = []
-
-        unsafe_start_list = []
-        unsafe_end_list = []
-        unsafe_ref_traj = []
+        start_list = []
+        end_list = []
+        ref_traj = []
 
         fig = plt.figure()
         ax = plt.axes(projection='3d')
@@ -221,33 +205,33 @@ class trajGenerator():
                     res = self.generate_safe_traj(x, xt, ig_time=initial_guess_time, ig_pos=initial_guess_pos,
                                                   ig_vel=initial_guess_vel, ig_acc=initial_guess_acc, num_safe=num_safe,
                                                   plot_debug=plot_debug)
-
                 if res is not None:
-                    safe_x_list.append(res[0])
-                    safe_u_list.append(res[1])
-                    safe_t_list.append(res[2])
+                    x_list.append(res[0])
+                    u_list.append(res[1])
+                    t_list.append(res[2])
                     labels.append('safe')
-                    safe_start_list.append(x)
-                    safe_end_list.append(xt)
+                    start_list.append(x)
+                    end_list.append(xt)
                     if init_guess_list is not None:
-                        safe_ref_traj.append(initial_guess_pos)
+                        ref_traj.append(initial_guess_pos)
                     num_safe += 1
 
 
             print("Generated Safe Trajectories")
 
             cmap = plt.cm.get_cmap('Greens')
-            crange = np.linspace(0,1,len(safe_x_list) + 2)
-            for i in range(len(safe_x_list)):
-                if init_guess_list is not None:
-                    plt.plot(ref_traj[i][:, 0], ref_traj[i][:, 1], ref_traj[i][:, 2], label=f'initial guess #{i + 1}')
-                # Plot Trajectories
-                rgba = cmap(crange[i + 1])
-                plt.plot(safe_x_list[i][:, 0], safe_x_list[i][:, 1], safe_x_list[i][:, 2], c=rgba, label=f'Safe #{i + 1}')
+            crange = np.linspace(0,1,len(x_list) + 2)
+            for i in range(len(labels)):
+                if labels[i] == 'safe':
+                    if init_guess_list is not None:
+                        plt.plot(ref_traj[i][:, 0], ref_traj[i][:, 1], ref_traj[i][:, 2], label=f'initial guess #{i + 1}')
+                    # Plot Trajectories
+                    rgba = cmap(crange[i + 1])
+                    plt.plot(x_list[i][:, 0], x_list[i][:, 1], x_list[i][:, 2], c=rgba, label=f'Safe #{i + 1}')
 
-                # Plot Start and End Points
-                ax.scatter(safe_start_list[i][0], safe_start_list[i][1], safe_start_list[i][2], s=3, c=rgba)
-                ax.scatter(safe_end_list[i][0], safe_end_list[i][1], safe_end_list[i][2], '*', s=5, c=rgba)
+                    # Plot Start and End Points
+                    ax.scatter(start_list[i][0], start_list[i][1], start_list[i][2], s=3, c=rgba)
+                    ax.scatter(end_list[i][0], end_list[i][1], end_list[i][2], '*', s=5, c=rgba)
 
         if self.semisafe:
             num_daring = 0
@@ -255,84 +239,61 @@ class trajGenerator():
                x, xt = self.make_trial_conditions()
                res = self.generate_daring_traj(x, xt)
                if res is not None:
-                   semisafe_x_list.append(res[0])
-                   semisafe_u_list.append(res[1])
-                   semisafe_t_list.append(res[2])
+                   x_list.append(res[0])
+                   u_list.append(res[1])
+                   t_list.append(res[2])
                    labels.append('daring')
-                   semisafe_start_list.append(x)
-                   semisafe_end_list.append(xt)
+                   start_list.append(x)
+                   end_list.append(xt)
 
                    num_daring += 1
             print("Generated Daring Trajectories")
 
             cmap = plt.cm.get_cmap('Blues')
-            crange = np.linspace(0, 1, len(semisafe_x_list) + 2)
-            for i in range(len(semisafe_x_list)):
-                # Plot Trajectories
-                rgba = cmap(crange[i + 1])
-                plt.plot(semisafe_x_list[i][:, 0], semisafe_x_list[i][:, 1], semisafe_x_list[i][:, 2], c=rgba,
-                         label=f'Daring #{i + 1}')
+            crange = np.linspace(0, 1, len(x_list) + 2)
+            for i in range(len(labels)):
+                if labels[i] == 'daring':
+                    # Plot Trajectories
+                    rgba = cmap(crange[i + 1])
+                    plt.plot(x_list[i][:, 0], x_list[i][:, 1], x_list[i][:, 2], c=rgba,
+                             label=f'Daring #{i + 1}')
 
-                # Plot Start and End Points
-                ax.scatter(semisafe_start_list[i][0], semisafe_start_list[i][1], semisafe_start_list[i][2], s=3, c=rgba)
-                ax.scatter(semisafe_end_list[i][0], semisafe_end_list[i][1], semisafe_end_list[i][2], '*', s=5, c=rgba)
+                    # Plot Start and End Points
+                    ax.scatter(start_list[i][0], start_list[i][1], start_list[i][2], s=3, c=rgba)
+                    ax.scatter(end_list[i][0], end_list[i][1], end_list[i][2], '*', s=5, c=rgba)
 
         #
         if self.unsafe:
-            x_unsafe = []
-            u_unsafe = []
-            t_unsafe = []
-
             num_unsafe = 0
             while num_unsafe < num_demos:
                x, xt = self.make_trial_conditions()
                res = self.generate_unsafe_traj(x, xt)
                if res is not None:
-                   unsafe_x_list.append(res[0])
-                   unsafe_u_list.append(res[1])
-                   unsafe_t_list.append(res[2])
+                   x_list.append(res[0])
+                   u_list.append(res[1])
+                   t_list.append(res[2])
                    labels.append('unsafe')
-                   unsafe_start_list.append(x)
-                   unsafe_end_list.append(xt)
+                   start_list.append(x)
+                   end_list.append(xt)
                    num_unsafe += 1
             print("Generated Unsafe Trajectories")
             cmap = plt.cm.get_cmap('Reds')
-            crange = np.linspace(0, 1, len(unsafe_x_list) + 2)
-            for i in range(len(unsafe_x_list)):
-                # Plot Trajectories
-                rgba = cmap(crange[i + 1])
-                plt.plot(unsafe_x_list[i][:, 0], unsafe_x_list[i][:, 1], unsafe_x_list[i][:, 2], c=rgba,
-                         label=f'Unsafe #{i + 1}')
+            crange = np.linspace(0, 1, len(x_list) + 2)
+            for i in range(len(labels)):
+                if labels[i] == 'unsafe':
+                    # Plot Trajectories
+                    rgba = cmap(crange[i + 1])
+                    plt.plot(x_list[i][:, 0], x_list[i][:, 1], x_list[i][:, 2], c=rgba,
+                             label=f'Unsafe #{i + 1}')
 
-                # Plot Start and End Points
-                ax.scatter(unsafe_start_list[i][0], unsafe_start_list[i][1], unsafe_start_list[i][2], s=3, c=rgba)
-                ax.scatter(unsafe_end_list[i][0], unsafe_end_list[i][1], unsafe_end_list[i][2], '*', s=5, c=rgba)
+                    # Plot Start and End Points
+                    ax.scatter(start_list[i][0], start_list[i][1], start_list[i][2], s=3, c=rgba)
+                    ax.scatter(end_list[i][0], end_list[i][1], end_list[i][2], '*', s=5, c=rgba)
 
-        if self.safe:
-            x_list = safe_x_list
-            u_list = safe_u_list
-            t_list = safe_t_list
-        elif self.unsafe:
-            x_list = unsafe_x_list
-            u_list = unsafe_u_list
-            t_list = unsafe_t_list
-        else:
-            x_list = semisafe_x_list
-            u_list = semisafe_u_list
-            t_list = semisafe_t_list
         cbf_traj_data = {
             'X': x_list,
             'U': u_list,
             'T': t_list,
-            'safe_X': safe_x_list,
-            'safe_U': safe_u_list,
-            'safe_T': safe_t_list,
-            'semisafe_X': semisafe_x_list,
-            'semisafe_U': semisafe_u_list,
-            'semisafe_T': semisafe_t_list,
-            'unsafe_X': unsafe_x_list,
-            'unsafe_U': unsafe_u_list,
-            'unsafe_T': unsafe_t_list,
             'Labels': labels
         }
         # print(ref_traj)
