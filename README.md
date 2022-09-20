@@ -132,7 +132,8 @@ bash build-server.sh
 aica-docker interactive learning-safety-margin:noetic -u ros --net host --no-hostname -v data_vol:/home/ros/ros_ws/src/learning_safety_margin/data
 roslaunch learning_safety_margin demo.launch demo:=joint_space_traj_replay_control args_for_control:="0 2"
 roslaunch learning_safety_margin demo.launch demo:=cartesian_space_traj_follow_control args_for_control:="0 4"
-roslaunch learning_safety_margin demo.launch demo:=user_evaluation_control
+roslaunch learning_safety_margin demo.launch demo:=user_evaluation_control args_for_control:="0 4"
+roslaunch learning_safety_margin demo.launch demo:=user_eval_joint_control args_for_control:="0 4"
 roslaunch learning_safety_margin demo.launch demo:=joint_space_velocity_control
 roslaunch learning_safety_margin mpc_control.launch robot_name:=franka args_for_planner:=0
 ```
@@ -164,6 +165,11 @@ current working scripts :
 - cartesian twist control (demo script)
 - joint space velocity control (demo script)
 
+
+Notes on user_eval_joint_ctrl :
+ need to tune last joint gain ( make it lower during traj follow ?)
+fix little offset in orientation at start ? (never in correct position)
+add plots to visualize how well it matches desired traj ( in joint space but also ee velocity would be nice )
 
 # TODO 
 - add option to start/stop integrator ? start thresh should be small but always reachable ( np.any instead? or start integrator if in same pos for too long )

@@ -38,6 +38,7 @@ set(CONTROL_SCRIPTS
     cartesian_space_single_traj_follow_control
     cartesian_space_traj_follow_control
     user_evaluation_control
+    user_eval_joint_control
     MPC_velocity_planner
     MPC_velocity_control
 )

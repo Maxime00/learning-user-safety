@@ -22,7 +22,7 @@ from std_msgs.msg import Header
 from learning_safety_margin.cbf_mpc_vel_planner import *
 from learning_safety_margin.vel_control_utils import *
 from learning_safety_margin.cbf_traj_generator import trajGenerator
-from robot_model import Model, InverseKinematicsParameters
+from robot_model import Model, InverseKinematicsParameters, QPInverseVelocityParameters
 from scipy import interpolate
 from pyquaternion import Quaternion
 
@@ -253,7 +253,7 @@ def control_loop(cart_traj_dict, joint_traj_list, robot, freq):
     ctrl = create_cartesian_controller(CONTROLLER_TYPE.IMPEDANCE)
 
     ctrl.set_parameter_value("stiffness", [150, 150, 150, 15, 15, 15], sr.ParameterType.DOUBLE_ARRAY) # between 20 and 10
-    ctrl.set_parameter_value("damping", [25, 25, 25, 7.5, 7.5, 1.5], sr.ParameterType.DOUBLE_ARRAY) # between 5 and 10
+    ctrl.set_parameter_value("damping", [25, 25, 25, 7.5, 7.5, 1.0], sr.ParameterType.DOUBLE_ARRAY) # between 5 and 10
     ctrl.set_parameter_value("inertia", [.45, .45, .45, 0., 0., 0.], sr.ParameterType.DOUBLE_ARRAY)
 
     # DS for orientation control
@@ -271,15 +271,19 @@ def control_loop(cart_traj_dict, joint_traj_list, robot, freq):
     # joint_ctrl.set_parameter_value("stiffness", [10., 5., 4., 2., 2, 2, 2], sr.ParameterType.DOUBLE_ARRAY)
     # joint_ctrl.set_parameter_value("damping", [3., 2., 2., 1., .5, .5, .5], sr.ParameterType.DOUBLE_ARRAY)
 
+    # import panda urdf
+    urdf_path = "/home/ros/ros_ws/src/learning_safety_margin/urdf/panda_arm.urdf"
+    robot_model = Model('panda', urdf_path)
+
     # SET UP state variables
-    desired_state = sr.CartesianState('panda_ee', 'panda_base')
+    desired_state = sr.CartesianState('panda_ee', robot_model.get_base_frame())
     feedback_state = sr.CartesianState('panda_ee', 'panda_base')
     desired_joint_state = sr.JointState("franka", nb_joints)
     feedback_joint_state = sr.JointState("franka", nb_joints)
 
-    # import panda urdf
-    urdf_path = "/home/ros/ros_ws/src/learning_safety_margin/urdf/panda_arm.urdf"
-    robot_model = Model('panda', urdf_path)
+
+
+    print("REF FRAME MODEL : ", robot_model.get_base_frame())
 
     flag = 0
     print_freq = freq*5
@@ -321,7 +325,7 @@ def control_loop(cart_traj_dict, joint_traj_list, robot, freq):
     # Successive traj follow - make random idx list to shuffle planned trajectories
     # planned traj + replay traj
     nbr_planned_traj = len(cart_traj_dict['Labels'])
-    idx_list = list(range(0, nbr_planned_traj+len(joint_traj_list)))
+    idx_list = list(range(0, nbr_planned_traj))#+len(joint_traj_list))) TODO : FIX FOR full usage
     random.shuffle(idx_list)
     idx_to_incr = 0
 
@@ -356,7 +360,7 @@ def control_loop(cart_traj_dict, joint_traj_list, robot, freq):
         desired_start_orientation = temp_orient * offset_rot
         initial_cart_pos.set_orientation(desired_start_orientation.elements)
         param = InverseKinematicsParameters()
-        param.max_number_of_iterations = 15000
+        param.max_number_of_iterations = 5000
         initial_joint_pos_sr = sr.JointPositions(robot_model.inverse_kinematics(sr.CartesianPose(initial_cart_pos), param, "panda_link8"))
         initial_joint_pos = initial_joint_pos_sr.data()
 
@@ -420,7 +424,7 @@ def control_loop(cart_traj_dict, joint_traj_list, robot, freq):
                     f_U = interpolate.interp1d(full_desired_T, full_desired_U, axis=0)
 
                     # set DS target for orientation control
-                    target_ds = sr.CartesianPose(state.ee_state.get_name(),  full_desired_X[-1, 0:3], np.array([0., 1., 0., 0.]),
+                    target_ds = sr.CartesianPose(state.ee_state.get_name(),  full_desired_X[-1, 0:3], desired_start_orientation.elements,
                                                  state.ee_state.get_reference_frame())
                     ds.set_parameter_value("attractor", target_ds, sr.ParameterType.STATE, sr.StateType.CARTESIAN_POSE)
                     # Set up for end of traj follow
@@ -517,6 +521,12 @@ def control_loop(cart_traj_dict, joint_traj_list, robot, freq):
 
             if ctrl_flag == 'cart':
                 ## Feedback state
+                feedback_joint_state.set_positions(state.joint_state.get_positions())
+                # filter velocities
+                dq_filtered = (1 - alpha) * dq_filtered + alpha * state.joint_state.get_velocities()
+                feedback_joint_state.set_velocities(dq_filtered)
+
+                # cartesian state
                 feedback_state.set_position(state.ee_state.get_position())
 
                 # filter velocities
@@ -525,7 +535,7 @@ def control_loop(cart_traj_dict, joint_traj_list, robot, freq):
 
                 # orientation
                 feedback_state.set_orientation(state.ee_state.get_orientation())
-                dq_filtered_ang = alpha_ang * dq_filtered_ang + (1-alpha_ang)* state.ee_state.get_angular_velocity()
+                dq_filtered_ang = alpha_ang * dq_filtered_ang + (1 - alpha_ang) * state.ee_state.get_angular_velocity()
                 feedback_state.set_angular_velocity(dq_filtered_ang)
 
                 ## Desired state
@@ -533,62 +543,63 @@ def control_loop(cart_traj_dict, joint_traj_list, robot, freq):
                 X_desired = f_X(nIter_time)
                 U_desired = f_U(nIter_time)
 
-                desired_state.set_position(X_desired[0:3])
-                desired_state.set_linear_velocity(X_desired[3:6])
-                desired_state.set_linear_acceleration(U_desired)
+                desired_state.set_position(X_desired[0:3]+ [0,0, z_axis_gripper_offset])
 
                 # Set desired angular velocity
                 ds_twist = sr.CartesianTwist(ds.evaluate(feedback_state))
-                desired_state.set_orientation(np.array([0., 1., 0., 0.]))
+                desired_state.set_orientation(desired_start_orientation.elements)
                 # clamp and set desired angular velocities
                 ds_twist.clamp(.25, .5)
+
+
+                param = InverseKinematicsParameters()
+                # param.max_number_of_iterations = 1000
+                jp_sr = sr.JointPositions(
+                    robot_model.inverse_kinematics(sr.CartesianPose(desired_state), param, "panda_link8"))
+                joint_pos =jp_sr.data()
+
+                desired_joint_state.set_positions(joint_pos)
+
+                desired_state.set_linear_velocity(X_desired[3:6])
+                desired_state.set_linear_acceleration(U_desired)
                 desired_state.set_angular_velocity(ds_twist.data()[3:6])
 
-                # compute linear acceleration for data_recording
-                if not np.isnan(recorded_state[idx-1, 0]):
-                    acc = (feedback_state.get_linear_velocity() - recorded_state[idx-1, 4:7])/(nIter_time - recorded_state[idx-1, 0])
-                    ddq_filtered = beta * ddq_filtered + (1 - beta) * acc
+                param_vel = QPInverseVelocityParameters()
+                jv_sr = sr.JointVelocities(
+                    robot_model.inverse_velocity(sr.CartesianTwist(desired_state), jp_sr, param_vel, "panda_link8" ))
+                joint_vel = jv_sr.data()
+
+                desired_joint_state.set_velocities(joint_vel)
 
                 ## DEBUG prints
-                # if print_count % 50 == 0:
-                #     print("Time : ", round(nIter_time, 4))
-                #     print("Cartesian positions: ", feedback_state.get_position())
-                #     print("Cartesian Velocities: ", feedback_state.get_linear_velocity())
-                #     print("Cartesian Accelerations: ", ddq_filtered)
-                #     print("Desired positions: ", desired_state.get_position())
-                #     print("Current orientation: ", feedback_state.get_orientation())
-                #     print("Desired orientation: ", desired_state.get_orientation())
-                #     print("Current angular Velocities: ", feedback_state.get_angular_velocity())
-                #     print("Desired Angular Velocities: ", desired_state.get_angular_velocity())
-                # print_count += 1
+                # print("Joint positions: ", feedback_state.get_positions())
+                # print("Joint Velocities: ", feedback_state.get_velocities())
+                # print("Desired positions: ", desired_state.get_positions())
+                # print("Desired Velocities: ", desired_state.get_velocities())
 
                 # SAVE current state
                 recorded_state[idx, 0] = nIter_time
-                recorded_state[idx, 1:4] = feedback_state.get_position()
-                recorded_state[idx, 4:7] = feedback_state.get_linear_velocity()
-                recorded_state[idx, 7:10] = ddq_filtered
-                recorded_state[idx, 10:13] = X_desired[0:3]
-                recorded_state[idx, 13:16] = X_desired[3:6]
-                recorded_state[idx, 16:19] = U_desired
-                recorded_state[idx, 26:30] = feedback_state.get_orientation_coefficients()
-                recorded_state[idx, 30:34] = desired_state.get_orientation_coefficients()
-                recorded_state[idx, 34:37] = feedback_state.get_angular_velocity()
-                recorded_state[idx, 37:40] = desired_state.get_angular_velocity()
+                recorded_state[idx, 1:8] = state.joint_state.get_positions()
+                recorded_state[idx, 8:15] = state.joint_state.get_velocities()
+                recorded_state[idx, 15:22] = state.joint_state.get_torques()
+                recorded_state[idx, 22:29] = desired_joint_state.get_positions()
+                recorded_state[idx, 29:36] = desired_joint_state.get_velocities()
+                # recorded_state[idx, 36:43] = df_desired['torques']
                 idx += 1
 
                 # Set command torques
-                command_torques = sr.JointTorques(ctrl.compute_command(desired_state, feedback_state, state.jacobian))
+                command_torques = sr.JointTorques(joint_ctrl.compute_command(desired_joint_state, feedback_joint_state))
+                command_torques.clamp(10.0)
                 command.joint_state = state.joint_state
                 command.joint_state.set_torques(command_torques.get_torques())
 
                 # print("Command:", command.joint_state.get_torques())
                 recorded_state[idx, 19:26] = command.joint_state.get_torques()
 
-                if np.any(command_torques.get_torques() > 30):
-                    print("Command:", command.joint_state.get_torques())
+                if np.any(command_torques.get_torques() > 10):
+                    print("Command:", command_torques.get_torques())
                     print("TORQUES TOO BIG !!!")
-                    break
-
+                    # break
                 else:
                     robot.send_command(command)
 
@@ -690,8 +701,7 @@ def control_loop(cart_traj_dict, joint_traj_list, robot, freq):
                     os.remove(save_dir + "temp_list_of_evaluated_traj.txt")
 
                     # call plot function
-                    if ctrl_flag == 'cart':
-                        plot_ref_vs_rec(full_desired_X, full_desired_U, full_desired_T, recorded_state)
+                    # plot_ref_vs_rec(full_desired_X, full_desired_U, full_desired_T, recorded_state)
                     break
 
                 # call plot function
@@ -741,6 +751,9 @@ def control_loop(cart_traj_dict, joint_traj_list, robot, freq):
 
             elif should_replay == 'y':
                 print("Replaying same trajectory... \n")
+
+            else :
+                print("Input was not in suggested answers, replaying same trajectory... \n")
 
             # Reset recording list
             recorded_state = np.zeros((10000, 1 + nb_joints * 6)) * np.nan
