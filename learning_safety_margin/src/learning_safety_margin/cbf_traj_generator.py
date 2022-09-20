@@ -159,7 +159,7 @@ class trajGenerator():
                 yt = y + np.random.uniform(y_lim[0]-y, y_lim[1]-y)
 
             # check coordinates are reachable by robot
-            if  .25 <= np.linalg.norm([x,y]) <= .75: # .8 should do it
+            if .25 <= np.linalg.norm([x,y]) <= .75: # .8 should do it
                 inRange = True
 
         z = 0.15
@@ -184,11 +184,14 @@ class trajGenerator():
         end_list = []
         ref_traj = []
 
+        num_safe = 0
+        num_daring = 0
+        num_unsafe = 0
+
         fig = plt.figure()
         ax = plt.axes(projection='3d')
 
         if self.safe:
-            num_safe = 0
             while num_safe < num_demos:
                 if init_guess_list is None:
                     x, xt = self.make_trial_conditions()
@@ -234,7 +237,6 @@ class trajGenerator():
                     ax.scatter(end_list[i][0], end_list[i][1], end_list[i][2], '*', s=5, c=rgba)
 
         if self.semisafe:
-            num_daring = 0
             while num_daring < num_demos:
                x, xt = self.make_trial_conditions()
                res = self.generate_daring_traj(x, xt)
@@ -256,15 +258,13 @@ class trajGenerator():
                     # Plot Trajectories
                     rgba = cmap(crange[i + 1])
                     plt.plot(x_list[i][:, 0], x_list[i][:, 1], x_list[i][:, 2], c=rgba,
-                             label=f'Daring #{i + 1}')
+                             label=f'Daring #{i -num_safe+ 1}')
 
                     # Plot Start and End Points
                     ax.scatter(start_list[i][0], start_list[i][1], start_list[i][2], s=3, c=rgba)
                     ax.scatter(end_list[i][0], end_list[i][1], end_list[i][2], '*', s=5, c=rgba)
 
-        #
         if self.unsafe:
-            num_unsafe = 0
             while num_unsafe < num_demos:
                x, xt = self.make_trial_conditions()
                res = self.generate_unsafe_traj(x, xt)
@@ -284,7 +284,7 @@ class trajGenerator():
                     # Plot Trajectories
                     rgba = cmap(crange[i + 1])
                     plt.plot(x_list[i][:, 0], x_list[i][:, 1], x_list[i][:, 2], c=rgba,
-                             label=f'Unsafe #{i + 1}')
+                             label=f'Unsafe #{i -num_safe-num_daring + 1}')
 
                     # Plot Start and End Points
                     ax.scatter(start_list[i][0], start_list[i][1], start_list[i][2], s=3, c=rgba)

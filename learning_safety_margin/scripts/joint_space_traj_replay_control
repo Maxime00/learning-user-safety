@@ -455,6 +455,5 @@ if __name__ == '__main__':
     print(fn_list)
     np.savetxt(save_dir + "temp_list_of_replayed_trajectories.txt", np.array(fn_list), fmt='%s')
 
-    print("Going to start position...")
     robot_interface = RobotInterface("*:1701", "*:1702")
     control_loop(fpath_list, robot_interface, 200)
