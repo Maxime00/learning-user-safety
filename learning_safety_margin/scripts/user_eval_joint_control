@@ -241,6 +241,141 @@ def plot_f0_traj(rec):
 
     plt.show()
 
+def plot_joint_rec(rec):
+
+    traj_name ="live inverse kinematic for joint controller"
+
+    # Formatting for ease
+    rec_time = rec[:, 0]
+
+    rec_pos = rec[:, 1:8]
+    rec_ref_pos = rec[:, 22:29]
+
+    rec_vel = rec[:, 8:15]
+    rec_ref_vel = rec[:, 29:36]
+
+    rec_torques = rec[:, 15:22]
+    rec_ref_torques = rec[:, 36:43]
+
+    rec_cart_pos = rec[:, 43:46]
+    rec_cart_vel = rec[:, 46:49]
+
+    rec_ref_cart_pos = rec[:, 49:52]
+    rec_ref_cart_vel = rec[:, 52:55]
+
+    rec_ort = rec[:, 55:59]
+    rec_ref_ort = rec[:, 59:63]
+
+    print("PLOTTING REFERENCE VS RECORDED TRAJECTORY")
+
+    # Plot reference and state
+    fig, axs = plt.subplots(4, 2)
+    fig.suptitle("Joint state and reference of '{}'".format(traj_name))
+
+    for i, ax in enumerate(axs.ravel()[:-1]):
+        ax.plot(rec_time[:], rec_pos[:, i])
+        ax.plot(rec_time[:], rec_ref_pos[:, i])
+        ax.set(ylabel="joint {}".format(i+1))
+        ax.set(xlabel="Time [sec]")
+    fig.legend(labels=['Recorded', 'Reference'], loc=(.6,.15))
+
+    # Plot velocities and reference
+    fig, axs = plt.subplots(4, 2)
+    fig.suptitle("Joint Velocities of '{}'".format(traj_name))
+
+    for i, ax in enumerate(axs.ravel()[:-1]):
+        ax.plot(rec_time, rec_vel[:, i])
+        ax.plot(rec_time, rec_ref_vel[:, i])
+        ax.set(ylabel="joint {}".format(i+1))
+        ax.set(xlabel="Time [sec]")
+    fig.legend(labels=['Recorded'], loc=(.6, .15))
+
+    # Plot torques and reference
+    fig, axs = plt.subplots(4, 2)
+    fig.suptitle("Joint  Torques of '{}'".format(traj_name))
+
+    for i, ax in enumerate(axs.ravel()[:-1]):
+        ax.plot(rec_time, rec_torques[:, i])
+        ax.plot(rec_time, rec_ref_torques[:, i])
+        ax.set(ylabel="joint {}".format(i+1))
+        ax.set(xlabel="Time [sec]")
+    fig.legend(labels=['Recorded'], loc=(.6, .15))
+
+    # 3D position plot
+    fig = plt.figure(figsize=(10, 10))
+    ax = plt.axes(projection='3d')
+    plt.plot(rec_cart_pos[:, 0], rec_cart_pos[:, 1], rec_cart_pos[:, 2])
+    plt.plot(rec_ref_cart_pos[:, 0], rec_ref_cart_pos[:, 1], rec_ref_cart_pos[:, 2])
+    plt.xlim(ws_lim[0])
+    plt.ylim(ws_lim[1])
+    ax.set_zlim(ws_lim[2])
+    fig.suptitle("EE pos vs ref of '{}'".format(traj_name))
+    fig.legend(labels=['Recorded', 'Reference'])
+
+    # 3D velocity plot
+    fig = plt.figure(figsize=(10, 10))
+    ax = plt.axes(projection='3d')
+    plt.plot(rec_cart_vel[:, 0], rec_cart_vel[:, 1], rec_cart_vel[:, 2])
+    plt.plot(rec_ref_cart_vel[:, 0], rec_ref_cart_vel[:, 1], rec_ref_cart_vel[:, 2])
+    plt.xlim(np.array(vdot_lim) / 2)
+    plt.ylim(np.array(vdot_lim) / 2)
+    ax.set_zlim(np.array(vdot_lim) / 2)
+    fig.suptitle("EE vel vs ref of '{}'".format(traj_name))
+    fig.legend(labels=['Recorded', 'Reference'])
+
+    # Plot reference and state
+    fig, axs = plt.subplots(3, 1)
+    fig.suptitle("EE Position and reference of '{}'".format(traj_name))
+
+    for i, ax in enumerate(axs.ravel()):
+        ax.plot(rec_time[:], rec_cart_pos[:, i])
+        ax.plot(rec_time[:], rec_ref_cart_pos[:, i])
+        ax.set(ylabel="Dim {}".format(i))
+        ax.set(xlabel="Time [sec]")
+    fig.legend(labels=['Recorded', 'Reference'])
+
+    # # Plot position error
+    # fig, axs = plt.subplots(3, 1)
+    # fig.suptitle("EE position error of '{}'".format(traj_name))
+    #
+    # for i, ax in enumerate(axs.ravel()):
+    #     ax.plot(rec_time, error_pos[:, i])
+    #     ax.set(ylabel="Dim {}".format(i))
+    #     ax.set(xlabel="Time [sec]")
+
+    # Plot velocities and reference
+    fig, axs = plt.subplots(3, 1)
+    fig.suptitle("EE Velocity and reference of '{}'".format(traj_name))
+
+    for i, ax in enumerate(axs.ravel()):
+        ax.plot(rec_time, rec_cart_vel[:, i])
+        ax.plot(rec_time, rec_ref_cart_vel[:, i])
+        ax.set(ylabel="Dim {}".format(i))
+        ax.set(xlabel="Time [sec]")
+    fig.legend(labels=['Recorded', 'Reference'])
+
+    # Plot velocity error
+    # fig, axs = plt.subplots(3, 1)
+    # fig.suptitle("EE Velocity error of '{}'".format(traj_name))
+    #
+    # for i, ax in enumerate(axs.ravel()):
+    #     ax.plot(rec_time, error_vel[:, i])
+    #     ax.set(ylabel="Dim {}".format(i))
+    #     ax.set(xlabel="Time [sec]")
+
+    # Plot orientation and reference
+    fig, axs = plt.subplots(4, 1)
+    fig.suptitle("EE Orientation and reference of '{}'".format(traj_name))
+
+    for i, ax in enumerate(axs.ravel()):
+        ax.plot(rec_time, rec_ort[:, i])
+        ax.plot(rec_time, rec_ref_ort[:, i])
+        ax.set(ylabel="Dim {}".format(i))
+        ax.set(xlabel="Time [sec]")
+    fig.legend(labels=['Recorded', 'Reference'])
+
+    plt.show()
+
 def control_loop(cart_traj_dict, joint_traj_list, robot, freq):
 
     # create publisher
@@ -308,7 +443,7 @@ def control_loop(cart_traj_dict, joint_traj_list, robot, freq):
     ddq_filtered = np.zeros(n_dim)
 
     # Set up data recording
-    recorded_state = np.zeros((10000, 1 + nb_joints * 6)) * np.nan
+    recorded_state = np.zeros((10000, 1 + nb_joints * 6 + n_dim * 4 + 8)) * np.nan
     idx = 0
 
     js_record = np.zeros((10000, 1 + nb_joints * 5)) * np.nan
@@ -429,6 +564,17 @@ def control_loop(cart_traj_dict, joint_traj_list, robot, freq):
                     ds.set_parameter_value("attractor", target_ds, sr.ParameterType.STATE, sr.StateType.CARTESIAN_POSE)
                     # Set up for end of traj follow
                     max_time = full_desired_T[-1]
+
+                    # chanegains for traj follow
+                    # [200, 180, 180, 160, 140, 100, 30] * 0.4
+                    # [22, 20, 19, 18, 13, 12, 4]
+                    stiffness = np.array([220, 220, 220, 180, 80, 80, 50]) * 0.3
+                    damping = np.array([15, 15, 15, 13, 8, 7, 4]) * 1.0
+
+                    joint_ctrl.set_parameter_value("stiffness", stiffness.tolist(), sr.ParameterType.DOUBLE_ARRAY)
+                    joint_ctrl.set_parameter_value("damping",damping.tolist(), sr.ParameterType.DOUBLE_ARRAY)
+
+
                     print("Ready to play planned trajectory labeled #%s of %s [Progress: %s/%s] \n" % (traj_idx + 1, nbr_planned_traj, idx_to_incr+1, len(idx_list)))
 
                 elif ctrl_flag == 'joint':
@@ -534,6 +680,12 @@ def control_loop(cart_traj_dict, joint_traj_list, robot, freq):
                 feedback_state.set_linear_velocity(dx_filtered)
 
                 # orientation
+                # TODO : convert orientation for ds to evaluate, should be in ref frame of urdf model (not panda gripper) ??
+                # WHY DOES NOT WORK
+                # gripper_orient = Quaternion(state.ee_state.get_orientation())
+                # urdf_orient = gripper_orient * offset_rot
+                # feedback_state.set_orientation(urdf_orient.elements)
+
                 feedback_state.set_orientation(state.ee_state.get_orientation())
                 dq_filtered_ang = alpha_ang * dq_filtered_ang + (1 - alpha_ang) * state.ee_state.get_angular_velocity()
                 feedback_state.set_angular_velocity(dq_filtered_ang)
@@ -549,7 +701,7 @@ def control_loop(cart_traj_dict, joint_traj_list, robot, freq):
                 ds_twist = sr.CartesianTwist(ds.evaluate(feedback_state))
                 desired_state.set_orientation(desired_start_orientation.elements)
                 # clamp and set desired angular velocities
-                ds_twist.clamp(.25, .5)
+                ds_twist.clamp(.25, .25)
 
 
                 param = InverseKinematicsParameters()
@@ -564,18 +716,25 @@ def control_loop(cart_traj_dict, joint_traj_list, robot, freq):
                 desired_state.set_linear_acceleration(U_desired)
                 desired_state.set_angular_velocity(ds_twist.data()[3:6])
 
+                ## TODO : use curent joit position instead of desired for inverse velocity
+
                 param_vel = QPInverseVelocityParameters()
                 jv_sr = sr.JointVelocities(
-                    robot_model.inverse_velocity(sr.CartesianTwist(desired_state), jp_sr, param_vel, "panda_link8" ))
+                    robot_model.inverse_velocity(sr.CartesianTwist(desired_state), jp_sr, param_vel, "panda_link8"))
                 joint_vel = jv_sr.data()
 
                 desired_joint_state.set_velocities(joint_vel)
 
                 ## DEBUG prints
-                # print("Joint positions: ", feedback_state.get_positions())
-                # print("Joint Velocities: ", feedback_state.get_velocities())
-                # print("Desired positions: ", desired_state.get_positions())
-                # print("Desired Velocities: ", desired_state.get_velocities())
+                if print_count % 50 == 0:
+                    print("Joint positions: ", feedback_joint_state.get_positions())
+                    # print("Joint Velocities: ", feedback_joint_state.get_velocities())
+                    print("Desired Joint positions: ", desired_joint_state.get_positions())
+                    # print("Desired Velocities: ", desired_joint_state.get_velocities())
+                    print("Current orientation: ", feedback_state.get_orientation())
+                    print("Desired orientation: ", desired_state.get_orientation())
+                print_count += 1
+
 
                 # SAVE current state
                 recorded_state[idx, 0] = nIter_time
@@ -584,6 +743,15 @@ def control_loop(cart_traj_dict, joint_traj_list, robot, freq):
                 recorded_state[idx, 15:22] = state.joint_state.get_torques()
                 recorded_state[idx, 22:29] = desired_joint_state.get_positions()
                 recorded_state[idx, 29:36] = desired_joint_state.get_velocities()
+                # cartesian state
+                recorded_state[idx, 43:46] = feedback_state.get_position()
+                recorded_state[idx, 46:49] = feedback_state.get_linear_velocity()
+                recorded_state[idx, 49:52] = X_desired[0:3]
+                recorded_state[idx, 52:55] = X_desired[3:6]
+                # orientation
+                recorded_state[idx, 55:59] = feedback_state.get_orientation_coefficients()
+                recorded_state[idx, 59:63] = desired_state.get_orientation_coefficients()
+
                 # recorded_state[idx, 36:43] = df_desired['torques']
                 idx += 1
 
@@ -594,7 +762,7 @@ def control_loop(cart_traj_dict, joint_traj_list, robot, freq):
                 command.joint_state.set_torques(command_torques.get_torques())
 
                 # print("Command:", command.joint_state.get_torques())
-                recorded_state[idx, 19:26] = command.joint_state.get_torques()
+                recorded_state[idx, 36:43] = command.joint_state.get_torques()
 
                 if np.any(command_torques.get_torques() > 10):
                     print("Command:", command_torques.get_torques())
@@ -706,7 +874,7 @@ def control_loop(cart_traj_dict, joint_traj_list, robot, freq):
 
                 # call plot function
                 if ctrl_flag == 'cart':
-                    plot_ref_vs_rec(full_desired_X, full_desired_U, full_desired_T, recorded_state)
+                    plot_joint_rec(recorded_state)
 
                 ## Set up next traj
                 traj_idx = idx_list[idx_to_incr]
@@ -756,13 +924,17 @@ def control_loop(cart_traj_dict, joint_traj_list, robot, freq):
                 print("Input was not in suggested answers, replaying same trajectory... \n")
 
             # Reset recording list
-            recorded_state = np.zeros((10000, 1 + nb_joints * 6)) * np.nan
+            recorded_state = np.zeros((10000, 1 + nb_joints * 6 + n_dim * 4 + 8)) * np.nan
             idx = 0
             js_record = np.zeros((10000, 1 + nb_joints * 5)) * np.nan
             js_idx = 0
 
             # Reset integrator
             integral = np.zeros(7)
+
+            # Reset controller
+            joint_ctrl.set_parameter_value("stiffness", [220, 200, 200, 180, 120, 100, 80], sr.ParameterType.DOUBLE_ARRAY)
+            joint_ctrl.set_parameter_value("damping", [15, 15, 15, 13, 9, 8, 6], sr.ParameterType.DOUBLE_ARRAY)
 
             # Reset flag to start loop again
             input("Ready for next trajectory... Press Enter to start")
@@ -816,7 +988,7 @@ if __name__ == '__main__':
     # Init Trajectory Generation
     print("Instantiating Traj Planner, should take around %s seconds... \n" % ((n_steps/2)*3))
     instantiate_start = time.time()
-    traj_generator = trajGenerator(centers, stds, params, bias_param, dt=dt, n_steps=n_steps, r_gains=50, zero_acc_start=True)
+    traj_generator = trajGenerator(centers, stds, params, bias_param, dt=dt, n_steps=n_steps, r_gains=20, zero_acc_start=True)
     print("FINISH INSTANTIATING TRAJ PLANNER IN %s seconds \n" % (time.time() - instantiate_start))
 
     print("Planning %s trajectories... \n" % nbr_demos*3)
@@ -847,5 +1019,5 @@ if __name__ == '__main__':
     np.savetxt(save_dir + "temp_list_of_replayed_trajectories.txt", np.array(fn_list), fmt='%s')
 
     # Connect to robot and start control loop
-    robot_interface = RobotInterface("*:1701", "*:1702")
+    robot_interface = RobotInterface("*:1601", "*:1602")
     control_loop(cbf_traj, fpath_list, robot_interface, freq)

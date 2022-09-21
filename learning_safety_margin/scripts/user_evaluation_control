@@ -834,5 +834,5 @@ if __name__ == '__main__':
     np.savetxt(save_dir + "temp_list_of_replayed_trajectories.txt", np.array(fn_list), fmt='%s')
 
     # Connect to robot and start control loop
-    robot_interface = RobotInterface("*:1701", "*:1702")
+    robot_interface = RobotInterface("*:1601", "*:1602")
     control_loop(cbf_traj, fpath_list, robot_interface, freq)
