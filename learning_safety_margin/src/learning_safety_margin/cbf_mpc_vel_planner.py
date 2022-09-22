@@ -16,9 +16,10 @@ class DoubleIntegrator():
 
 class CBFMPC_Controller(DoubleIntegrator):
 
-    def __init__(self, centers, stds, theta, bias, dt=0.1, n_steps=10, v_gain = 10, r_gains =.01, zero_acc_start = False):
+    def __init__(self, centers, stds, theta, bias, dt=0.1, n_steps=.1, p_gains= 1, v_gain = .1, r_gains =.01, zero_acc_start = False):
 
         super().__init__(dt)
+        print("WS LIMS: ", ws_lim)
         # Set MPC Parameters
         self.N = n_steps
         self.dt = dt
@@ -39,9 +40,9 @@ class CBFMPC_Controller(DoubleIntegrator):
         self.P = casadi.SX.sym('P', self.n_states + self.n_states + self.n_controls*self.N)
 
         # Optimization weights' variables
-        self.Q_x = 1
-        self.Q_y = 1
-        self.Q_theta = 1
+        self.Q_x = p_gains
+        self.Q_y = p_gains
+        self.Q_theta = p_gains
         self.Q_v = v_gain
         self.R1 = r_gains
         self.R2 = r_gains
@@ -49,7 +50,7 @@ class CBFMPC_Controller(DoubleIntegrator):
 
         self.Q = casadi.diagcat(self.Q_x, self.Q_y, self.Q_theta, self.Q_v, self.Q_v, self.Q_v) # State Weights 
         self.R = casadi.diagcat(self.R1, self.R2, self.R3) # Control Weights
-
+        print(self.Q, self.R)
         # CBF Parameters
         self.gamma = 0.1#0.05 # CBF Parameter
         self.centers = centers
@@ -91,7 +92,7 @@ class CBFMPC_Controller(DoubleIntegrator):
             # print((2*self.n_states + i*self.n_controls),(2*self.n_states + i*self.n_controls + self.n_controls))
             # udes = self.P[(2*self.n_states + i*self.n_controls):(2*self.n_states + i*self.n_controls + self.n_controls) ]
             # Objective Function
-            self.cost_fn = self.cost_fn + (xi-self.P[self.n_states:(2*self.n_states)]).T @ self.Q @ (xi-self.P[self.n_states:(2*self.n_states)]) + ui.T @ self.R @ ui #+ (ui-udes).T @ self.R @ (ui-udes)
+            self.cost_fn = self.cost_fn + (xi-self.P[self.n_states:(2*self.n_states)]).T @ self.Q @ (xi-self.P[self.n_states:(2*self.n_states)]) + ui.T @ self.R @ ui #+ (ui-udes).T @ self.R @ (ui-udes) # + ui.T @ self.R @ ui
 
             # Constraints
             xnext_sim = self.forward_sim(xi, ui)#xi + ui * self.dt # Forward Sim

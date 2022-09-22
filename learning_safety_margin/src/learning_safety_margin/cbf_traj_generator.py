@@ -20,8 +20,8 @@ class trajGenerator():
         self.stds = stds
         self.theta = theta
         self.bias = bias
-        self.safe = True
-        self.unsafe = False
+        self.safe = False
+        self.unsafe = True
         self.semisafe = False
         if self.semisafe: self.daring_offset = daring_offset
         if self.unsafe: self.unsafe_offset = unsafe_offset
@@ -319,22 +319,19 @@ class trajGenerator():
             x_list = semisafe_x_list
             u_list = semisafe_u_list
             t_list = semisafe_t_list
+
         cbf_traj_data = {
             'X': x_list,
             'U': u_list,
             'T': t_list,
-            'safe_X': safe_x_list,
-            'safe_U': safe_u_list,
-            'safe_T': safe_t_list,
-            'semisafe_X': semisafe_x_list,
-            'semisafe_U': semisafe_u_list,
-            'semisafe_T': semisafe_t_list,
-            'unsafe_X': unsafe_x_list,
-            'unsafe_U': unsafe_u_list,
-            'unsafe_T': unsafe_t_list,
+            'is_safe': self.safe,
+            'is_unsafe': self.unsafe,
+            'is_daring': self.semisafe,
             'Labels': labels
         }
         # print(ref_traj)
+
+
 
         # cmap = plt.cm.get_cmap('Greens')
         # crange = np.linspace(0,1,len(safe_x_list) + 2)

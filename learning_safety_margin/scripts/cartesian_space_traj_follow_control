@@ -719,12 +719,16 @@ if __name__ == '__main__':
     # Init Trajectory Generation
     print("Instantiating Traj Planner, should take around %s seconds... \n" % ((n_steps/2)*3))
     instantiate_start = time.time()
-    traj_generator = trajGenerator(centers, stds, params, bias_param, dt=dt, n_steps=n_steps, r_gains=200, zero_acc_start=True)
+    traj_generator = trajGenerator(centers, stds, params, bias_param, dt=dt, n_steps=n_steps, zero_acc_start=True)#, r_gains=200, )
     print("FINISH INSTANTIATING TRAJ PLANNER IN %s seconds \n" % (time.time() - instantiate_start))
 
     print("Planning %s trajectories... \n" % nbr_demos)
     plan_start = time.time()
     cbf_traj = traj_generator.generate_all_trajectories(num_demos=nbr_demos)#, init_guess_list=fpath_list)#, plot_debug=show_plots)
+
+    with open('saved_dictionary.pkl', 'wb') as f:
+        pickle.dump(cbf_traj, f)
+
     print("FINISH planning trajectories in %s seconds \n" % (time.time() - plan_start))
 
     # Set save dir and create folder if needed
