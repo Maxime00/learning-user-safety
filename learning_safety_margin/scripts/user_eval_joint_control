@@ -433,7 +433,7 @@ def control_loop(cart_traj_dict, joint_traj_list, robot, freq):
 
     print("REF FRAME MODEL : ", robot_model.get_base_frame())
 
-    flag = 0
+    flag = -1
     print_freq = freq*5
 
     # integrator variables  [60, 50, 45, 40, 35, 25, 20]
@@ -448,7 +448,7 @@ def control_loop(cart_traj_dict, joint_traj_list, robot, freq):
 
     # filter parameters
     n_dim = 3  # cartesian space[x,y,z]]
-    alpha = 0.99
+    alpha = 0.8
     alpha_ang = 0.8
     dx_filtered = np.zeros(n_dim)
     dq_filtered_ang = np.zeros(n_dim)
@@ -470,10 +470,15 @@ def control_loop(cart_traj_dict, joint_traj_list, robot, freq):
     # wait a bit to receive correct state
     checked_first_state = True
 
+    home_position = np.array([0.0, 0.0, 0.0,  -1.6478, 0.0, 1.6295, 0.785])
+
     # Successive traj follow - make random idx list to shuffle planned trajectories
     # planned traj + replay traj
     nbr_planned_traj = len(cart_traj_dict['Labels'])
-    idx_list = list(range(0, nbr_planned_traj))#+len(joint_traj_list))) TODO : FIX FOR full usage
+
+    ## TODO : REPLACE idx_list FOR TASK SUCCESS (will use only planned trajectories and no replays)
+    # idx_list = list(range(0, nbr_planned_traj))
+    idx_list = list(range(0, nbr_planned_traj+len(joint_traj_list)))
     random.shuffle(idx_list)
     idx_to_incr = 0
 
@@ -519,6 +524,7 @@ def control_loop(cart_traj_dict, joint_traj_list, robot, freq):
 
     print_count = 0
 
+    ### CONTROL LOOP
     rate = rospy.Rate(freq)
     while not rospy.is_shutdown():
 
@@ -539,6 +545,72 @@ def control_loop(cart_traj_dict, joint_traj_list, robot, freq):
 
         # print("EEF position: ", state.ee_state.get_position())
         # print("EEF orientation: ", state.ee_state.get_orientation())
+        if flag == -1:
+            # ----------- GO TO HOME POSITION ---------------------
+
+            error = abs(home_position - state.joint_state.get_positions())
+            time_f0 = time.time() - start_f0
+
+            if np.all(error < 0.3):
+                # print("Desired start position : ", initial_joint_pos)
+                print("Error :", error)
+                print("Reached home position in %s seconds" % time_f0)
+                flag = 0
+
+                # Stop robot
+                command.joint_state = state.joint_state
+                command.joint_state.set_torques(np.zeros(7))
+                robot.send_command(command)
+                rospy.sleep(1.0)
+                robot.send_command(command)
+
+                # input("Waiting for user input... Press Enter to start \n ")
+                rospy.sleep(0.2)
+                timeZero = time.time()
+                continue
+
+            # Adding integrator when getting close to target
+            # if np.all(error < start_integrator_threshold):
+            #     integral += (initial_joint_pos - state.joint_state.get_positions()) * time_period
+            #     # reset integral if overhsoot
+            #     if np.any(abs(integral) > integrator_reset_threshold):
+            #         integral *= 0
+            #     inte_torques = inte_gain * integral
+                # if print_count % 50 == 0:
+                #     print("INTERGRATOR TORQUES :", inte_torques)
+
+            # Set feedback state
+            feedback_joint_state.set_positions(state.joint_state.get_positions())
+            dq_filtered = (1 - alpha) * dq_filtered + alpha * state.joint_state.get_velocities()
+            feedback_joint_state.set_velocities(dq_filtered)
+
+            # Set velocity and position error
+            velo_d = home_position - state.joint_state.get_positions()
+
+            # Norm velocities
+            velo_d = velo_d / np.linalg.norm(velo_d) if np.linalg.norm(velo_d) > 1.0 else velo_d
+            desired_joint_state.set_velocities(velo_d)
+
+            pos_d = feedback_joint_state.get_positions() + time_period * velo_d
+            desired_joint_state.set_positions(pos_d)
+
+            # Set command
+            command_torques = sr.JointTorques(joint_ctrl.compute_command(desired_joint_state, feedback_joint_state))
+            command.joint_state = state.joint_state
+            command.joint_state.set_torques(command_torques.get_torques() + inte_torques)
+
+            # debug print
+            if print_count % print_freq == 0:
+                print("Error :", error)
+            print_count += 1
+
+            # print("Command:", command.joint_state.get_torques())
+            if np.any(command_torques.get_torques() > 30):
+                print("TORQUES TOO BIG !!!")
+                break
+
+            else:
+                robot.send_command(command)
 
         if flag == 0:
             #----------- GO TO START POSITION ---------------------
@@ -581,13 +653,13 @@ def control_loop(cart_traj_dict, joint_traj_list, robot, freq):
                     # chane gains for traj follow
                     # [200, 180, 180, 160, 140, 100, 30]
                     # [22, 20, 19, 18, 13, 12, 4]
-                    stiffness = np.array([220, 220, 220, 180, 80, 80, 10]) * 0.3
-                    damping = np.array([15, 15, 15, 13, 8, 7, 0.1]) * 0.9
-                    inertia = np.array([0.8, 0.8, 0.8, 0.7, 0.5, 0.4, 0.01]) * 1.0
+                    stiffness = np.array([220, 220, 220, 180, 120, 100, 40]) * 0.3
+                    damping = np.array([18, 17, 16, 13, 6.8, 6, 1.5]) * 2.3
+                    # inertia = np.array([0.8, 0.8, 0.8, 0.7, 0.5, 0.4, 0.01]) * 1.0
 
                     joint_ctrl.set_parameter_value("stiffness", stiffness.tolist(), sr.ParameterType.DOUBLE_ARRAY)
                     joint_ctrl.set_parameter_value("damping", damping.tolist(), sr.ParameterType.DOUBLE_ARRAY)
-                    joint_ctrl.set_parameter_value("inertia", inertia.tolist(), sr.ParameterType.DOUBLE_ARRAY)
+                    # joint_ctrl.set_parameter_value("inertia", inertia.tolist(), sr.ParameterType.DOUBLE_ARRAY)
 
                     print("Ready to play planned trajectory labeled #%s of %s [Progress: %s/%s] \n" % (traj_idx + 1, nbr_planned_traj, idx_to_incr+1, len(idx_list)))
 
@@ -689,18 +761,11 @@ def control_loop(cart_traj_dict, joint_traj_list, robot, freq):
                 # cartesian state
                 feedback_state.set_position(state.ee_state.get_position())
 
-                time_convert_0 = time.time()
-
                 # filter velocities
                 dx_filtered = alpha * dx_filtered + (1 - alpha) * state.ee_state.get_linear_velocity()
                 feedback_state.set_linear_velocity(dx_filtered)
 
                 # orientation
-                # TODO : convert orientation for ds to evaluate, should be in ref frame of urdf model (not panda gripper) ??
-                # WHY DOES NOT WORK
-                # gripper_orient = Quaternion(state.ee_state.get_orientation())
-                # urdf_orient = gripper_orient * offset_rot
-                # feedback_state.set_orientation(urdf_orient.elements)
                 feedback_state.set_orientation(state.ee_state.get_orientation())
                 dq_filtered_ang = alpha_ang * dq_filtered_ang + (1 - alpha_ang) * state.ee_state.get_angular_velocity()
                 feedback_state.set_angular_velocity(dq_filtered_ang)
@@ -717,40 +782,33 @@ def control_loop(cart_traj_dict, joint_traj_list, robot, freq):
                 desired_state.set_orientation(desired_start_orientation.elements)
                 # clamp and set desired angular velocities
                 ds_twist.clamp(.25, .25)
+
+                # Get joint positions
                 param = InverseKinematicsParameters()
                 param.max_number_of_iterations = 7000
                 param.tolerance = 0.005
                 jp_sr = sr.JointPositions(
-                    robot_model.inverse_kinematics(sr.CartesianPose(desired_state), param, "panda_link8"))
+                    robot_model.inverse_kinematics(sr.CartesianPose(desired_state), sr.JointPositions(state.joint_state), param, "panda_link8"))
                 joint_pos =jp_sr.data()
-
                 desired_joint_state.set_positions(joint_pos)
 
                 desired_state.set_linear_velocity(X_desired[3:6])
-                # desired_state.set_linear_acceleration(U_desired)
                 desired_state.set_angular_velocity(ds_twist.data()[3:6])
 
-                # LINALG.LSTSQ(jacobian, cartesian twist)
-                # param_vel = QPInverseVelocityParameters() param_vel
+                # get joint velocities
                 joint_vel = np.linalg.lstsq(state.jacobian.data(), desired_state.get_twist())[0]
-
-                # jv_sr = sr.JointVelocities(
-                #     robot_model.inverse_velocity(sr.CartesianTwist(desired_state), sr.JointPositions(state.joint_state), "panda_link8"))
-                # joint_vel = jv_sr.data()
-
                 desired_joint_state.set_velocities(joint_vel)
 
                 ## DEBUG prints
-                if print_count % (print_freq/5) == 0:
-                    print("Joint positions: ", feedback_joint_state.get_positions())
-                    # print("Joint Velocities: ", feedback_joint_state.get_velocities())
-                    print("Desired Joint positions: ", desired_joint_state.get_positions())
-                    # print("Desired Velocities: ", desired_joint_state.get_velocities())
-                    # print("Current orientation: ", feedback_state.get_orientation())
-                    # print("Desired orientation: ", desired_state.get_orientation())
-                    # print("Time to convert:", time.time() - time_convert_0)
-                    # print("Joint Torques :", command_torques.get_torques())
-                print_count += 1
+                # if print_count % (print_freq/5) == 0:
+                #     # print("Joint positions: ", feedback_joint_state.get_positions())
+                #     # # print("Joint Velocities: ", feedback_joint_state.get_velocities())
+                #     # print("Desired Joint positions: ", desired_joint_state.get_positions())
+                #     # print("Desired Velocities: ", desired_joint_state.get_velocities())
+                #     # print("Current orientation: ", feedback_state.get_orientation())
+                #     # print("Desired orientation: ", desired_state.get_orientation())
+                #     # print("Joint Torques :", command_torques.get_torques())
+                # print_count += 1
 
                 # compute linear acceleration for data_recording
                 if not np.isnan(recorded_state[idx - 1, 0]):
@@ -773,7 +831,7 @@ def control_loop(cart_traj_dict, joint_traj_list, robot, freq):
                 # orientation
                 recorded_state[idx, 55:59] = feedback_state.get_orientation_coefficients()
                 recorded_state[idx, 59:63] = desired_state.get_orientation_coefficients()
-                # accel
+                # acceleration
                 recorded_state[idx, 63:66] = ddq_filtered
                 recorded_state[idx, 66:69] = U_desired
 
@@ -792,7 +850,6 @@ def control_loop(cart_traj_dict, joint_traj_list, robot, freq):
                 command.joint_state = state.joint_state
                 command.joint_state.set_torques(command_torques.get_torques())
 
-                print("Command:", command.joint_state.get_torques())
                 recorded_state[idx, 36:43] = command.joint_state.get_torques()
 
                 if np.any(command_torques.get_torques() > 10):
@@ -904,8 +961,8 @@ def control_loop(cart_traj_dict, joint_traj_list, robot, freq):
                     break
 
                 # call plot function
-                if ctrl_flag == 'cart':
-                    plot_joint_rec(recorded_state)
+                # if ctrl_flag == 'cart':
+                #     plot_joint_rec(recorded_state)
 
                 ## Set up next traj
                 traj_idx = idx_list[idx_to_incr]
@@ -971,7 +1028,7 @@ def control_loop(cart_traj_dict, joint_traj_list, robot, freq):
             input("Ready for next trajectory... Press Enter to start")
             print("Going to start position...")
             start_f0 = time.time()
-            flag = 0
+            flag = -1
 
         # Publish joint states for recording
         pub.publish(convert_joint_state_msg(state))
