@@ -253,8 +253,8 @@ def control_loop(cart_traj_dict, joint_traj_list, robot, freq):
     ctrl = create_cartesian_controller(CONTROLLER_TYPE.IMPEDANCE)
 
     ctrl.set_parameter_value("stiffness", [150, 150, 150, 15, 15, 15], sr.ParameterType.DOUBLE_ARRAY) # between 20 and 10
-    ctrl.set_parameter_value("damping", [25, 25, 25, 7.5, 7.5, 1.5], sr.ParameterType.DOUBLE_ARRAY) # between 5 and 10
-    ctrl.set_parameter_value("inertia", [.45, .45, .45, 0., 0., 0.], sr.ParameterType.DOUBLE_ARRAY)
+    ctrl.set_parameter_value("damping", [45, 45, 45, 7.5, 7.5, 1.5], sr.ParameterType.DOUBLE_ARRAY) # between 5 and 10
+    ctrl.set_parameter_value("inertia", [100, 100, 100, 0.5, 0.5, 0.001], sr.ParameterType.DOUBLE_ARRAY) # .45
 
     # DS for orientation control
     ds = create_cartesian_ds(DYNAMICAL_SYSTEM_TYPE.POINT_ATTRACTOR)
@@ -296,7 +296,7 @@ def control_loop(cart_traj_dict, joint_traj_list, robot, freq):
 
     # filter parameters
     n_dim = 3  # cartesian space[x,y,z]]
-    alpha = 0.85
+    alpha = 0.45 # 0.85
     alpha_ang = 0.8
     dx_filtered = np.zeros(n_dim)
     dq_filtered_ang = np.zeros(n_dim)
@@ -318,10 +318,13 @@ def control_loop(cart_traj_dict, joint_traj_list, robot, freq):
     # wait a bit to receive correct state
     checked_first_state = True
 
+    # Falg to reahc correct heigh before going to target
+    height_flag = True
+
     # Successive traj follow - make random idx list to shuffle planned trajectories
     # planned traj + replay traj
     nbr_planned_traj = len(cart_traj_dict['Labels'])
-    idx_list = list(range(0, nbr_planned_traj+len(joint_traj_list)))
+    idx_list = list(range(0, nbr_planned_traj))#+len(joint_traj_list)))
     random.shuffle(idx_list)
     idx_to_incr = 0
 
@@ -449,7 +452,7 @@ def control_loop(cart_traj_dict, joint_traj_list, robot, freq):
 
             # Set feedback state
             feedback_joint_state.set_positions(state.joint_state.get_positions())
-            dq_filtered = (1 - alpha) * dq_filtered + alpha * state.joint_state.get_velocities()
+            dq_filtered = alpha * dq_filtered + (1-alpha) * state.joint_state.get_velocities()
             feedback_joint_state.set_velocities(dq_filtered)
 
             # Set velocity and position error
@@ -574,6 +577,8 @@ def control_loop(cart_traj_dict, joint_traj_list, robot, freq):
                 recorded_state[idx, 30:34] = desired_state.get_orientation_coefficients()
                 recorded_state[idx, 34:37] = feedback_state.get_angular_velocity()
                 recorded_state[idx, 37:40] = desired_state.get_angular_velocity()
+                # needed for plots
+                recorded_state[idx, 40:43] = np.array([0,0,0])
                 idx += 1
 
                 # Set command torques
@@ -795,7 +800,7 @@ if __name__ == '__main__':
     # print("BIAS:", bias_param)
 
     # SET PARAMETERS FOR MPC CONTROL
-    freq = 200
+    freq = 300
     dt = 0.1  # 1./freq
     n_steps = 50
     nbr_demos = int(number_of_demos)
@@ -803,7 +808,7 @@ if __name__ == '__main__':
     # Init Trajectory Generation
     print("Instantiating Traj Planner, should take around %s seconds... \n" % ((n_steps/2)*3))
     instantiate_start = time.time()
-    traj_generator = trajGenerator(centers, stds, params, bias_param, dt=dt, n_steps=n_steps, r_gains=50, zero_acc_start=True)
+    traj_generator = trajGenerator(centers, stds, params, bias_param, dt=dt, n_steps=n_steps, r_gains=0.01, zero_acc_start=True)
     print("FINISH INSTANTIATING TRAJ PLANNER IN %s seconds \n" % (time.time() - instantiate_start))
 
     print("Planning %s trajectories... \n" % nbr_demos*3)

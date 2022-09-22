@@ -16,7 +16,7 @@ class DoubleIntegrator():
 
 class CBFMPC_Controller(DoubleIntegrator):
 
-    def __init__(self, centers, stds, theta, bias, dt=0.1, n_steps=10, v_gain = 10, r_gains =1, zero_acc_start = False):
+    def __init__(self, centers, stds, theta, bias, dt=0.1, n_steps=10, pos_gains=1, v_gain = .1, r_gains =.01, zero_acc_start = False):
 
         super().__init__(dt)
         # Set MPC Parameters
@@ -39,9 +39,9 @@ class CBFMPC_Controller(DoubleIntegrator):
         self.P = casadi.SX.sym('P', self.n_states + self.n_states)
 
         # Optimization weights' variables
-        self.Q_x = 100
-        self.Q_y = 100
-        self.Q_theta = 100
+        self.Q_x = pos_gains
+        self.Q_y = pos_gains
+        self.Q_theta = pos_gains
         self.Q_v = v_gain
         self.R1 = r_gains
         self.R2 = r_gains

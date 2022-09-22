@@ -168,6 +168,7 @@ def control_loop(fpath_list, robot, freq):
     feedback_state = sr.JointState("franka", nb_joints)
 
     flag = 0
+    checked_first_state = True
 
     # integrator variables  [60, 50, 45, 40, 35, 25, 20]
     inte_gain = [65, 55, 50, 45, 40, 30, 20]
@@ -455,5 +456,5 @@ if __name__ == '__main__':
     print(fn_list)
     np.savetxt(save_dir + "temp_list_of_replayed_trajectories.txt", np.array(fn_list), fmt='%s')
 
-    robot_interface = RobotInterface("*:1701", "*:1702")
+    robot_interface = RobotInterface("*:1601", "*:1602")
     control_loop(fpath_list, robot_interface, 200)
