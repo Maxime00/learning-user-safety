@@ -49,11 +49,11 @@ def desired_orientation():
     desired_orientation = temp_orient * offset_rot
     return desired_orientation.elements
 
-def setup_initial_jp(X, robot_model, z_axis_gripper_offset):
+def setup_initial_jp(cart_pos, robot_model, z_axis_gripper_offset):
     # Set up initial position in Joint State from cartesian state and urdf model
     initial_cart_pos = sr.CartesianState("panda_ee", robot_model.get_base_frame())
     # add z-axis offset for gripper
-    init_pos = X[0, 0:3] + [0, 0, z_axis_gripper_offset]
+    init_pos = cart_pos + [0, 0, z_axis_gripper_offset]
     initial_cart_pos.set_position(init_pos)
     initial_cart_pos.set_orientation(desired_orientation())
     param = InverseKinematicsParameters()
@@ -105,6 +105,10 @@ def control_loop(cart_traj_dict, joint_traj_list, robot, freq, replays_flag, do_
     flag = 0
     print_freq = freq*10
 
+    # Avoid obstacle logic
+    obstacle_height = 0.15
+    avoiding_obstacle = False
+
     # Integrator Variables
     if in_sim:
         inte_gain = [3, 2.5, 2, 1.8, 1.5, 1.3, 1]   # SIM GAINS
@@ -143,13 +147,14 @@ def control_loop(cart_traj_dict, joint_traj_list, robot, freq, replays_flag, do_
     checked_first_state = True
 
     home_position = np.array([0.0, 0.0, 0.0,  -1.6478, 0.0, 1.6295, 0.785])
+    target = home_position
 
     # Successive traj follow - make random idx list to shuffle planned trajectories
     nbr_planned_traj = len(cart_traj_dict['Labels'])
     # Whether to use replays or only planned trajectories
     if replays_flag:
         idx_list = list(range(0, nbr_planned_traj+len(joint_traj_list)))
-    elif replays_flag:
+    elif not replays_flag:
         idx_list = list(range(0, nbr_planned_traj))
     random.shuffle(idx_list)
     idx_to_incr = 0
@@ -172,7 +177,7 @@ def control_loop(cart_traj_dict, joint_traj_list, robot, freq, replays_flag, do_
         correct_label = cart_traj_dict['Labels'][traj_idx]
         # append 0 accelerations to U to match size of other variables
         full_desired_U = np.append(full_desired_U, [[0, 0, 0]], axis=0)
-        initial_joint_pos = setup_initial_jp(full_desired_X, robot_model, z_axis_gripper_offset)
+        initial_joint_pos = setup_initial_jp(full_desired_X[0, 0:3], robot_model, z_axis_gripper_offset)
 
     elif ctrl_flag == 'Replay':
         ## Set up joint trajectory + initial position
@@ -192,7 +197,7 @@ def control_loop(cart_traj_dict, joint_traj_list, robot, freq, replays_flag, do_
 
         # Wait a bit so state is correct
         elif state and checked_first_state:
-            print("EEF position: ", state.ee_state.get_position())
+            # print("EEF position: ", state.ee_state.get_position())
             rospy.sleep(0.1)
             checked_first_state = False
             input("Waiting for user input... Press Enter to start")
@@ -206,9 +211,23 @@ def control_loop(cart_traj_dict, joint_traj_list, robot, freq, replays_flag, do_
             error = abs(home_position - state.joint_state.get_positions())
             time_f0 = time.time() - start_f0
 
+            ## Go up to avoid obstacle if too low
+            if state.ee_state.get_position()[2] < obstacle_height:
+                cart_target = state.ee_state.get_position()[0:3]
+                cart_target = cart_target.tolist()
+                cart_target[2] = obstacle_height + 0.1
+                print(cart_target)
+                target = setup_initial_jp(cart_target, robot_model, z_axis_gripper_offset)
+                avoiding_obstacle = True
+
+            # once high enough, switch target to home
+            if state.ee_state.get_position()[2] >= obstacle_height and avoiding_obstacle:
+                avoiding_obstacle = False
+                target = home_position
+
             if np.all(error < 0.3):
                 # print("Desired start position : ", initial_joint_pos)
-                print("Error :", error)
+                # print("Error :", error)
                 print("Reached home position in %s seconds" % time_f0)
                 flag = 1
 
@@ -230,7 +249,7 @@ def control_loop(cart_traj_dict, joint_traj_list, robot, freq, replays_flag, do_
             feedback_joint_state.set_velocities(dq_filtered)
 
             # Set velocity and position error
-            velo_d = home_position - state.joint_state.get_positions()
+            velo_d = target - state.joint_state.get_positions()
 
             # Norm velocities
             velo_d = velo_d / np.linalg.norm(velo_d) if np.linalg.norm(velo_d) > 1.0 else velo_d
@@ -532,8 +551,10 @@ def control_loop(cart_traj_dict, joint_traj_list, robot, freq, replays_flag, do_
             # option to replay the same trajectory again
             should_replay = input("Do you want to replay this trajectory again ? [y/n] \n")
 
-            if should_replay == 'n':
+            if should_replay == 'y' or should_replay == 'Y' or should_replay == 'yes':
+                print("Replaying same trajectory, wait for setup... \n")
 
+            else:
                 # Get user classification
                 classified_as = input("How would you classify this trajectory ? [safe/daring/unsafe] \n")
                 user_classification.append(classified_as)
@@ -564,18 +585,18 @@ def control_loop(cart_traj_dict, joint_traj_list, robot, freq, replays_flag, do_
                     # call plot function
                     if do_plots:
                         if ctrl_flag == 'Planned':
-                            plot_rec_from_planned_joint(recorded_state)
+                            plot_rec_from_planned_joint(recorded_state, save_fn)
                         elif ctrl_flag == 'Replay':
-                            plot_rec_from_replay(traj, recorded_state, fpath_list[traj_idx])
+                            plot_rec_from_replay(traj, recorded_state, save_fn)
 
                     break
 
                 # call plot function
                 if do_plots:
                     if ctrl_flag == 'Planned':
-                        plot_rec_from_planned_joint(recorded_state)
+                        plot_rec_from_planned_joint(recorded_state, save_fn)
                     elif ctrl_flag == 'Replay':
-                        plot_rec_from_replay(traj, recorded_state, fpath_list[traj_idx-1])
+                        plot_rec_from_replay(traj, recorded_state, save_fn)
 
                 ## Set up next traj
                 traj_idx = idx_list[idx_to_incr]
@@ -595,18 +616,12 @@ def control_loop(cart_traj_dict, joint_traj_list, robot, freq, replays_flag, do_
                     correct_label = cart_traj_dict['Labels'][traj_idx]
                     # append 0 accelerations to U to match size of other variables
                     full_desired_U = np.append(full_desired_U, [[0, 0, 0]], axis=0)
-                    initial_joint_pos = setup_initial_jp(full_desired_X, robot_model, z_axis_gripper_offset)
+                    initial_joint_pos = setup_initial_jp(full_desired_X[0, 0:3], robot_model, z_axis_gripper_offset)
 
                 elif ctrl_flag == 'Replay':
                     ## Set up joint trajectory + initial position
                     traj = pd.read_pickle(fpath_list[traj_idx - nbr_planned_traj])
                     initial_joint_pos = traj['position'].at[0]
-
-            elif should_replay == 'y':
-                print("Replaying same trajectory, wait for setup... \n")
-
-            else :
-                print("Input was not in suggested answers, replaying same trajectory... \n")
 
             # Reset recording list
             recorded_state = np.zeros((15000, 1 + nb_joints * 6 + n_dim * 6 + 8)) * np.nan
@@ -680,7 +695,6 @@ if __name__ == '__main__':
     centers = data["rbf_centers"]
     stds = data["rbf_stds"]
     if bias_param is None: bias_param = 0.1
-    # print("BIAS:", bias_param)
 
     # SET PARAMETERS FOR MPC CONTROL
     freq = 300

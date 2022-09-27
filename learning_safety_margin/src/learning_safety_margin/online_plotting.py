@@ -62,12 +62,10 @@ def plot_f0_traj(rec):
 
     plt.show()
 
-def plot_rec_from_planned_joint(rec):
+def plot_rec_from_planned_joint(rec, traj_name):
     #########
     # Plot reference vs recording of joint controller from planned trajectory (from CBF planner)
     ########
-
-    traj_name ="Joint controller"
 
     # Formatting for ease
     rec_time = rec[:, 0]

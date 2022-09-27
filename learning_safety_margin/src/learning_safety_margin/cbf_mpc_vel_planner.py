@@ -151,7 +151,7 @@ class CBFMPC_Controller(DoubleIntegrator):
 
         args['lbx'] = self.lbx
         args['ubx'] = self.ubx
-        print("goal: ", xgoal)
+        # print(f"goal: {xgoal:.2f}")
 
         ## NO MOVE initial guess
         # u0 = casadi.DM.zeros((self.n_controls, self.N))  # initial control
@@ -265,7 +265,7 @@ class CBFMPC_Controller(DoubleIntegrator):
         X0 = casadi.DM(X0.T)
         u0 = casadi.DM(u0.T)
 
-        print(X0.shape, u0.shape)
+        # print(X0.shape, u0.shape)
         params = casadi.vertcat(
             x0,    # current state
             xgoal   # target state
@@ -286,7 +286,7 @@ class CBFMPC_Controller(DoubleIntegrator):
                 )
         # print("Initial Cost: ", self.cost_fn(["x0"]))
 
-        print("Optimal Cost: ", float(sol["f"], ))
+        print(f'Optimal Cost: {float(sol["f"]):.2f}')
         U = casadi.reshape(sol['x'][self.n_states * (self.N+1):], self.n_controls, self.N).T
         X = casadi.reshape(sol['x'][:self.n_states * (self.N+1)], self.n_states, self.N+1).T
 

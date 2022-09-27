@@ -20,7 +20,7 @@ class trajGenerator():
         self.stds = stds
         self.theta = theta
         self.bias = bias
-        print("TRAJ BIAS:", bias, self.bias)
+        # print("TRAJ BIAS:", bias, self.bias)
         self.safe = True
         self.unsafe = True
         self.semisafe = False
@@ -168,7 +168,7 @@ class trajGenerator():
         xdot = 0
         ydot = 0
         zdot = 0
-        print("x, y and xt, yt : ", x, y, xt, yt)
+        print(f"x, y :[{x:.2f},{y:.2f}] and xt,yt : [{xt:.2f},{yt:.2f}] ")
         x0 = np.hstack((x, y, z0, xdot, ydot, zdot))
         xt = np.hstack((xt, yt, zt, xdot, ydot, zdot))
 

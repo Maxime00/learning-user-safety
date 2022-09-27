@@ -88,5 +88,5 @@ if __name__ == '__main__':
 
     print("starting Idle controller")
 
-    robot_interface = RobotInterface("*:1601", "*:1602")
+    robot_interface = RobotInterface("*:1701", "*:1702")
     control_loop(robot_interface, 500)

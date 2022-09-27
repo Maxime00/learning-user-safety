@@ -123,9 +123,8 @@ aica-docker connect learning-safety-margin-noetic-ssh -u ros
 ```
 Note: the argument -u ros lets docker write files with local user permission
 
-The trajectory replaying and following take in as argument the user_number and the number_of_traj per safety category to be played.
-Other arguments are options for plots amd playing only planned trajectories:
-
+The trajectory replaying and following take in as argument the user_number and the number_of_demos per safety category to be played.
+Other arguments are options for plots and playing only planned trajectories (use -h for help):
 -u <user_number>
 -n <number_of_demos>
 -r <use_replay> [True, False]
@@ -136,7 +135,7 @@ bash build-server.sh
 aica-docker interactive learning-safety-margin:noetic -u ros --net host --no-hostname -v data_vol:/home/ros/ros_ws/src/learning_safety_margin/data
 roslaunch learning_safety_margin demo.launch demo:=joint_space_traj_replay_control args_for_control:="0 2"
 roslaunch learning_safety_margin demo.launch demo:=cartesian_space_traj_follow_control args_for_control:="0 4"
-roslaunch learning_safety_margin demo.launch demo:=user_eval_joint_control args_for_control:="-u 0 -n 1"
+roslaunch learning_safety_margin demo.launch demo:=user_eval_joint_control args_for_control:="-u 0 -n 1 -p True -r False"
 ```
 
 ## Development
