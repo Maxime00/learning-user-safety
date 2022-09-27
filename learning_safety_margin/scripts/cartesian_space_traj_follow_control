@@ -291,6 +291,7 @@ def control_loop(traj_dict, robot, freq):
 
     # filter parameters
     n_dim = 3  # cartesian space[x,y,z]]
+    alpha_f0 = 0.15
     alpha = 0.85
     alpha_ang = 0.8
     dx_filtered = np.zeros(n_dim)
@@ -426,7 +427,7 @@ def control_loop(traj_dict, robot, freq):
 
             # Set feedback state
             feedback_joint_state.set_positions(state.joint_state.get_positions())
-            dq_filtered = (1 - alpha) * dq_filtered + alpha * state.joint_state.get_velocities()
+            dq_filtered = alpha_f0 * dq_filtered + (1 - alpha_f0) * state.joint_state.get_velocities()
             feedback_joint_state.set_velocities(dq_filtered)
 
             # Set velocity and position error

@@ -50,9 +50,7 @@ def pandas_to_np(df):
 
     return reference_arr
 
-def plot_ref_vs_rec(df_ref, rec):
-
-    traj_name ="test"
+def plot_ref_vs_rec(df_ref, rec, traj_name):
 
     ref = pandas_to_np(df_ref)
 
@@ -141,6 +139,67 @@ def plot_ref_vs_rec(df_ref, rec):
 
     plt.show()
 
+def plot_f0_traj(rec):
+
+    traj_name ="Going to x0"
+
+    # Formatting for ease
+    rec_time = rec[:, 0]
+
+    rec_pos = rec[:, 1:8]
+    rec_ref_pos = rec[:, 15:22]
+
+    rec_int = rec[:, 22:29]
+    rec_int_tor = rec[:, 29:36]
+
+    rec_vel = rec[:, 8:15]
+
+    print("PLOTTING REFERENCE VS RECORDED TRAJECTORY")
+
+    # Plot reference and state
+    fig, axs = plt.subplots(4, 2)
+    fig.suptitle("Joint state and reference of '{}'".format(traj_name))
+
+    for i, ax in enumerate(axs.ravel()[:-1]):
+        ax.plot(rec_time[:], rec_pos[:, i])
+        ax.plot(rec_time[:], rec_ref_pos[:, i])
+        ax.set(ylabel="joint {}".format(i+1))
+        ax.set(xlabel="Time [sec]")
+    fig.legend(labels=['Recorded', 'Reference'], loc=(.6,.15))
+
+
+    # Plot velocities and reference
+    fig, axs = plt.subplots(4, 2)
+    fig.suptitle("Joint Velocities of '{}'".format(traj_name))
+
+    for i, ax in enumerate(axs.ravel()[:-1]):
+        ax.plot(rec_time, rec_vel[:, i])
+        ax.set(ylabel="joint {}".format(i+1))
+        ax.set(xlabel="Time [sec]")
+    fig.legend(labels=['Recorded'], loc=(.6, .15))
+
+    # Plot integrator value
+    fig, axs = plt.subplots(4, 2)
+    fig.suptitle("Joint integrator of '{}'".format(traj_name))
+
+    for i, ax in enumerate(axs.ravel()[:-1]):
+        ax.plot(rec_time, rec_int[:, i])
+        ax.set(ylabel="joint {}".format(i+1))
+        ax.set(xlabel="Time [sec]")
+
+    # Plot torques and reference
+    fig, axs = plt.subplots(4, 2)
+    fig.suptitle("Joint integrator Torques of '{}'".format(traj_name))
+
+    for i, ax in enumerate(axs.ravel()[:-1]):
+        ax.plot(rec_time, rec_int_tor[:, i])
+        ax.set(ylabel="joint {}".format(i+1))
+        ax.set(xlabel="Time [sec]")
+    fig.legend(labels=['Recorded'], loc=(.6, .15))
+
+    plt.show()
+
+
 def control_loop(fpath_list, robot, freq):
 
     # create publisher
@@ -154,8 +213,10 @@ def control_loop(fpath_list, robot, freq):
     ctrl = create_joint_controller(CONTROLLER_TYPE.IMPEDANCE, nb_joints)
 
     ## IRL GAINS
-    ctrl.set_parameter_value("stiffness", [220, 220, 220, 180, 120, 120, 100], sr.ParameterType.DOUBLE_ARRAY)
-    ctrl.set_parameter_value("damping", [15, 15, 15, 13, 11, 10, 8], sr.ParameterType.DOUBLE_ARRAY)
+    # ctrl.set_parameter_value("stiffness", [220, 220, 220, 180, 120, 120, 100], sr.ParameterType.DOUBLE_ARRAY)
+    # ctrl.set_parameter_value("damping", [15, 15, 15, 13, 11, 10, 8], sr.ParameterType.DOUBLE_ARRAY)
+    ctrl.set_parameter_value("stiffness", [220, 200, 200, 180, 120, 100, 80], sr.ParameterType.DOUBLE_ARRAY)
+    ctrl.set_parameter_value("damping", [15, 15, 15, 13, 9, 8, 6], sr.ParameterType.DOUBLE_ARRAY)
     ## SIMULATOR GAINS
     # ctrl.set_parameter_value("stiffness", [10., 5., 4., 2., 2, 2, 2], sr.ParameterType.DOUBLE_ARRAY)
     # ctrl.set_parameter_value("damping", [3., 2., 2., 1., .5, .5, .5], sr.ParameterType.DOUBLE_ARRAY)
@@ -172,21 +233,31 @@ def control_loop(fpath_list, robot, freq):
 
     # integrator variables  [60, 50, 45, 40, 35, 25, 20]
     inte_gain = [65, 55, 50, 45, 40, 30, 20]
-    start_integrator_threshold = 0.28
+    start_integrator_threshold = 0.3
     init_pos_err_threshold = 0.01
     integrator_reset_threshold = 0.05
     time_period = 1. / freq
     integral = np.zeros(nb_joints)
     inte_torques = np.zeros(nb_joints)
 
-    alpha = 0.99
+    alpha = 0.15
     dq_filtered = np.zeros(7)
 
+    # wait a bit to receive correct state
+    checked_first_state = True
+
+    # Data recording
     recorded_state = np.zeros((10000, 1 + nb_joints * 6))* np.nan
     idx = 0
 
+    js_record = np.zeros((10000, 1 + nb_joints * 5)) * np.nan
+    js_idx = 0
+
+    print_count = 0
+
     user_classification = []
 
+    # replay path list variable
     traj_idx = 0
     traj = pd.read_pickle(fpath_list[traj_idx])
     initial_pos = traj['position'].at[0]
@@ -205,24 +276,30 @@ def control_loop(fpath_list, robot, freq):
             checked_first_state = False
             input("Waiting for user input... Press Enter to start")
             print("Going to start position...")
+            start_f0 = time.time()
             continue
-
 
 
         if flag == 0:
             # ------GO TO START POSITION ------------------------
 
             error = abs(initial_pos - state.joint_state.get_positions())
+            time_f0 = time.time() - start_f0
 
             if all(error < init_pos_err_threshold):
                 print("Error :", error)
-                print("Reached start position ")
+                print("Reached start position in %s seconds" % time_f0)
                 flag = 1
 
                 # Stop robot
                 command.joint_state = state.joint_state
                 command.joint_state.set_torques(np.zeros(7))
                 robot.send_command(command)
+
+                ## plot f0 traj
+                # remove zeros
+                js_record = js_record[~np.isnan(js_record).any(axis=1)]
+                plot_f0_traj(js_record)
 
                 input("Waiting for user input... Press Enter to start \n ")
                 rospy.sleep(0.3)
@@ -243,9 +320,12 @@ def control_loop(fpath_list, robot, freq):
 
                 inte_torques = inte_gain * integral
 
+                if print_count % 100 == 0:
+                    print("INTERGRATOR TORQUES :", inte_torques)
+
             # Extract form Yang code
             feedback_state.set_positions(state.joint_state.get_positions())
-            dq_filtered = (1 - alpha) * dq_filtered + alpha * state.joint_state.get_velocities()
+            dq_filtered = alpha * dq_filtered +  (1 - alpha)* state.joint_state.get_velocities()
             feedback_state.set_velocities(dq_filtered)
 
             velo_d = initial_pos - state.joint_state.get_positions()
@@ -266,6 +346,16 @@ def control_loop(fpath_list, robot, freq):
             command_torques = sr.JointTorques(ctrl.compute_command(desired_state, feedback_state))
             command.joint_state = state.joint_state
             command.joint_state.set_torques(command_torques.get_torques() + inte_torques)
+
+            # record data for plots
+            js_record[js_idx, 0] = time_f0
+            js_record[js_idx, 1:8] = state.joint_state.get_positions()
+            js_record[js_idx, 8:15] = state.joint_state.get_velocities()
+            js_record[js_idx, 15:22] = initial_pos
+            js_record[js_idx, 22:29] = integral
+            js_record[js_idx, 29:36] = inte_torques
+            js_idx += 1
+            print_count +=1
 
             # print("Command:", command.joint_state.get_torques())
             if np.any(command_torques.get_torques() > 30):
@@ -302,7 +392,7 @@ def control_loop(fpath_list, robot, freq):
             ## Feedback state
             feedback_state.set_positions(state.joint_state.get_positions())
             # filter velocities
-            dq_filtered = (1 - alpha) * dq_filtered + alpha * state.joint_state.get_velocities()
+            dq_filtered = alpha * dq_filtered + (1-alpha) * state.joint_state.get_velocities()
             feedback_state.set_velocities(dq_filtered)
 
             ## Get desired state from traj
@@ -378,9 +468,9 @@ def control_loop(fpath_list, robot, freq):
                     os.remove(save_dir + "temp_list_of_replayed_trajectories.txt")
 
                     # call plot function
-                    plot_ref_vs_rec(traj, recorded_state)
+                    plot_ref_vs_rec(traj, recorded_state, fn_list[traj_idx])
 
-                # plot_ref_vs_rec(traj, recorded_state)
+                plot_ref_vs_rec(traj, recorded_state, fn_list[traj_idx-1])
 
                 traj = pd.read_pickle(fpath_list[traj_idx])
                 initial_pos = traj['position'].at[0]
@@ -391,6 +481,8 @@ def control_loop(fpath_list, robot, freq):
             # Reset recording list
             recorded_state = np.zeros((10000, 1 + nb_joints * 6)) * np.nan
             idx = 0
+            js_record = np.zeros((10000, 1 + nb_joints * 5)) * np.nan
+            js_idx = 0
 
             # Reset integrator
             integral = np.zeros(7)
@@ -398,6 +490,7 @@ def control_loop(fpath_list, robot, freq):
             # Reset flag to start loop again
             input("Waiting for user input... Press Enter to start")
             print("Going to start position...")
+            start_f0 = time.time()
             flag = 0
 
         # Publish joint states for recording
@@ -421,6 +514,9 @@ if __name__ == '__main__':
 
     if isinstance(user_number, str):
         print("Processing rosbags for User_" + user_number)
+
+    # Variables
+    freq = 200
 
     # Set up directories
     data_dir = "/home/ros/ros_ws/src/learning_safety_margin/data/User_"+user_number+"/"
@@ -452,9 +548,10 @@ if __name__ == '__main__':
 
     # Save name and category of each traj in a txt file
     fn_list = [os.path.join(os.path.basename(os.path.normpath(os.path.split(fn)[0])), os.path.splitext(os.path.split(fn)[1])[0]) for fn in fpath_list]
-    print(fpath_list)
     print(fn_list)
     np.savetxt(save_dir + "temp_list_of_replayed_trajectories.txt", np.array(fn_list), fmt='%s')
 
-    robot_interface = RobotInterface("*:1601", "*:1602")
-    control_loop(fpath_list, robot_interface, 200)
+    print("Going to start position...")
+    robot_interface = RobotInterface("*:1701", "*:1702")
+    control_loop(fpath_list, robot_interface, freq)
+

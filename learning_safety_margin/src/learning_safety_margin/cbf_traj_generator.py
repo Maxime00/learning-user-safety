@@ -314,6 +314,7 @@ class trajGenerator():
         ax.set_xlim(x_lim)
         ax.set_ylim(y_lim)
         ax.set_zlim(z_lim)
+
         ax.set_xlabel("$x$")
         ax.set_ylabel("$y$")
         ax.set_zlabel("$z$")
@@ -392,6 +393,6 @@ class trajGenerator():
                 plt.plot(t_list[i][:-1], u_list[i][:, 2], label='az')
                 fig.legend()
                 fig.suptitle(f"Planned acceleration #{i+1}")
-        plt.show()
+        # plt.show()
 
         return cbf_traj_data
