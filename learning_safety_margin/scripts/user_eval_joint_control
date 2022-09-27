@@ -62,7 +62,7 @@ def setup_initial_jp(X, robot_model, z_axis_gripper_offset):
         robot_model.inverse_kinematics(sr.CartesianPose(initial_cart_pos), param, "panda_link8"))
     return initial_joint_pos_sr.data()
 
-def control_loop(cart_traj_dict, joint_traj_list, robot, freq, replays_flag, do_plots):
+def control_loop(cart_traj_dict, joint_traj_list, robot, freq, replays_flag, do_plots, in_sim):
 
     # create publisher
     pub = rospy.Publisher('/joint_states', JointState, queue_size=10)
