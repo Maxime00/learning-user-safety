@@ -2,20 +2,20 @@
 
 import pandas as pd
 import numpy as np
+import argparse
 import pickle
 import random
 import rospy
 import glob
 import time
-import sys
 import os
-import matplotlib.pyplot as plt
 import state_representation as sr
 from controllers import create_joint_controller, create_cartesian_controller, CONTROLLER_TYPE
 from dynamical_systems import create_cartesian_ds, DYNAMICAL_SYSTEM_TYPE
 from network_interfaces.control_type import ControlType
 from network_interfaces.zmq.network import CommandMessage
 from learning_safety_margin.robot_interface import RobotInterface
+from learning_safety_margin.online_plotting import plot_f0_traj, plot_rec_from_replay, plot_rec_from_planned_joint
 from sensor_msgs.msg import JointState
 from std_msgs.msg import Header
 
@@ -42,368 +42,33 @@ def find_closest_time(df, time):
     dist = (df['time'] - time).abs()
     return df.loc[dist.idxmin()]
 
-def plot_ref_vs_rec(pos_vel, acc, t, rec):
-    traj_name ="test"
-
-    # Formatting for ease
-    rec_time = rec[:, 0]
-    ref_time = t
-
-    rec_pos = rec[:, 1:4]
-    ref_pos = pos_vel[:, 0:3]
-    rec_ref_pos = rec[:, 10:13]
-    error_pos = rec_pos - rec_ref_pos
-
-    rec_vel = rec[:, 4:7]
-    ref_vel = pos_vel[:, 3:6]
-    rec_ref_vel = rec[:, 13:16]
-    error_vel = rec_vel - rec_ref_vel
-
-    rec_acc = rec[:, 7:10]
-    ref_acc = acc
-    rec_ref_acc = rec[:, 16:19]
-    error_acc = rec_acc - rec_ref_acc
-
-    rec_ort = rec[:, 26:30]
-    rec_ref_ort = rec[:, 30:34]
-
-    rec_ang_vel = rec[:, 34:37]
-    rec_ref_ang_vel = rec[:, 37:40]
-
-    rec_tor = rec[:, 19:26]
-
-    print("PLOTTING REFERENCE VS RECORDED TRAJECTORY")
-    print("Length of reference : ", len(ref_time), "\n Length of recorded : ", len(rec_time))
-
-    # 3D position plot
-    fig = plt.figure(figsize=(10, 10))
-    ax = plt.axes(projection='3d')
-    plt.plot(rec_pos[:, 0], rec_pos[:, 1], rec_pos[:, 2])
-    plt.plot(ref_pos[:, 0], ref_pos[:, 1], ref_pos[:, 2])
-    plt.xlim(ws_lim[0])
-    plt.ylim(ws_lim[1])
-    ax.set_zlim(ws_lim[2])
-    fig.suptitle("EE pos vs ref of '{}'".format(traj_name))
-    fig.legend(labels=['Recorded', 'Reference'])
-
-    # 3D velocity plot
-    fig = plt.figure(figsize=(10, 10))
-    ax = plt.axes(projection='3d')
-    plt.plot(rec_vel[:, 0], rec_vel[:, 1], rec_vel[:, 2])
-    plt.plot(ref_vel[:, 0], ref_vel[:, 1], ref_vel[:, 2])
-    plt.xlim(np.array(vdot_lim)/2)
-    plt.ylim(np.array(vdot_lim)/2)
-    ax.set_zlim(np.array(vdot_lim)/2)
-    fig.suptitle("EE vel vs ref of '{}'".format(traj_name))
-    fig.legend(labels=['Recorded', 'Reference'])
-
-    # Plot reference and state
-    fig, axs = plt.subplots(3, 1)
-    fig.suptitle("EE Position and reference of '{}'".format(traj_name))
-
-    for i, ax in enumerate(axs.ravel()):
-        ax.plot(rec_time[:], rec_pos[:, i])
-        ax.plot(ref_time[:], ref_pos[:, i])
-        ax.set(ylabel="Dim {}".format(i))
-        ax.set(xlabel="Time [sec]")
-    fig.legend(labels=['Recorded', 'Reference'])
-
-    # Plot position error
-    fig, axs = plt.subplots(3, 1)
-    fig.suptitle("EE position error of '{}'".format(traj_name))
-
-    for i, ax in enumerate(axs.ravel()):
-        ax.plot(rec_time, error_pos[:, i])
-        ax.set(ylabel="Dim {}".format(i))
-        ax.set(xlabel="Time [sec]")
-
-    # Plot velocities and reference
-    fig, axs = plt.subplots(3, 1)
-    fig.suptitle("EE Velocity and reference of '{}'".format(traj_name))
-
-    for i, ax in enumerate(axs.ravel()):
-        ax.plot(rec_time, rec_vel[:, i])
-        ax.plot(ref_time, ref_vel[:, i])
-        ax.set(ylabel="Dim {}".format(i))
-        ax.set(xlabel="Time [sec]")
-    fig.legend(labels=['Recorded', 'Reference'])
-
-    # Plot velocity error
-    fig, axs = plt.subplots(3, 1)
-    fig.suptitle("EE Velocity error of '{}'".format(traj_name))
-
-    for i, ax in enumerate(axs.ravel()):
-        ax.plot(rec_time, error_vel[:, i])
-        ax.set(ylabel="Dim {}".format(i))
-        ax.set(xlabel="Time [sec]")
-
-    # Plot acc and reference - no acceleration recorded
-    fig, axs = plt.subplots(3, 1)
-    fig.suptitle("EE acceleration and reference of '{}'".format(traj_name))
-
-    for i, ax in enumerate(axs.ravel()):
-        ax.plot(rec_time, rec_acc[:, i])
-        ax.plot(ref_time, ref_acc[:, i])
-        ax.set(ylabel="Dim {}".format(i))
-        ax.set(xlabel="Time [sec]")
-    fig.legend(labels=['Recorded', 'Reference'])
-
-    # Plot orientation and reference
-    fig, axs = plt.subplots(4, 1)
-    fig.suptitle("EE Orientation and reference of '{}'".format(traj_name))
-
-    for i, ax in enumerate(axs.ravel()):
-        ax.plot(rec_time, rec_ort[:, i])
-        ax.plot(rec_time, rec_ref_ort[:, i])
-        ax.set(ylabel="Dim {}".format(i))
-        ax.set(xlabel="Time [sec]")
-    fig.legend(labels=['Recorded', 'Reference'])
-
-    # Plot angular velocity and reference
-    fig, axs = plt.subplots(3, 1)
-    fig.suptitle("EE angular velocity and reference of '{}'".format(traj_name))
-
-    for i, ax in enumerate(axs.ravel()):
-        ax.plot(rec_time, rec_ang_vel[:, i])
-        ax.plot(rec_time, rec_ref_ang_vel[:, i])
-        ax.set(ylabel="Dim {}".format(i))
-        ax.set(xlabel="Time [sec]")
-    fig.legend(labels=['Recorded', 'Reference'])
-
-    # Plot torques
-    fig, axs = plt.subplots(4, 2)
-    fig.suptitle("Joint Torques of '{}'".format(traj_name))
-
-    for i, ax in enumerate(axs.ravel()[:-1]):
-        ax.plot(rec_time, rec_tor[:, i])
-        ax.set(ylabel="joint {}".format(i+1))
-        ax.set(xlabel="Time [sec]")
-
-    plt.show()
-
-def plot_f0_traj(rec):
-
-    traj_name ="Going to x0"
-
-    # Formatting for ease
-    rec_time = rec[:, 0]
-
-    rec_pos = rec[:, 1:8]
-    rec_ref_pos = rec[:, 15:22]
-
-    rec_int = rec[:, 22:29]
-    rec_int_tor = rec[:, 29:36]
-
-    rec_vel = rec[:, 8:15]
-
-    print("PLOTTING REFERENCE VS RECORDED TRAJECTORY")
-
-    # Plot reference and state
-    fig, axs = plt.subplots(4, 2)
-    fig.suptitle("Joint state and reference of '{}'".format(traj_name))
-
-    for i, ax in enumerate(axs.ravel()[:-1]):
-        ax.plot(rec_time[:], rec_pos[:, i])
-        ax.plot(rec_time[:], rec_ref_pos[:, i])
-        ax.set(ylabel="joint {}".format(i+1))
-        ax.set(xlabel="Time [sec]")
-    fig.legend(labels=['Recorded', 'Reference'], loc=(.6,.15))
-
-
-    # Plot velocities and reference
-    fig, axs = plt.subplots(4, 2)
-    fig.suptitle("Joint Velocities of '{}'".format(traj_name))
-
-    for i, ax in enumerate(axs.ravel()[:-1]):
-        ax.plot(rec_time, rec_vel[:, i])
-        ax.set(ylabel="joint {}".format(i+1))
-        ax.set(xlabel="Time [sec]")
-    fig.legend(labels=['Recorded'], loc=(.6, .15))
-
-    # Plot integrator value
-    fig, axs = plt.subplots(4, 2)
-    fig.suptitle("Joint integrator of '{}'".format(traj_name))
-
-    for i, ax in enumerate(axs.ravel()[:-1]):
-        ax.plot(rec_time, rec_int[:, i])
-        ax.set(ylabel="joint {}".format(i+1))
-        ax.set(xlabel="Time [sec]")
-
-    # Plot torques and reference
-    fig, axs = plt.subplots(4, 2)
-    fig.suptitle("Joint integrator Torques of '{}'".format(traj_name))
-
-    for i, ax in enumerate(axs.ravel()[:-1]):
-        ax.plot(rec_time, rec_int_tor[:, i])
-        ax.set(ylabel="joint {}".format(i+1))
-        ax.set(xlabel="Time [sec]")
-    fig.legend(labels=['Recorded'], loc=(.6, .15))
-
-    plt.show()
-
-def plot_joint_rec(rec):
-
-    traj_name ="live inverse kinematic for joint controller"
-
-    # Formatting for ease
-    rec_time = rec[:, 0]
-
-    rec_pos = rec[:, 1:8]
-    rec_ref_pos = rec[:, 22:29]
-
-    rec_vel = rec[:, 8:15]
-    rec_ref_vel = rec[:, 29:36]
-
-    rec_torques = rec[:, 15:22]
-    rec_ref_torques = rec[:, 36:43]
-
-    rec_cart_pos = rec[:, 43:46]
-    rec_cart_vel = rec[:, 46:49]
-
-    rec_ref_cart_pos = rec[:, 49:52]
-    rec_ref_cart_vel = rec[:, 52:55]
-
-    rec_ort = rec[:, 55:59]
-    rec_ref_ort = rec[:, 59:63]
-
-    rec_acc = rec[:, 63:66]
-    rec_ref_acc = rec[:, 66:69]
-
-    print("PLOTTING REFERENCE VS RECORDED TRAJECTORY")
-
-    # Plot reference and state
-    fig, axs = plt.subplots(4, 2)
-    fig.suptitle("Joint state and reference of '{}'".format(traj_name))
-
-    for i, ax in enumerate(axs.ravel()[:-1]):
-        ax.plot(rec_time[:], rec_pos[:, i])
-        ax.plot(rec_time[:], rec_ref_pos[:, i])
-        ax.set(ylabel="joint {}".format(i+1))
-        ax.set(xlabel="Time [sec]")
-    fig.legend(labels=['Recorded', 'Reference'], loc=(.6,.15))
-
-    # Plot velocities and reference
-    fig, axs = plt.subplots(4, 2)
-    fig.suptitle("Joint Velocities of '{}'".format(traj_name))
-
-    for i, ax in enumerate(axs.ravel()[:-1]):
-        ax.plot(rec_time, rec_vel[:, i])
-        ax.plot(rec_time, rec_ref_vel[:, i])
-        ax.set(ylabel="joint {}".format(i+1))
-        ax.set(xlabel="Time [sec]")
-    fig.legend(labels=['Recorded', 'Reference'], loc=(.6, .15))
-
-    # Plot torques and reference
-    fig, axs = plt.subplots(4, 2)
-    fig.suptitle("Joint  Torques of '{}'".format(traj_name))
-
-    for i, ax in enumerate(axs.ravel()[:-1]):
-        ax.plot(rec_time, rec_torques[:, i])
-        ax.plot(rec_time, rec_ref_torques[:, i])
-        ax.set(ylabel="joint {}".format(i+1))
-        ax.set(xlabel="Time [sec]")
-    fig.legend(labels=['Recorded', 'Reference'], loc=(.6, .15))
-
-    # 3D position plot
-    fig = plt.figure(figsize=(10, 10))
-    ax = plt.axes(projection='3d')
-    plt.plot(rec_cart_pos[:, 0], rec_cart_pos[:, 1], rec_cart_pos[:, 2])
-    plt.plot(rec_ref_cart_pos[:, 0], rec_ref_cart_pos[:, 1], rec_ref_cart_pos[:, 2])
-    plt.xlim(ws_lim[0])
-    plt.ylim(ws_lim[1])
-    ax.set_zlim(ws_lim[2])
-    fig.suptitle("EE pos vs ref of '{}'".format(traj_name))
-    fig.legend(labels=['Recorded', 'Reference'])
-
-    # 3D velocity plot
-    fig = plt.figure(figsize=(10, 10))
-    ax = plt.axes(projection='3d')
-    plt.plot(rec_cart_vel[:, 0], rec_cart_vel[:, 1], rec_cart_vel[:, 2])
-    plt.plot(rec_ref_cart_vel[:, 0], rec_ref_cart_vel[:, 1], rec_ref_cart_vel[:, 2])
-    plt.xlim(np.array(vdot_lim) / 2)
-    plt.ylim(np.array(vdot_lim) / 2)
-    ax.set_zlim(np.array(vdot_lim) / 2)
-    fig.suptitle("EE vel vs ref of '{}'".format(traj_name))
-    fig.legend(labels=['Recorded', 'Reference'])
-
-    # Plot reference and state
-    fig, axs = plt.subplots(3, 1)
-    fig.suptitle("EE Position and reference of '{}'".format(traj_name))
-
-    for i, ax in enumerate(axs.ravel()):
-        ax.plot(rec_time[:], rec_cart_pos[:, i])
-        ax.plot(rec_time[:], rec_ref_cart_pos[:, i])
-        ax.set(ylabel="Dim {}".format(i))
-        ax.set(xlabel="Time [sec]")
-    fig.legend(labels=['Recorded', 'Reference'])
-
-    # # Plot position error
-    # fig, axs = plt.subplots(3, 1)
-    # fig.suptitle("EE position error of '{}'".format(traj_name))
-    #
-    # for i, ax in enumerate(axs.ravel()):
-    #     ax.plot(rec_time, error_pos[:, i])
-    #     ax.set(ylabel="Dim {}".format(i))
-    #     ax.set(xlabel="Time [sec]")
-
-    # Plot velocities and reference
-    fig, axs = plt.subplots(3, 1)
-    fig.suptitle("EE Velocity and reference of '{}'".format(traj_name))
-
-    for i, ax in enumerate(axs.ravel()):
-        ax.plot(rec_time, rec_cart_vel[:, i])
-        ax.plot(rec_time, rec_ref_cart_vel[:, i])
-        ax.set(ylabel="Dim {}".format(i))
-        ax.set(xlabel="Time [sec]")
-    fig.legend(labels=['Recorded', 'Reference'])
-
-    # Plot velocity error
-    # fig, axs = plt.subplots(3, 1)
-    # fig.suptitle("EE Velocity error of '{}'".format(traj_name))
-    #
-    # for i, ax in enumerate(axs.ravel()):
-    #     ax.plot(rec_time, error_vel[:, i])
-    #     ax.set(ylabel="Dim {}".format(i))
-    #     ax.set(xlabel="Time [sec]")
-
-    # Plot acc and reference - no acceleration recorded
-    fig, axs = plt.subplots(3, 1)
-    fig.suptitle("EE acceleration and reference of '{}'".format(traj_name))
-
-    for i, ax in enumerate(axs.ravel()):
-        ax.plot(rec_time, rec_acc[:, i])
-        ax.plot(rec_time, rec_ref_acc[:, i])
-        ax.set(ylabel="Dim {}".format(i))
-        ax.set(xlabel="Time [sec]")
-    fig.legend(labels=['Recorded', 'Reference'])
-
-    # Plot orientation and reference
-    fig, axs = plt.subplots(4, 1)
-    fig.suptitle("EE Orientation and reference of '{}'".format(traj_name))
-
-    for i, ax in enumerate(axs.ravel()):
-        ax.plot(rec_time, rec_ort[:, i])
-        ax.plot(rec_time, rec_ref_ort[:, i])
-        ax.set(ylabel="Dim {}".format(i))
-        ax.set(xlabel="Time [sec]")
-    fig.legend(labels=['Recorded', 'Reference'])
-
-    plt.show()
-
-def control_loop(cart_traj_dict, joint_traj_list, robot, freq):
+def desired_orientation():
+    # add -45 deg compensation (ref frame offset from link8 to hand)
+    offset_rot = Quaternion(axis=[0., 0., 1.], degrees=45)  # 0.9238, 0.0, 0.3826, 0.)
+    temp_orient = Quaternion(0., 1., 0., 0.)
+    desired_orientation = temp_orient * offset_rot
+    return desired_orientation.elements
+
+def setup_initial_jp(X, robot_model, z_axis_gripper_offset):
+    # Set up initial position in Joint State from cartesian state and urdf model
+    initial_cart_pos = sr.CartesianState("panda_ee", robot_model.get_base_frame())
+    # add z-axis offset for gripper
+    init_pos = X[0, 0:3] + [0, 0, z_axis_gripper_offset]
+    initial_cart_pos.set_position(init_pos)
+    initial_cart_pos.set_orientation(desired_orientation())
+    param = InverseKinematicsParameters()
+    param.max_number_of_iterations = 5000
+    initial_joint_pos_sr = sr.JointPositions(
+        robot_model.inverse_kinematics(sr.CartesianPose(initial_cart_pos), param, "panda_link8"))
+    return initial_joint_pos_sr.data()
+
+def control_loop(cart_traj_dict, joint_traj_list, robot, freq, replays_flag, do_plots):
 
     # create publisher
     pub = rospy.Publisher('/joint_states', JointState, queue_size=10)
 
     command = CommandMessage()
     command.control_type = [ControlType.EFFORT.value]
-
-    # SET UP CARTESIAN CTRL - follow trajectory
-    ctrl = create_cartesian_controller(CONTROLLER_TYPE.IMPEDANCE)
-
-    ctrl.set_parameter_value("stiffness", [150, 150, 150, 15, 15, 15], sr.ParameterType.DOUBLE_ARRAY) # between 20 and 10
-    ctrl.set_parameter_value("damping", [25, 25, 25, 7.5, 7.5, 1.0], sr.ParameterType.DOUBLE_ARRAY) # between 5 and 10
-    ctrl.set_parameter_value("inertia", [.45, .45, .45, 0., 0., 0.], sr.ParameterType.DOUBLE_ARRAY)
 
     # DS for orientation control
     ds = create_cartesian_ds(DYNAMICAL_SYSTEM_TYPE.POINT_ATTRACTOR)
@@ -413,31 +78,38 @@ def control_loop(cart_traj_dict, joint_traj_list, robot, freq):
     nb_joints = 7
     joint_ctrl = create_joint_controller(CONTROLLER_TYPE.IMPEDANCE, nb_joints)
 
-    ## IRL GAINS
-    joint_ctrl.set_parameter_value("stiffness", [220, 200, 200, 180, 120, 100, 80], sr.ParameterType.DOUBLE_ARRAY)
-    joint_ctrl.set_parameter_value("damping", [15, 15, 15, 13, 9, 8, 6], sr.ParameterType.DOUBLE_ARRAY)
-    ## SIMULATOR GAINS
-    # joint_ctrl.set_parameter_value("stiffness", [10., 5., 4., 2., 2, 2, 2], sr.ParameterType.DOUBLE_ARRAY)
-    # joint_ctrl.set_parameter_value("damping", [3., 2., 2., 1., .5, .5, .5], sr.ParameterType.DOUBLE_ARRAY)
+    if in_sim:  # SIMULATOR GAINS
+        joint_ctrl.set_parameter_value("stiffness", [10., 5., 4., 2., 2, 2, 2], sr.ParameterType.DOUBLE_ARRAY)
+        joint_ctrl.set_parameter_value("damping", [3., 2., 2., 1., .5, .5, .5], sr.ParameterType.DOUBLE_ARRAY)
+        stiffness = np.array([10., 5., 4., 2., 2, 2, 2])
+        damping = np.array([3., 2., 2., 1., .5, .5, .5])
+    else:  # IRL GAINS
+        # Getting to start position
+        joint_ctrl.set_parameter_value("stiffness", [220, 200, 200, 180, 120, 100, 80], sr.ParameterType.DOUBLE_ARRAY)
+        joint_ctrl.set_parameter_value("damping", [15, 15, 15, 13, 9, 8, 6], sr.ParameterType.DOUBLE_ARRAY)
+        # Trajectory following
+        stiffness = np.array([220, 220, 220, 180, 120, 100, 40]) * 0.3
+        damping = np.array([18, 17, 16, 13, 6.8, 6, 1.5]) * 2.3
 
-    # import panda urdf
+    # Import panda urdf
     urdf_path = "/home/ros/ros_ws/src/learning_safety_margin/urdf/panda_arm.urdf"
     robot_model = Model('panda', urdf_path)
+    z_axis_gripper_offset = 0.1034  # offset due to gripper
 
-    # SET UP state variables
+    # Set up state variables
     desired_state = sr.CartesianState('panda_ee', robot_model.get_base_frame())
     feedback_state = sr.CartesianState('panda_ee', 'panda_base')
     desired_joint_state = sr.JointState("franka", nb_joints)
     feedback_joint_state = sr.JointState("franka", nb_joints)
 
+    flag = 0
+    print_freq = freq*10
 
-    print("REF FRAME MODEL : ", robot_model.get_base_frame())
-
-    flag = -1
-    print_freq = freq*5
-
-    # integrator variables  [60, 50, 45, 40, 35, 25, 20]
-    inte_gain =[65, 55, 50, 45, 40, 30, 20]## SIM GAINS [3, 2.5, 2, 1.8, 1.5, 1.3, 1] #
+    # Integrator Variables
+    if in_sim:
+        inte_gain = [3, 2.5, 2, 1.8, 1.5, 1.3, 1]   # SIM GAINS
+    else:
+        inte_gain = [65, 55, 50, 45, 40, 30, 20]   #IRL GAINS
     start_integrator_threshold = 0.3 # ideal 0.25 but doesn't reach that sometimes
     init_pos_err_threshold = 0.02
     integrator_reset_threshold = 0.05
@@ -473,12 +145,12 @@ def control_loop(cart_traj_dict, joint_traj_list, robot, freq):
     home_position = np.array([0.0, 0.0, 0.0,  -1.6478, 0.0, 1.6295, 0.785])
 
     # Successive traj follow - make random idx list to shuffle planned trajectories
-    # planned traj + replay traj
     nbr_planned_traj = len(cart_traj_dict['Labels'])
-
-    ## TODO : REPLACE idx_list FOR TASK SUCCESS (will use only planned trajectories and no replays)
-    # idx_list = list(range(0, nbr_planned_traj))
-    idx_list = list(range(0, nbr_planned_traj+len(joint_traj_list)))
+    # Whether to use replays or only planned trajectories
+    if replays_flag:
+        idx_list = list(range(0, nbr_planned_traj+len(joint_traj_list)))
+    elif replays_flag:
+        idx_list = list(range(0, nbr_planned_traj))
     random.shuffle(idx_list)
     idx_to_incr = 0
 
@@ -487,12 +159,12 @@ def control_loop(cart_traj_dict, joint_traj_list, robot, freq):
 
     # Set up controller flag
     if traj_idx >= nbr_planned_traj:
-        ctrl_flag = 'joint'
+        ctrl_flag = 'Replay'
     elif traj_idx < nbr_planned_traj:
-        ctrl_flag = 'cart'
+        ctrl_flag = 'Planned'
 
     ## Set up initial position + grab data
-    if ctrl_flag == 'cart':
+    if ctrl_flag == 'Planned':
         ## Set up cartesian trajectory + initial position
         full_desired_X = cart_traj_dict['X'][traj_idx]
         full_desired_U = cart_traj_dict['U'][traj_idx]
@@ -500,24 +172,9 @@ def control_loop(cart_traj_dict, joint_traj_list, robot, freq):
         correct_label = cart_traj_dict['Labels'][traj_idx]
         # append 0 accelerations to U to match size of other variables
         full_desired_U = np.append(full_desired_U, [[0, 0, 0]], axis=0)
+        initial_joint_pos = setup_initial_jp(full_desired_X, robot_model, z_axis_gripper_offset)
 
-        # Set up initial position in Joint State
-        z_axis_gripper_offset = 0.1034
-        initial_cart_pos = sr.CartesianState("panda_ee", robot_model.get_base_frame())
-        # add z-axis offset for gripper
-        init_pos = full_desired_X[0, 0:3] + [0,0, z_axis_gripper_offset]
-        initial_cart_pos.set_position(init_pos)
-        # add -45 deg compensation (ref frame offset from link8 to hand)
-        offset_rot = Quaternion(axis= [0., 0., 1.], degrees=45) #0.9238, 0.0, 0.3826, 0.)
-        temp_orient = Quaternion(0.,1.,0.,0.)
-        desired_start_orientation = temp_orient * offset_rot
-        initial_cart_pos.set_orientation(desired_start_orientation.elements)
-        param = InverseKinematicsParameters()
-        param.max_number_of_iterations = 5000
-        initial_joint_pos_sr = sr.JointPositions(robot_model.inverse_kinematics(sr.CartesianPose(initial_cart_pos), param, "panda_link8"))
-        initial_joint_pos = initial_joint_pos_sr.data()
-
-    elif ctrl_flag == 'joint':
+    elif ctrl_flag == 'Replay':
         ## Set up joint trajectory + initial position
         traj = pd.read_pickle(fpath_list[traj_idx - nbr_planned_traj])
         initial_joint_pos = traj['position'].at[0]
@@ -539,13 +196,11 @@ def control_loop(cart_traj_dict, joint_traj_list, robot, freq):
             rospy.sleep(0.1)
             checked_first_state = False
             input("Waiting for user input... Press Enter to start")
-            print("Going to start position...")
+            print("Going to home position...")
             start_f0 = time.time()
             continue
 
-        # print("EEF position: ", state.ee_state.get_position())
-        # print("EEF orientation: ", state.ee_state.get_orientation())
-        if flag == -1:
+        if flag == 0:
             # ----------- GO TO HOME POSITION ---------------------
 
             error = abs(home_position - state.joint_state.get_positions())
@@ -555,7 +210,7 @@ def control_loop(cart_traj_dict, joint_traj_list, robot, freq):
                 # print("Desired start position : ", initial_joint_pos)
                 print("Error :", error)
                 print("Reached home position in %s seconds" % time_f0)
-                flag = 0
+                flag = 1
 
                 # Stop robot
                 command.joint_state = state.joint_state
@@ -568,16 +223,6 @@ def control_loop(cart_traj_dict, joint_traj_list, robot, freq):
                 rospy.sleep(0.2)
                 timeZero = time.time()
                 continue
-
-            # Adding integrator when getting close to target
-            # if np.all(error < start_integrator_threshold):
-            #     integral += (initial_joint_pos - state.joint_state.get_positions()) * time_period
-            #     # reset integral if overhsoot
-            #     if np.any(abs(integral) > integrator_reset_threshold):
-            #         integral *= 0
-            #     inte_torques = inte_gain * integral
-                # if print_count % 50 == 0:
-                #     print("INTERGRATOR TORQUES :", inte_torques)
 
             # Set feedback state
             feedback_joint_state.set_positions(state.joint_state.get_positions())
@@ -599,12 +244,6 @@ def control_loop(cart_traj_dict, joint_traj_list, robot, freq):
             command.joint_state = state.joint_state
             command.joint_state.set_torques(command_torques.get_torques() + inte_torques)
 
-            # debug print
-            if print_count % print_freq == 0:
-                print("Error :", error)
-            print_count += 1
-
-            # print("Command:", command.joint_state.get_torques())
             if np.any(command_torques.get_torques() > 30):
                 print("TORQUES TOO BIG !!!")
                 break
@@ -612,17 +251,16 @@ def control_loop(cart_traj_dict, joint_traj_list, robot, freq):
             else:
                 robot.send_command(command)
 
-        if flag == 0:
+        if flag == 1:
             #----------- GO TO START POSITION ---------------------
 
             error = abs(initial_joint_pos - state.joint_state.get_positions())
             time_f0 = time.time() - start_f0
 
             if np.all(error < init_pos_err_threshold):
-                # print("Desired start position : ", initial_joint_pos)
                 print("Error :", error)
                 print("Reached start position in %s seconds" % time_f0)
-                flag = 1
+                flag = 2
 
                 # Stop robot
                 command.joint_state = state.joint_state
@@ -632,38 +270,29 @@ def control_loop(cart_traj_dict, joint_traj_list, robot, freq):
                 robot.send_command(command)
 
                 ## plot f0 traj
-                # remove zeros
-                js_record = js_record[~np.isnan(js_record).any(axis=1)]
-                # plot_f0_traj(js_record)
+                js_record = js_record[~np.isnan(js_record).any(axis=1)]  # remove zeros
+                if do_plots:
+                    plot_f0_traj(js_record)
 
                 ## Setup trajectory following
-
-                if ctrl_flag == 'cart':
+                if ctrl_flag == 'Planned':
                     # Create interpolation functions
                     f_X = interpolate.interp1d(full_desired_T, full_desired_X, axis=0)
                     f_U = interpolate.interp1d(full_desired_T, full_desired_U, axis=0)
 
-                    # set DS target for orientation control  ##desired_start_orientation.elements,
-                    target_ds = sr.CartesianPose(state.ee_state.get_name(),  full_desired_X[-1, 0:3],  desired_start_orientation.elements,
+                    # set DS target for orientation control
+                    target_ds = sr.CartesianPose(state.ee_state.get_name(),  full_desired_X[-1, 0:3],  desired_orientation(),
                                                 state.ee_state.get_reference_frame())  #robot_model.get_base_frame())#
                     ds.set_parameter_value("attractor", target_ds, sr.ParameterType.STATE, sr.StateType.CARTESIAN_POSE)
                     # Set up for end of traj follow
                     max_time = full_desired_T[-1]
 
-                    # chane gains for traj follow
-                    # [200, 180, 180, 160, 140, 100, 30]
-                    # [22, 20, 19, 18, 13, 12, 4]
-                    stiffness = np.array([220, 220, 220, 180, 120, 100, 40]) * 0.3
-                    damping = np.array([18, 17, 16, 13, 6.8, 6, 1.5]) * 2.3
-                    # inertia = np.array([0.8, 0.8, 0.8, 0.7, 0.5, 0.4, 0.01]) * 1.0
-
                     joint_ctrl.set_parameter_value("stiffness", stiffness.tolist(), sr.ParameterType.DOUBLE_ARRAY)
                     joint_ctrl.set_parameter_value("damping", damping.tolist(), sr.ParameterType.DOUBLE_ARRAY)
-                    # joint_ctrl.set_parameter_value("inertia", inertia.tolist(), sr.ParameterType.DOUBLE_ARRAY)
 
                     print("Ready to play planned trajectory labeled #%s of %s [Progress: %s/%s] \n" % (traj_idx + 1, nbr_planned_traj, idx_to_incr+1, len(idx_list)))
 
-                elif ctrl_flag == 'joint':
+                elif ctrl_flag == 'Replay':
                     # Set up for end of traj follow
                     max_time = traj['time'].iat[-1]
                     print("Ready to play replay trajectory labeled #%s of %s [Progress: %s/%s] \n" % (traj_idx-nbr_planned_traj + 1, len(fpath_list), idx_to_incr+1, len(idx_list)))
@@ -680,8 +309,6 @@ def control_loop(cart_traj_dict, joint_traj_list, robot, freq):
                 if np.any(abs(integral) > integrator_reset_threshold):
                     integral *= 0
                 inte_torques = inte_gain * integral
-                # if print_count % 50 == 0:
-                #     print("INTERGRATOR TORQUES :", inte_torques)
 
             # Set feedback state
             feedback_joint_state.set_positions(state.joint_state.get_positions())
@@ -725,22 +352,20 @@ def control_loop(cart_traj_dict, joint_traj_list, robot, freq):
             else:
                 robot.send_command(command)
 
-        if flag == 1:
+        if flag == 2:
             # GET current time
             nIter_time = time.time() - timeZero
 
             # Check if reached end of traj
             if nIter_time > max_time:
                 print("REACHED END OF TRAJ")
-                if ctrl_flag == 'cart':
+                if ctrl_flag == 'Planned':
                     error = np.linalg.norm(full_desired_X[-1, 0:3] - state.ee_state.get_position())
-                elif ctrl_flag == 'joint':
+                elif ctrl_flag == 'Replay':
                     error = np.linalg.norm(traj['position'].iat[-1] - state.joint_state.get_positions())
                 print("DISTANCE TO TARGET : ", error)
-                print("EEF position: ", state.ee_state.get_position())
-                print("EEF orientation: ", state.ee_state.get_orientation())
 
-                flag = 2
+                flag = 3
 
                 # Stop robot
                 command.joint_state = state.joint_state
@@ -751,7 +376,7 @@ def control_loop(cart_traj_dict, joint_traj_list, robot, freq):
                 rospy.sleep(1.0)
                 continue
 
-            if ctrl_flag == 'cart':
+            if ctrl_flag == 'Planned':
                 ## Feedback state
                 feedback_joint_state.set_positions(state.joint_state.get_positions())
                 # filter velocities
@@ -779,7 +404,7 @@ def control_loop(cart_traj_dict, joint_traj_list, robot, freq):
 
                 # Set desired angular velocity
                 ds_twist = sr.CartesianTwist(ds.evaluate(feedback_state))
-                desired_state.set_orientation(desired_start_orientation.elements)
+                desired_state.set_orientation(desired_orientation())
                 # clamp and set desired angular velocities
                 ds_twist.clamp(.25, .25)
 
@@ -796,19 +421,8 @@ def control_loop(cart_traj_dict, joint_traj_list, robot, freq):
                 desired_state.set_angular_velocity(ds_twist.data()[3:6])
 
                 # get joint velocities
-                joint_vel = np.linalg.lstsq(state.jacobian.data(), desired_state.get_twist())[0]
+                joint_vel = np.linalg.lstsq(state.jacobian.data(), desired_state.get_twist(), rcond=None)[0]
                 desired_joint_state.set_velocities(joint_vel)
-
-                ## DEBUG prints
-                # if print_count % (print_freq/5) == 0:
-                #     # print("Joint positions: ", feedback_joint_state.get_positions())
-                #     # # print("Joint Velocities: ", feedback_joint_state.get_velocities())
-                #     # print("Desired Joint positions: ", desired_joint_state.get_positions())
-                #     # print("Desired Velocities: ", desired_joint_state.get_velocities())
-                #     # print("Current orientation: ", feedback_state.get_orientation())
-                #     # print("Desired orientation: ", desired_state.get_orientation())
-                #     # print("Joint Torques :", command_torques.get_torques())
-                # print_count += 1
 
                 # compute linear acceleration for data_recording
                 if not np.isnan(recorded_state[idx - 1, 0]):
@@ -834,13 +448,10 @@ def control_loop(cart_traj_dict, joint_traj_list, robot, freq):
                 # acceleration
                 recorded_state[idx, 63:66] = ddq_filtered
                 recorded_state[idx, 66:69] = U_desired
-
-                # recorded_state[idx, 36:43] = df_desired['torques']
                 idx += 1
 
                 # Set command torques
                 command_torques = sr.JointTorques(joint_ctrl.compute_command(desired_joint_state, feedback_joint_state))
-                # command_torques.clamp(15.0)
                 # clamp only if last 3 joints exceed joint limits
                 if np.any(command_torques.get_torques()[4:6] > 12):
                     print("Command:", command_torques.get_torques())
@@ -859,7 +470,7 @@ def control_loop(cart_traj_dict, joint_traj_list, robot, freq):
 
                 robot.send_command(command)
 
-            elif ctrl_flag == 'joint':
+            elif ctrl_flag == 'Replay':
                 ## Feedback state
                 feedback_joint_state.set_positions(state.joint_state.get_positions())
                 # filter velocities
@@ -872,12 +483,6 @@ def control_loop(cart_traj_dict, joint_traj_list, robot, freq):
                 desired_joint_state.set_positions(df_desired['position'])
                 desired_joint_state.set_velocities(df_desired['velocity'])
 
-                ## DEBUG prints
-                # print("Joint positions: ", feedback_state.get_positions())
-                # print("Joint Velocities: ", feedback_state.get_velocities())
-                # print("Desired positions: ", desired_state.get_positions())
-                # print("Desired Velocities: ", desired_state.get_velocities())
-
                 # SAVE current state
                 recorded_state[idx, 0] = nIter_time
                 recorded_state[idx, 1:8] = state.joint_state.get_positions()
@@ -886,6 +491,8 @@ def control_loop(cart_traj_dict, joint_traj_list, robot, freq):
                 recorded_state[idx, 22:29] = df_desired['position']
                 recorded_state[idx, 29:36] = df_desired['velocity']
                 recorded_state[idx, 36:43] = df_desired['torques']
+                # needed for plots
+                recorded_state[idx, 43:69] = np.zeros(26)
                 idx += 1
 
                 # Set command torques
@@ -901,24 +508,22 @@ def control_loop(cart_traj_dict, joint_traj_list, robot, freq):
                 else:
                     robot.send_command(command)
 
-        if flag == 2:
+        if flag == 3:
             # ------------END OF TRAJ-> DO PLOTS ------------------------
             # remove zeros
             recorded_state = recorded_state[~np.isnan(recorded_state).any(axis=1)]
 
-            if ctrl_flag == 'cart':
+            if ctrl_flag == 'Planned':
                 # count number of MPC trajectories and set name for this traj accordingly
                 count_prev_traj = sum(len(files) for _, _, files in os.walk(os.path.join(save_dir,correct_label)))
                 save_fn = str(count_prev_traj) + "_" + correct_label +"_Planned_eeState"
-                ctrl_label = 'Planned'
 
-            elif ctrl_flag == 'joint':
+            elif ctrl_flag == 'Replay':
                 # save file, reuse same name
                 complete_fn = os.path.split(fpath_list[traj_idx - nbr_planned_traj])
                 correct_label = os.path.basename(os.path.normpath(complete_fn[0]))
                 fn = os.path.splitext(complete_fn[1])
                 save_fn = fn[0] + "_" + correct_label + "_Replay_jointState"
-                ctrl_label = 'Replay'
 
             print("Traj name : ", save_fn)
             # save file
@@ -934,7 +539,7 @@ def control_loop(cart_traj_dict, joint_traj_list, robot, freq):
                 user_classification.append(classified_as)
                 real_classification.append(correct_label)
                 final_fn_list.append(save_fn)
-                ctrl_labels.append(ctrl_label)
+                ctrl_labels.append(ctrl_flag)
                 print("Classified as :", classified_as, "\n")
 
                 # in case of crash
@@ -950,31 +555,39 @@ def control_loop(cart_traj_dict, joint_traj_list, robot, freq):
                     print("PLAYED ALL TRAJECTORIES IN LIST \n")
                     # Save names of replayed trajectories with corresponding labels
                     dict2save = {'Traj name': final_fn_list, 'User Label': user_classification,
-                                 'Correct Label': real_classification, 'Type of trajectory': ctrl_label}
+                                 'Correct Label': real_classification, 'Type of trajectory': ctrl_labels}
                     df = pd.DataFrame.from_dict(dict2save)
                     df.to_csv(save_dir+"Replayed_demos_and_labels.csv", index=False, header=True)
                     os.remove(save_dir + "temp_list_of_labels.txt")
                     os.remove(save_dir + "temp_list_of_evaluated_traj.txt")
 
                     # call plot function
-                    # plot_ref_vs_rec(full_desired_X, full_desired_U, full_desired_T, recorded_state)
+                    if do_plots:
+                        if ctrl_flag == 'Planned':
+                            plot_rec_from_planned_joint(recorded_state)
+                        elif ctrl_flag == 'Replay':
+                            plot_rec_from_replay(traj, recorded_state, fpath_list[traj_idx])
+
                     break
 
                 # call plot function
-                # if ctrl_flag == 'cart':
-                #     plot_joint_rec(recorded_state)
+                if do_plots:
+                    if ctrl_flag == 'Planned':
+                        plot_rec_from_planned_joint(recorded_state)
+                    elif ctrl_flag == 'Replay':
+                        plot_rec_from_replay(traj, recorded_state, fpath_list[traj_idx-1])
 
                 ## Set up next traj
                 traj_idx = idx_list[idx_to_incr]
 
                 # Set up controller flag
                 if traj_idx >= nbr_planned_traj:
-                    ctrl_flag = 'joint'
+                    ctrl_flag = 'Replay'
                 elif traj_idx < nbr_planned_traj:
-                    ctrl_flag = 'cart'
+                    ctrl_flag = 'Planned'
 
                 ## Set up initial position + grab data
-                if ctrl_flag == 'cart':
+                if ctrl_flag == 'Planned':
                     ## Set up cartesian trajectory + initial position
                     full_desired_X = cart_traj_dict['X'][traj_idx]
                     full_desired_U = cart_traj_dict['U'][traj_idx]
@@ -982,31 +595,15 @@ def control_loop(cart_traj_dict, joint_traj_list, robot, freq):
                     correct_label = cart_traj_dict['Labels'][traj_idx]
                     # append 0 accelerations to U to match size of other variables
                     full_desired_U = np.append(full_desired_U, [[0, 0, 0]], axis=0)
+                    initial_joint_pos = setup_initial_jp(full_desired_X, robot_model, z_axis_gripper_offset)
 
-                    # Set up initial position in Joint State
-                    z_axis_gripper_offset = 0.1034
-                    initial_cart_pos = sr.CartesianState("panda_ee", robot_model.get_base_frame())
-                    # add z-axis offset for gripper
-                    init_pos = full_desired_X[0, 0:3] + [0, 0, z_axis_gripper_offset]
-                    initial_cart_pos.set_position(init_pos)
-                    # add -45 deg compensation (ref frame offset from link8 to hand)
-                    offset_rot = Quaternion(axis=[0., 0., 1.], degrees=45)  # 0.9238, 0.0, 0.3826, 0.)
-                    temp_orient = Quaternion(0., 1., 0., 0.)
-                    desired_start_orientation = temp_orient * offset_rot
-                    initial_cart_pos.set_orientation(desired_start_orientation.elements)
-                    param = InverseKinematicsParameters()
-                    param.max_number_of_iterations = 15000
-                    initial_joint_pos_sr = sr.JointPositions(
-                        robot_model.inverse_kinematics(sr.CartesianPose(initial_cart_pos), param, "panda_link8"))
-                    initial_joint_pos = initial_joint_pos_sr.data()
-
-                elif ctrl_flag == 'joint':
+                elif ctrl_flag == 'Replay':
                     ## Set up joint trajectory + initial position
                     traj = pd.read_pickle(fpath_list[traj_idx - nbr_planned_traj])
                     initial_joint_pos = traj['position'].at[0]
 
             elif should_replay == 'y':
-                print("Replaying same trajectory... \n")
+                print("Replaying same trajectory, wait for setup... \n")
 
             else :
                 print("Input was not in suggested answers, replaying same trajectory... \n")
@@ -1020,41 +617,59 @@ def control_loop(cart_traj_dict, joint_traj_list, robot, freq):
             # Reset integrator
             integral = np.zeros(7)
 
-            # Reset controller
-            joint_ctrl.set_parameter_value("stiffness", [220, 200, 200, 180, 120, 100, 80], sr.ParameterType.DOUBLE_ARRAY)
-            joint_ctrl.set_parameter_value("damping", [15, 15, 15, 13, 9, 8, 6], sr.ParameterType.DOUBLE_ARRAY)
+            if in_sim:  # SIMULATOR GAINS
+                joint_ctrl.set_parameter_value("stiffness", [10., 5., 4., 2., 2, 2, 2], sr.ParameterType.DOUBLE_ARRAY)
+                joint_ctrl.set_parameter_value("damping", [3., 2., 2., 1., .5, .5, .5], sr.ParameterType.DOUBLE_ARRAY)
+            else:  # IRL GAINS
+                joint_ctrl.set_parameter_value("stiffness", [220, 200, 200, 180, 120, 100, 80], sr.ParameterType.DOUBLE_ARRAY)
+                joint_ctrl.set_parameter_value("damping", [15, 15, 15, 13, 9, 8, 6], sr.ParameterType.DOUBLE_ARRAY)
 
             # Reset flag to start loop again
             input("Ready for next trajectory... Press Enter to start")
-            print("Going to start position...")
+            print("Going to home position...")
             start_f0 = time.time()
-            flag = -1
+            flag = 0
 
         # Publish joint states for recording
         pub.publish(convert_joint_state_msg(state))
 
         rate.sleep()
 
+def parser():
+    # Parse arguments calls functions accordingly
+    myparser = argparse.ArgumentParser(description="Plays replays and planned trajectories from user specific CBF planner on Franka Panda robot")
 
-# Controller to replay demonstrations
+    myparser.add_argument("-u", "--user_number", type=str, default='0', nargs='?', help="The user data to process")
+    myparser.add_argument("-n", "--number_of_demos", type=str, default='2',  nargs='?',
+                        help="The number of demos to plan/replay for each safety category")
+    myparser.add_argument("-r", "--use_replays", type=str, choices=['True', 'False'], default='True',  nargs='?',
+                          help="Option only play planned trajectories")
+    myparser.add_argument("-p", "--plot", type=str, choices=['True', 'False'], default='False',  nargs='?',
+                          help="Option to plot reference vs recorded trajectories")
+
+    args, unknown = myparser.parse_known_args()
+    print(args)
+
+    return args.user_number, args.number_of_demos, eval(args.use_replays), eval(args.plot)
+
+### Controller to play replays and planned trajectories from user specific CBF planner
 if __name__ == '__main__':
 
     rospy.init_node("test", anonymous=True)
 
-    # Check passed argument - User number , Number of demos (for each ctrl, per safety category)
-    if len(sys.argv) >= 2:
-        user_number = sys.argv[1]
-        number_of_demos = sys.argv[2]
-    else:
-        user_number = '0'
-        number_of_demos = '2'
+    # Arguments parser
+    user_number, number_of_demos, replays_flag, do_plots = parser()
+
+    # BOOL FOR USING SIMULATOR
+    in_sim = True
 
     print("\n Running User Evaluation Controller for User_"+user_number+"\n")
+    print("Total number of demos: "+str(int(number_of_demos)*3 + int(number_of_demos)*3*int(replays_flag))+"\n")
 
     # Set up directories
     data_dir = "/home/ros/ros_ws/src/learning_safety_margin/data/User_" + user_number + "/"
     save_dir = data_dir + "evaluations/"
-    if not os.path.isdir(save_dir): # create dir if needed
+    if not os.path.isdir(save_dir):  # create dir if needed
         os.mkdir(save_dir)
 
     ## Set up Trajectory Planner
@@ -1062,13 +677,13 @@ if __name__ == '__main__':
     params = data["theta"]
     bias_param = data["bias"]
     # slack_param = data["unsafe_slack"]
-    centers =data["rbf_centers"]
+    centers = data["rbf_centers"]
     stds = data["rbf_stds"]
     if bias_param is None: bias_param = 0.1
     # print("BIAS:", bias_param)
 
     # SET PARAMETERS FOR MPC CONTROL
-    freq = 500
+    freq = 300
     dt = 0.1  # 1./freq
     n_steps = 50
     nbr_demos = int(number_of_demos)
@@ -1107,5 +722,5 @@ if __name__ == '__main__':
     np.savetxt(save_dir + "temp_list_of_replayed_trajectories.txt", np.array(fn_list), fmt='%s')
 
     # Connect to robot and start control loop
-    robot_interface = RobotInterface("*:1601", "*:1602")
-    control_loop(cbf_traj, fpath_list, robot_interface, freq)
+    robot_interface = RobotInterface("*:1701", "*:1702")
+    control_loop(cbf_traj, fpath_list, robot_interface, freq, replays_flag, do_plots, in_sim)

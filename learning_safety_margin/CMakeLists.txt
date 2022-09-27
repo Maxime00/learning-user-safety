@@ -8,12 +8,6 @@ find_package(catkin REQUIRED COMPONENTS
   message_generation
 )
 
-add_message_files(
-  FILES
-  mpcCommand.msg
-  mpcTraj.msg
-)
-
 catkin_python_setup()
 
 generate_messages(
@@ -32,15 +26,9 @@ include_directories(${catkin_INCLUDE_DIRS})
 
 set(CONTROL_SCRIPTS
     joint_space_velocity_control
-    cartesian_twist_control
     idle_control
     joint_space_traj_replay_control
-    cartesian_space_single_traj_follow_control
-    cartesian_space_traj_follow_control
-    user_evaluation_control
     user_eval_joint_control
-    MPC_velocity_planner
-    MPC_velocity_control
 )
 
 foreach(SCRIPT ${CONTROL_SCRIPTS})

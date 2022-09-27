@@ -672,7 +672,8 @@ def control_loop(traj_dict, robot, freq):
         rate.sleep()
 
 
-# Controller to replay demonstrations
+# Controller to play demonstrations from CBF planner
+# DOES NOT WORK VERY WELL --> DO NOT USE
 if __name__ == '__main__':
 
     rospy.init_node("test", anonymous=True)

@@ -69,7 +69,6 @@ Launch idle controller, use rosbags to record
 ### Terminal #1
 ```console
 ./build-server.sh
-aica-docker interactive learning-safety-margin:noetic -u ros --net host --no-hostname 
 aica-docker interactive learning-safety-margin:noetic -u ros --net host --no-hostname -v data_vol:/home/ros/ros_ws/src/learning_safety_margin/data
 roslaunch learning_safety_margin demo.launch demo:=idle_control
 ```
@@ -124,18 +123,20 @@ aica-docker connect learning-safety-margin-noetic-ssh -u ros
 ```
 Note: the argument -u ros lets docker write files with local user permission
 
-The trajectory replaying and following take in as argument the user_number and the number_of_traj per safety category to be played
-Default is "0 2"
+The trajectory replaying and following take in as argument the user_number and the number_of_traj per safety category to be played.
+Other arguments are options for plots amd playing only planned trajectories:
+
+-u <user_number>
+-n <number_of_demos>
+-r <use_replay> [True, False]
+-p <plot> [True, False]
 
 ```console
 bash build-server.sh
 aica-docker interactive learning-safety-margin:noetic -u ros --net host --no-hostname -v data_vol:/home/ros/ros_ws/src/learning_safety_margin/data
 roslaunch learning_safety_margin demo.launch demo:=joint_space_traj_replay_control args_for_control:="0 2"
 roslaunch learning_safety_margin demo.launch demo:=cartesian_space_traj_follow_control args_for_control:="0 4"
-roslaunch learning_safety_margin demo.launch demo:=user_evaluation_control args_for_control:="0 4"
-roslaunch learning_safety_margin demo.launch demo:=user_eval_joint_control args_for_control:="1 2"
-roslaunch learning_safety_margin demo.launch demo:=joint_space_velocity_control
-roslaunch learning_safety_margin mpc_control.launch robot_name:=franka args_for_planner:=0
+roslaunch learning_safety_margin demo.launch demo:=user_eval_joint_control args_for_control:="-u 0 -n 1"
 ```
 
 ## Development
@@ -166,34 +167,5 @@ current working scripts :
 - joint space velocity control (demo script)
 
 
-Notes on user_eval_joint_ctrl :
- need to tune last joint gain ( make it lower during traj follow ?)
-fix little offset in orientation at start ? (never in correct position)
-add plots to visualize how well it matches desired traj ( in joint space but also ee velocity would be nice )
-
-# TODO 
-- add option to start/stop integrator ? start thresh should be small but always reachable ( np.any instead? or start integrator if in same pos for too long )
-- add 'show_plots' option ?
+# TODO
 - improve random positions of cbf traj planner -> must stay in reachable space
-
-
-### Instructions for MPC-simulator pipeline
-
-# Terminal 1 - run simulator
-```console 
-cd Workspace/simulator-backend/pybullet_zmq
-bash build-server.sh
-aica-docker interactive aica-technology/zmq-simulator -u ros2 --net host --no-hostname
-python3 pybullet_zmq/bin/zmq-simulator
-```
-
-# Terminal 2 - run controller
-```console
-bash build-server.sh -s -u ros
-aica-docker connect learning-safety-margin-noetic-ssh -u ros
-roslaunch learning_safety_margin mpc_control.launch
-```
-
-Can edit code directly in pycharm without the need to rebuild, just ctrl+c in terminal 2 and do roslaunch again
-launch file runs MPC_velocity_control and MPC_velocity_planner
-The mpc_control.launch file runs MPC_velocity_control and MPC_velocity_planner as two communicating nodes

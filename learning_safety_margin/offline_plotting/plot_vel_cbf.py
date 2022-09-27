@@ -696,7 +696,7 @@ class PlotCBF():
             alpha: the alpha values of the quiver arrows
 
         Note : Same as above, different num_arrows for each dimension might yield improved visibility
-            Improving subsampling of points to use for quiver plotting might avoid clusters/improve readability
+            Improving subsampling of points to use for quiver offline_plotting might avoid clusters/improve readability
 
         """
         fig = plt.figure(figsize=(10, 10))
