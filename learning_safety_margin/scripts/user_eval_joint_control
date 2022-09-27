@@ -214,9 +214,7 @@ def control_loop(cart_traj_dict, joint_traj_list, robot, freq, replays_flag, do_
             ## Go up to avoid obstacle if too low
             if state.ee_state.get_position()[2] < obstacle_height:
                 cart_target = state.ee_state.get_position()[0:3]
-                cart_target = cart_target.tolist()
                 cart_target[2] = obstacle_height + 0.1
-                print(cart_target)
                 target = setup_initial_jp(cart_target, robot_model, z_axis_gripper_offset)
                 avoiding_obstacle = True
 
