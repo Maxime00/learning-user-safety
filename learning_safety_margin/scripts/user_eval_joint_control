@@ -661,7 +661,7 @@ if __name__ == '__main__':
     user_number, number_of_demos, replays_flag, do_plots = parser()
 
     # BOOL FOR USING SIMULATOR
-    in_sim = True
+    in_sim = False
 
     print("\n Running User Evaluation Controller for User_"+user_number+"\n")
     print("Total number of demos: "+str(int(number_of_demos)*3 + int(number_of_demos)*3*int(replays_flag))+"\n")
