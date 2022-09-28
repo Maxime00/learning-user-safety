@@ -148,7 +148,7 @@ bash build-server.sh -s
 
 You can then connect to it using
 ```console
-aica-docker connect learning-safety-margin-noetic-ssh
+aica-docker connect learning-safety-margin-noetic-ssh -u ros
 ```
 
 Code here is based on this [example](https://github.com/domire8/control-libraries-ros-demos/tree/main/rospy_zmq)

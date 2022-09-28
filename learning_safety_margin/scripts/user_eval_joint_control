@@ -94,7 +94,7 @@ def control_loop(cart_traj_dict, joint_traj_list, robot, freq, replays_flag, do_
     # Import panda urdf
     urdf_path = "/home/ros/ros_ws/src/learning_safety_margin/urdf/panda_arm.urdf"
     robot_model = Model('panda', urdf_path)
-    z_axis_gripper_offset = 0.1034  # offset due to gripper
+
 
     # Set up state variables
     desired_state = sr.CartesianState('panda_ee', robot_model.get_base_frame())
@@ -112,8 +112,10 @@ def control_loop(cart_traj_dict, joint_traj_list, robot, freq, replays_flag, do_
     # Integrator Variables
     if in_sim:
         inte_gain = [3, 2.5, 2, 1.8, 1.5, 1.3, 1]   # SIM GAINS
+        z_axis_gripper_offset = 0.0 # no gripper in sim
     else:
         inte_gain = [65, 55, 50, 45, 40, 30, 20]   #IRL GAINS
+        z_axis_gripper_offset = 0.1034  # offset due to gripper
     start_integrator_threshold = 0.3 # ideal 0.25 but doesn't reach that sometimes
     init_pos_err_threshold = 0.02
     integrator_reset_threshold = 0.05
@@ -212,7 +214,7 @@ def control_loop(cart_traj_dict, joint_traj_list, robot, freq, replays_flag, do_
             time_f0 = time.time() - start_f0
 
             ## Go up to avoid obstacle if too low
-            if state.ee_state.get_position()[2] < obstacle_height:
+            if state.ee_state.get_position()[2] < obstacle_height and not avoiding_obstacle:
                 cart_target = state.ee_state.get_position()[0:3]
                 cart_target[2] = obstacle_height + 0.1
                 target = setup_initial_jp(cart_target, robot_model, z_axis_gripper_offset)
@@ -262,6 +264,7 @@ def control_loop(cart_traj_dict, joint_traj_list, robot, freq, replays_flag, do_
             command.joint_state.set_torques(command_torques.get_torques() + inte_torques)
 
             if np.any(command_torques.get_torques() > 30):
+                print("Command:", command_torques.get_torques())
                 print("TORQUES TOO BIG !!!")
                 break
 
@@ -363,6 +366,7 @@ def control_loop(cart_traj_dict, joint_traj_list, robot, freq, replays_flag, do_
 
             # print("Command:", command.joint_state.get_torques())
             if np.any(command_torques.get_torques() > 30):
+                print("Command:", command_torques.get_torques())
                 print("TORQUES TOO BIG !!!")
                 break
 
