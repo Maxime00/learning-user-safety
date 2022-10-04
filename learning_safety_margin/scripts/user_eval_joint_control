@@ -11,7 +11,7 @@ import time
 import os
 import state_representation as sr
 from controllers import create_joint_controller, create_cartesian_controller, CONTROLLER_TYPE
-from dynamical_systems import create_cartesian_ds, DYNAMICAL_SYSTEM_TYPE
+from dynamical_systems import create_cartesian_ds, create_joint_ds, DYNAMICAL_SYSTEM_TYPE
 from network_interfaces.control_type import ControlType
 from network_interfaces.zmq.network import CommandMessage
 from learning_safety_margin.robot_interface import RobotInterface
@@ -75,6 +75,11 @@ def control_loop(cart_traj_dict, joint_traj_list, robot, freq, replays_flag, do_
     # DS for orientation control
     ds = create_cartesian_ds(DYNAMICAL_SYSTEM_TYPE.POINT_ATTRACTOR)
     ds.set_parameter_value("gain", [0., 0., 0., 5., 5., 5.], sr.ParameterType.DOUBLE_ARRAY)
+
+    # DS to reach initial position
+    start_ds = create_cartesian_ds(DYNAMICAL_SYSTEM_TYPE.POINT_ATTRACTOR)
+    start_ds.set_parameter_value("gain", [50., 50., 50., 25., 25., 25.], sr.ParameterType.DOUBLE_ARRAY)
+
 
     # SET UP TORQUE controller - reach start position
     nb_joints = 7
@@ -180,11 +185,19 @@ def control_loop(cart_traj_dict, joint_traj_list, robot, freq, replays_flag, do_
         # append 0 accelerations to U to match size of other variables
         full_desired_U = np.append(full_desired_U, [[0, 0, 0]], axis=0)
         initial_joint_pos = setup_jp(full_desired_X[0, 0:3], sr.JointPositions(robot_model.get_robot_name(),home_position), robot_model)
+        initial_cart_pos = sr.CartesianPose('panda_ee', full_desired_X[-1, 0:3],  desired_orientation(), robot_model.get_base_frame())
 
     elif ctrl_flag == 'Replay':
         ## Set up joint trajectory + initial position
         traj = pd.read_pickle(fpath_list[traj_idx - nbr_planned_traj])
         initial_joint_pos = traj['position'].at[0]
+        initial_cart_pos = sr.CartesianPose(robot_model.forward_kinematics(sr.JointPositions(robot_model.get_robot_name(), initial_joint_pos), "panda_link8"))
+
+    # Set up start DS
+    home_cart_pos = sr.CartesianPose(
+        robot_model.forward_kinematics(sr.JointPositions(robot_model.get_robot_name(), home_position), "panda_link8"))
+    start_ds.set_parameter_value("attractor", home_cart_pos, sr.ParameterType.STATE, sr.StateType.CARTESIAN_POSE)
+    start_feedback_state = sr.CartesianState('panda_ee', robot_model.get_base_frame())
 
     print_count = 0
 
@@ -217,18 +230,25 @@ def control_loop(cart_traj_dict, joint_traj_list, robot, freq, replays_flag, do_
             if state.ee_state.get_position()[2] < obstacle_height and not avoiding_obstacle:
                 cart_target = state.ee_state.get_position()[0:3]
                 cart_target[2] = cleared_height+0.2
-                target = setup_jp(cart_target, state.joint_state, robot_model)
+                # target = setup_jp(cart_target, state.joint_state, robot_model)
+                target_cart_pos = sr.CartesianPose('panda_ee', cart_target,  desired_orientation(), robot_model.get_base_frame())
+                start_ds.set_parameter_value("attractor", target_cart_pos, sr.ParameterType.STATE,
+                                             sr.StateType.CARTESIAN_POSE)
                 avoiding_obstacle = True
 
             # once high enough, switch target to home
             if state.ee_state.get_position()[2] >= cleared_height and avoiding_obstacle:
+                # target = home_position
+                start_ds.set_parameter_value("attractor", home_cart_pos, sr.ParameterType.STATE,
+                                             sr.StateType.CARTESIAN_POSE)
                 avoiding_obstacle = False
-                target = home_position
 
             if np.all(error < 0.3):
                 # print("Desired start position : ", initial_joint_pos)
                 # print("Error :", error)
                 print("Reached home position in %s seconds" % time_f0)
+                start_ds.set_parameter_value("attractor", initial_cart_pos, sr.ParameterType.STATE,
+                                             sr.StateType.CARTESIAN_POSE)
                 flag = 1
 
                 # Stop robot
@@ -249,13 +269,21 @@ def control_loop(cart_traj_dict, joint_traj_list, robot, freq, replays_flag, do_
             feedback_joint_state.set_velocities(dq_filtered)
 
             # Set velocity and position error
-            velo_d = target - state.joint_state.get_positions()
+            # velo_d = target - state.joint_state.get_positions()
+            #
+            # # Norm velocities
+            # velo_d = velo_d / np.linalg.norm(velo_d) if np.linalg.norm(velo_d) > 1.0 else velo_d
+            # desired_joint_state.set_velocities(velo_d)
 
-            # Norm velocities
-            velo_d = velo_d / np.linalg.norm(velo_d) if np.linalg.norm(velo_d) > 1.0 else velo_d
-            desired_joint_state.set_velocities(velo_d)
+            ### alternative method - DS
+            start_feedback_state.set_pose(state.ee_state.get_pose())
+            ds_twist = sr.CartesianTwist(start_ds.evaluate(start_feedback_state))
+            # clamp and set desired angular velocities
+            ds_twist.clamp(.25, .5)
+            joint_vel = np.linalg.lstsq(state.jacobian.data(), ds_twist.data(), rcond=None)[0]
+            desired_joint_state.set_velocities(joint_vel)
 
-            pos_d = feedback_joint_state.get_positions() + time_period * velo_d
+            pos_d = feedback_joint_state.get_positions() + time_period * joint_vel #velo_d
             desired_joint_state.set_positions(pos_d)
 
             # Set command
@@ -336,13 +364,21 @@ def control_loop(cart_traj_dict, joint_traj_list, robot, freq, replays_flag, do_
             feedback_joint_state.set_velocities(dq_filtered)
 
             # Set velocity and position error
-            velo_d = initial_joint_pos - state.joint_state.get_positions()
+            # velo_d = initial_joint_pos - state.joint_state.get_positions()
+            #
+            # # Norm velocities
+            # velo_d = velo_d / np.linalg.norm(velo_d) if np.linalg.norm(velo_d) > 1.0 else velo_d
+            # desired_joint_state.set_velocities(velo_d)
 
-            # Norm velocities
-            velo_d = velo_d / np.linalg.norm(velo_d) if np.linalg.norm(velo_d) > 1.0 else velo_d
-            desired_joint_state.set_velocities(velo_d)
+            ### alternative method - DS
+            start_feedback_state.set_pose(state.ee_state.get_pose())
+            ds_twist = sr.CartesianTwist(start_ds.evaluate(start_feedback_state))
+            # clamp and set desired angular velocities
+            ds_twist.clamp(.25, .5)
+            joint_vel = np.linalg.lstsq(state.jacobian.data(), ds_twist.data(), rcond=None)[0]
+            desired_joint_state.set_velocities(joint_vel)
 
-            pos_d = feedback_joint_state.get_positions() + time_period * velo_d
+            pos_d = feedback_joint_state.get_positions() + time_period * joint_vel#velo_d
             desired_joint_state.set_positions(pos_d)
 
             # Set command
@@ -362,6 +398,8 @@ def control_loop(cart_traj_dict, joint_traj_list, robot, freq, replays_flag, do_
             # debug print
             if print_count % print_freq == 0:
                 print("Error :", error)
+                print("Command:", command_torques.get_torques())
+                print("DS twist post clamping : ", ds_twist) # TODO : why so small
             print_count += 1
 
             # print("Command:", command.joint_state.get_torques())
@@ -658,7 +696,6 @@ def parser():
                           help="Option to plot reference vs recorded trajectories")
 
     args, unknown = myparser.parse_known_args()
-    print(args)
 
     return args.user_number, args.number_of_demos, eval(args.use_replays), eval(args.plot)
 
@@ -671,7 +708,9 @@ if __name__ == '__main__':
     user_number, number_of_demos, replays_flag, do_plots = parser()
 
     # BOOL FOR USING SIMULATOR
-    in_sim = False
+    in_sim = True
+    if in_sim:
+        print("USING SIMULATION PARAMETERS")
 
     print("\n Running User Evaluation Controller for User_"+user_number+"\n")
     print("Total number of demos: "+str(int(number_of_demos)*3 + int(number_of_demos)*3*int(replays_flag))+"\n")
