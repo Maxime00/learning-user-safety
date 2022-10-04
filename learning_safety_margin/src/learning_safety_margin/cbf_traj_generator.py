@@ -158,17 +158,19 @@ class trajGenerator():
                     xt = x - 0.45
                 yt = y + np.random.uniform(y_lim[0]-y, y_lim[1]-y)
 
+            z0 = np.random.uniform(0.14, 0.4)
+            zt = np.random.uniform(0.14, 0.4)
+
             # check coordinates are reachable by robot
-            if .25 <= np.linalg.norm([x,y]) <= .75: # .8 should do it
+            if  .25 <= np.linalg.norm([x,y,z0]) <= .75 and .25 <= np.linalg.norm([xt,yt,zt]) <= .75: # .8 should do it
                 inRange = True
 
         z = 0.15
-        z0 = np.random.uniform(0.14, 0.4)
-        zt = np.random.uniform(0.14, 0.4)
+
         xdot = 0
         ydot = 0
         zdot = 0
-        print(f"x, y :[{x:.2f},{y:.2f}] and xt,yt : [{xt:.2f},{yt:.2f}] ")
+        print(f"x, y :[{x:.2f},{y:.2f},{z:.2f}] and xt,yt : [{xt:.2f},{yt:.2f},{zt:.2f}] ")
         x0 = np.hstack((x, y, z0, xdot, ydot, zdot))
         xt = np.hstack((xt, yt, zt, xdot, ydot, zdot))
 
