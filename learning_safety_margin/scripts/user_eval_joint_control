@@ -14,14 +14,12 @@ from controllers import create_joint_controller, create_cartesian_controller, CO
 from dynamical_systems import create_cartesian_ds, DYNAMICAL_SYSTEM_TYPE
 from network_interfaces.control_type import ControlType
 from network_interfaces.zmq.network import CommandMessage
-from learning_safety_margin.robot_interface import RobotInterface
-from learning_safety_margin.online_plotting import plot_f0_traj, plot_rec_from_replay, plot_rec_from_planned_joint
+from learning_safety_margin import RobotInterface
+from learning_safety_margin import plot_f0_traj, plot_rec_from_replay, plot_rec_from_planned_joint
 from sensor_msgs.msg import JointState
 from std_msgs.msg import Header
-
-from learning_safety_margin.cbf_mpc_vel_planner import *
-from learning_safety_margin.vel_control_utils import *
-from learning_safety_margin.cbf_traj_generator import trajGenerator
+from learning_safety_margin import *
+from learning_safety_margin import trajGenerator
 from robot_model import Model, InverseKinematicsParameters, QPInverseVelocityParameters
 from scipy import interpolate
 from pyquaternion import Quaternion
@@ -104,7 +102,7 @@ def control_loop(cart_traj_dict, joint_traj_list, robot, freq, replays_flag, do_
     feedback_joint_state = sr.JointState("franka", nb_joints)
 
     flag = 1
-    print_freq = freq*10
+    print_freq = freq*2
 
     # Avoid obstacle logic
     obstacle_height = 0.15
@@ -150,8 +148,11 @@ def control_loop(cart_traj_dict, joint_traj_list, robot, freq, replays_flag, do_
     checked_first_state = False
     checked_obstacle = False
 
-    home_position = np.array([0.0, 0.0, 0.0,  -1.6478, 0.0, 1.6295, 0.785])
-    target = home_position
+    null_position = np.array([0.0, 0.1479, 0.0,  -2.2249, 0.0, 2.3723, 0.7]) ## home pos np.array([0.0, 0.0, 0.0,  -1.6478, 0.0, 1.6295, 0.785])
+    if in_sim:
+        null_gain = 0.0
+    else:
+        null_gain = 2
 
     # Successive traj follow - make random idx list to shuffle planned trajectories
     nbr_planned_traj = len(cart_traj_dict['Labels'])
@@ -181,7 +182,7 @@ def control_loop(cart_traj_dict, joint_traj_list, robot, freq, replays_flag, do_
         correct_label = cart_traj_dict['Labels'][traj_idx]
         # append 0 accelerations to U to match size of other variables
         full_desired_U = np.append(full_desired_U, [[0, 0, 0]], axis=0)
-        initial_joint_pos = setup_jp(full_desired_X[0, 0:3], sr.JointPositions(robot_model.get_robot_name(),home_position), robot_model)
+        initial_joint_pos = setup_jp(full_desired_X[0, 0:3], sr.JointPositions(robot_model.get_robot_name(),null_position), robot_model)
 
     elif ctrl_flag == 'Replay':
         ## Set up joint trajectory + initial position
@@ -303,16 +304,18 @@ def control_loop(cart_traj_dict, joint_traj_list, robot, freq, replays_flag, do_
 
             ## TODO : ADD NULL SPACE
             # Calculate jacobian pseudo inverse
-
-            # calculate null space matrix
-
-            # get null space error
-
+            jacobian = np.array(state.jacobian.data())
+            jacobian_damped_inverse = np.dot(jacobian.T, np.linalg.inv((np.dot(jacobian, jacobian.T) + 0.01 * np.eye(6))))
+            # calculate null space matrix and error
+            null_space_matrix = np.eye(nb_joints) - jacobian_damped_inverse.dot(jacobian)
+            null_error = null_position - state.joint_state.get_positions()
+            # get null space command
+            null_command = null_gain * null_space_matrix.dot(null_error)
 
             # Set command
             command_torques = sr.JointTorques(joint_ctrl.compute_command(desired_joint_state, feedback_joint_state))
             command.joint_state = state.joint_state
-            command.joint_state.set_torques(command_torques.get_torques() + inte_torques)
+            command.joint_state.set_torques(command_torques.get_torques() + inte_torques + null_command)
 
             # record data for plots
             js_record[js_idx, 0] = time_f0
@@ -326,6 +329,7 @@ def control_loop(cart_traj_dict, joint_traj_list, robot, freq, replays_flag, do_
             # debug print
             if print_count % print_freq == 0:
                 print("Error :", error)
+                print("ratio null to command :", null_command/(command_torques.get_torques() + inte_torques))
             print_count += 1
 
             # print("Command:", command.joint_state.get_torques())
@@ -640,7 +644,7 @@ if __name__ == '__main__':
     user_number, number_of_demos, replays_flag, do_plots = parser()
 
     # BOOL FOR USING SIMULATOR
-    in_sim = False
+    in_sim = True
 
     print("\n Running User Evaluation Controller for User_"+user_number+"\n")
     print("Total number of demos: "+str(int(number_of_demos)*3 + int(number_of_demos)*3*int(replays_flag))+"\n")

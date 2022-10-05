@@ -1,16 +1,12 @@
-import matplotlib.colors
 import numpy as np
-import pickle
-import rospy
-import time
-import sys
-import os
-import matplotlib.pyplot as plt
-import casadi
 import random
 
+import casadi
+import matplotlib.pyplot as plt
+import numpy as np
 from learning_safety_margin.cbf_mpc_vel_planner import *
 from learning_safety_margin.vel_control_utils import *
+
 
 class trajGenerator():
 
@@ -22,7 +18,7 @@ class trajGenerator():
         self.bias = bias
         # print("TRAJ BIAS:", bias, self.bias)
         self.safe = True
-        self.unsafe = True
+        self.unsafe = False
         self.semisafe = False
         if self.semisafe: self.daring_offset = daring_offset
         if self.unsafe: self.unsafe_offset = unsafe_offset
