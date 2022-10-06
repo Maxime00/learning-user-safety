@@ -18,8 +18,8 @@ class trajGenerator():
         self.bias = bias
         # print("TRAJ BIAS:", bias, self.bias)
         self.safe = True
-        self.unsafe = False
-        self.semisafe = False
+        self.unsafe = True
+        self.semisafe = True
         if self.semisafe: self.daring_offset = daring_offset
         if self.unsafe: self.unsafe_offset = unsafe_offset
         #
@@ -61,7 +61,7 @@ class trajGenerator():
             self.h_unsafe_fun = casadi.Function('h_unsafe_fun', [self.x], [self.h_unsafe])
 
         # Generate Planners
-        if self.safe: self.safe_mpc_planner = CBFMPC_Controller(self.centers, self.stds, self.theta, self.bias, dt=self.dt, n_steps=self.n_steps,r_gains = self.r_gains, zero_acc_start=self.zero_acc_start)
+        if self.safe: self.safe_mpc_planner = CBFMPC_Controller(self.centers, self.stds, self.theta, self.bias, dt=self.dt, n_steps=self.n_steps,pos_gains=2, r_gains = self.r_gains, zero_acc_start=self.zero_acc_start)
         if self.semisafe: self.daring_mpc_planner = CBFMPC_Controller(self.centers, self.stds, self.theta, self.daring_bias, dt=self.dt, n_steps=self.n_steps, r_gains = self.r_gains, zero_acc_start=self.zero_acc_start)
         if self.unsafe: self.unsafe_mpc_planner = CBFMPC_Controller(self.centers, self.stds, self.theta, self.unsafe_bias, dt=self.dt, n_steps=self.n_steps, r_gains = self.r_gains, zero_acc_start=self.zero_acc_start)
 
@@ -136,37 +136,32 @@ class trajGenerator():
 
         while not inRange:
             x = np.random.uniform(x_lim[0], x_lim[1])
-            # print("x:", x)
-            if 0.3 <= x <= 0.7:
+            if 0.35 <= x <= 0.66:
                 if random.random() < 0.5:
                     y = np.random.uniform(0.3, 0.45)
-                    # print("y :", y)
                 else:
                     y = np.random.uniform(-0.3, -0.45)
-                xt = x + np.random.uniform(0.3-x, 0.7-x)
+                xt = x + np.random.uniform(0.35-x, 0.66-x)
                 yt = -y
-                # print("x, y : ", x, y, xt, yt)
             else:
                 y = np.random.uniform(y_lim[0], y_lim[1])
-                if x < 0.3:
-                    xt = 0.7 + (0.3-x)
+                if x < 0.35:
+                    xt = 0.66 + (0.35-x)
                 else:
                     xt = x - 0.45
                 yt = y + np.random.uniform(y_lim[0]-y, y_lim[1]-y)
 
-            z0 = np.random.uniform(0.14, 0.4)
-            zt = np.random.uniform(0.14, 0.4)
+            z0 = np.random.uniform(0.05, 0.3)
+            zt = np.random.uniform(0.05, 0.3)
 
             # check coordinates are reachable by robot
-            if  .25 <= np.linalg.norm([x,y,z0]) <= .75 and .25 <= np.linalg.norm([xt,yt,zt]) <= .75: # .8 should do it
+            if  .3 <= np.linalg.norm([x,y,z0]) <= .77 and .3 <= np.linalg.norm([xt,yt,zt]) <= .77: # .8 should do it
                 inRange = True
-
-        z = 0.15
 
         xdot = 0
         ydot = 0
         zdot = 0
-        print(f"x, y :[{x:.2f},{y:.2f},{z:.2f}] and xt,yt : [{xt:.2f},{yt:.2f},{zt:.2f}] ")
+        print(f"start: [{x:.2f},{y:.2f},{z0:.2f}] \t end: [{xt:.2f},{yt:.2f},{zt:.2f}] ")
         x0 = np.hstack((x, y, z0, xdot, ydot, zdot))
         xt = np.hstack((xt, yt, zt, xdot, ydot, zdot))
 
@@ -391,6 +386,6 @@ class trajGenerator():
                 plt.plot(t_list[i][:-1], u_list[i][:, 2], label='az')
                 fig.legend()
                 fig.suptitle(f"Planned acceleration #{i+1}")
-        # plt.show()
+        plt.show()
 
         return cbf_traj_data

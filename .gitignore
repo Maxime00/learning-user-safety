@@ -11,4 +11,4 @@
 *.npy
 *.csv
 
-learning_safety_margin/data/User_Study_Notes
+#learning_safety_margin/data/User_Study_Notes

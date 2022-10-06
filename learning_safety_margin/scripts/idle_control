@@ -56,6 +56,7 @@ def control_loop(robot, freq):
         # debug print
         if print_count % freq == 0:
             print("EEF position: ", state.ee_state.get_position())
+            # print("Distance to center: ", np.linalg.norm(state.ee_state.get_position()))
             # print("Joint positions: ", state.joint_state.get_positions())
             # print("EEF orientation: ", state.ee_state.get_orientation())
         print_count += 1
