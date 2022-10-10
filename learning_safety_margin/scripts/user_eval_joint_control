@@ -187,21 +187,21 @@ def control_loop(cart_traj_dict, joint_traj_list, robot, freq, replays_flag, do_
         correct_label = cart_traj_dict['Labels'][traj_idx]
         # append 0 accelerations to U to match size of other variables
         full_desired_U = np.append(full_desired_U, [[0, 0, 0]], axis=0)
-        initial_joint_pos = setup_jp(full_desired_X[0, 0:3], sr.JointPositions(robot_model.get_robot_name(),home_position), robot_model)
+        # initial_joint_pos = setup_jp(full_desired_X[0, 0:3], sr.JointPositions(robot_model.get_robot_name(),home_position), robot_model)
         initial_cart_pos = sr.CartesianPose('panda_ee', full_desired_X[-1, 0:3],  desired_orientation(), robot_model.get_base_frame())
+        start_ds.set_parameter_value("attractor", initial_cart_pos, sr.ParameterType.STATE, sr.StateType.CARTESIAN_POSE)
+        start_feedback_state = sr.CartesianState('panda_ee', robot_model.get_base_frame())
 
     elif ctrl_flag == 'Replay':
         ## Set up joint trajectory + initial position
         traj = pd.read_pickle(fpath_list[traj_idx - nbr_planned_traj])
         initial_joint_pos = traj['position'].at[0]
-        initial_cart_pos = sr.CartesianPose(robot_model.forward_kinematics(sr.JointPositions(robot_model.get_robot_name(), initial_joint_pos), "panda_link8"))
+        # initial_cart_pos = sr.CartesianPose(robot_model.forward_kinematics(sr.JointPositions(robot_model.get_robot_name(), initial_joint_pos), "panda_link8"))
+        target_joint = initial_joint_pos
 
     # Set up start DS
     # home_cart_pos = sr.CartesianPose(
     #     robot_model.forward_kinematics(sr.JointPositions(robot_model.get_robot_name(), home_position), "panda_link8"))
-    start_ds.set_parameter_value("attractor", initial_cart_pos, sr.ParameterType.STATE, sr.StateType.CARTESIAN_POSE)
-    start_feedback_state = sr.CartesianState('panda_ee', robot_model.get_base_frame())
-    target_joint = initial_joint_pos
 
     print_count = 0
 
@@ -367,7 +367,7 @@ def control_loop(cart_traj_dict, joint_traj_list, robot, freq, replays_flag, do_
             if not checked_obstacle:
                 if state.ee_state.get_position()[2] < cleared_height:
                     cart_target = state.ee_state.get_position()[0:3]
-                    cart_target[2] = cleared_height + 0.2
+                    cart_target[2] = cleared_height + 0.15
                     target_cart = sr.CartesianPose('panda_ee', cart_target, desired_orientation(),
                                     robot_model.get_base_frame())
                     start_ds.set_parameter_value("attractor", target_cart, sr.ParameterType.STATE,
@@ -687,12 +687,19 @@ def control_loop(cart_traj_dict, joint_traj_list, robot, freq, replays_flag, do_
                     correct_label = cart_traj_dict['Labels'][traj_idx]
                     # append 0 accelerations to U to match size of other variables
                     full_desired_U = np.append(full_desired_U, [[0, 0, 0]], axis=0)
-                    initial_joint_pos = setup_jp(full_desired_X[0, 0:3], state.joint_state, robot_model)
+                    # initial_joint_pos = setup_jp(full_desired_X[0, 0:3], sr.JointPositions(robot_model.get_robot_name(),home_position), robot_model)
+                    initial_cart_pos = sr.CartesianPose('panda_ee', full_desired_X[-1, 0:3], desired_orientation(),
+                                                        robot_model.get_base_frame())
+                    start_ds.set_parameter_value("attractor", initial_cart_pos, sr.ParameterType.STATE,
+                                                 sr.StateType.CARTESIAN_POSE)
+                    start_feedback_state = sr.CartesianState('panda_ee', robot_model.get_base_frame())
 
                 elif ctrl_flag == 'Replay':
                     ## Set up joint trajectory + initial position
                     traj = pd.read_pickle(fpath_list[traj_idx - nbr_planned_traj])
                     initial_joint_pos = traj['position'].at[0]
+                    # initial_cart_pos = sr.CartesianPose(robot_model.forward_kinematics(sr.JointPositions(robot_model.get_robot_name(), initial_joint_pos), "panda_link8"))
+                    target_joint = initial_joint_pos
 
             # Reset obstacle avoidance
             avoiding_obstacle = False
