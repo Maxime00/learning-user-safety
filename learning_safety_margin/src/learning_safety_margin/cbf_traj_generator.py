@@ -65,7 +65,7 @@ class trajGenerator():
             self.h_unsafe_fun = casadi.Function('h_unsafe_fun', [self.x], [self.h_unsafe])
 
         # Generate Planners
-        if self.safe: self.safe_mpc_planner = CBFMPC_Controller(self.centers, self.stds, self.theta, self.bias, dt=self.dt, n_steps=self.n_steps,r_gains = self.r_gains, zero_acc_start=self.zero_acc_start)
+        if self.safe: self.safe_mpc_planner = CBFMPC_Controller(self.centers, self.stds, self.theta, self.bias, dt=self.dt, n_steps=self.n_steps, pos_gains=2, r_gains = self.r_gains, zero_acc_start=self.zero_acc_start)
         if self.semisafe: self.daring_mpc_planner = CBFMPC_Controller(self.centers, self.stds, self.theta, self.daring_bias, dt=self.dt, n_steps=self.n_steps, r_gains = self.r_gains, zero_acc_start=self.zero_acc_start)
         if self.unsafe: self.unsafe_mpc_planner = CBFMPC_Controller(self.centers, self.stds, self.theta, self.unsafe_bias, dt=self.dt, n_steps=self.n_steps, r_gains = self.r_gains, zero_acc_start=self.zero_acc_start)
 
@@ -393,6 +393,6 @@ class trajGenerator():
                 plt.plot(t_list[i][:-1], u_list[i][:, 2], label='az')
                 fig.legend()
                 fig.suptitle(f"Planned acceleration #{i+1}")
-        # plt.show()
+        plt.show()
 
         return cbf_traj_data

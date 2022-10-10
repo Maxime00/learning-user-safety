@@ -113,7 +113,7 @@ def control_loop(cart_traj_dict, joint_traj_list, robot, freq, replays_flag, do_
 
     # Avoid obstacle logic
     obstacle_height = 0.15
-    cleared_height = obstacle_height + 0.1
+    cleared_height = obstacle_height + 0.05
     avoiding_obstacle = False
     checked_obstacle = False
     reached_start = False
@@ -201,6 +201,7 @@ def control_loop(cart_traj_dict, joint_traj_list, robot, freq, replays_flag, do_
     #     robot_model.forward_kinematics(sr.JointPositions(robot_model.get_robot_name(), home_position), "panda_link8"))
     start_ds.set_parameter_value("attractor", initial_cart_pos, sr.ParameterType.STATE, sr.StateType.CARTESIAN_POSE)
     start_feedback_state = sr.CartesianState('panda_ee', robot_model.get_base_frame())
+    target_joint = initial_joint_pos
 
     print_count = 0
 
@@ -234,7 +235,7 @@ def control_loop(cart_traj_dict, joint_traj_list, robot, freq, replays_flag, do_
             ## Go up to avoid obstacle if too low
             if state.ee_state.get_position()[2] < obstacle_height and not avoiding_obstacle:
                 cart_target = state.ee_state.get_position()[0:3]
-                cart_target[2] = cleared_height+0.2
+                cart_target[2] = cleared_height+0.15
                 # target = setup_jp(cart_target, state.joint_state, robot_model)
                 target_cart_pos = sr.CartesianPose('panda_ee', cart_target,  desired_orientation(), robot_model.get_base_frame())
                 start_ds.set_parameter_value("attractor", target_cart_pos, sr.ParameterType.STATE,
@@ -750,7 +751,7 @@ if __name__ == '__main__':
     user_number, number_of_demos, replays_flag, do_plots = parser()
 
     # BOOL FOR USING SIMULATOR
-    in_sim = True
+    in_sim = False
     if in_sim:
         print("USING SIMULATION PARAMETERS")
 
@@ -805,9 +806,14 @@ if __name__ == '__main__':
     # Reshape list to be 1D, then shuffle
     fpath_list = sum(fpath_list, [])
     random.shuffle(fpath_list)
+
+    # ADD desired traj by hand
+    fpath_list[0] = data_dir + "csv/" + "unsafe/1_JointState.pkl"
+
     # Save name and category of each traj in a txt file
     fn_list = [os.path.join(os.path.basename(os.path.normpath(os.path.split(fn)[0])),
                             os.path.splitext(os.path.split(fn)[1])[0]) for fn in fpath_list]
+
     print("Traj to be replayed :", fn_list)
     np.savetxt(save_dir + "temp_list_of_replayed_trajectories.txt", np.array(fn_list), fmt='%s')
 
