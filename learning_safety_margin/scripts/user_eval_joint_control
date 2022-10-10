@@ -508,7 +508,7 @@ def control_loop(cart_traj_dict, joint_traj_list, robot, freq, replays_flag, do_
                 fn = os.path.splitext(complete_fn[1])
                 save_fn = fn[0] + "_" + correct_label + "_Replay_jointState"
 
-            print("Traj name : ", save_fn)
+            # print("Traj name : ", save_fn)
             # save file
             np.save(os.path.join(save_dir,correct_label,save_fn), recorded_state, allow_pickle=False)
 
