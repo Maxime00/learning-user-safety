@@ -2,7 +2,7 @@ import numpy as np
 
 class Ellipsoid():
 
-    def __init__(self, center_position, axes_lengths, sensitivity=1):
+    def __init__(self, center_position, axes_lengths, sensitivity=0.5):
 
         self.center = np.array(center_position)
         self.axes = np.array(axes_lengths)
@@ -47,7 +47,5 @@ def doModulation(obstacle, cart_pos, unmodulated_linear_velocity):
     M = E.dot(D).dot(np.linalg.inv(E))
 
     modulated_vel = M.dot(unmodulated_linear_velocity)
-
-    print(modulated_vel, type(modulated_vel))
 
     return np.array(modulated_vel.A1)
