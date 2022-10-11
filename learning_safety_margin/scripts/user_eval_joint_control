@@ -266,8 +266,12 @@ def control_loop(cart_traj_dict, joint_traj_list, robot, freq, replays_flag, do_
             if not checked_obstacle :
                 if state.ee_state.get_position()[2] < cleared_height:
                     cart_target = state.ee_state.get_position()[0:3]
-                    cart_target[2] = cleared_height + 0.2
-                    target = setup_jp(cart_target, state.joint_state, robot_model)
+                    # Check to avoid inverse kinematics failing
+                    if cart_target[0] > 0.7 :
+                        target = null_position
+                    else:
+                        cart_target[2] = cleared_height + 0.2
+                        target = setup_jp(cart_target, state.joint_state, robot_model)
                     avoiding_obstacle = True
                     print("Going up !")
                 checked_obstacle = True
@@ -337,7 +341,7 @@ def control_loop(cart_traj_dict, joint_traj_list, robot, freq, replays_flag, do_
             if np.any(command_torques.get_torques() > 30):
                 print("Command:", command_torques.get_torques())
                 print("TORQUES TOO BIG !!!")
-                break
+                # break
 
             else:
                 robot.send_command(command)
@@ -450,8 +454,8 @@ def control_loop(cart_traj_dict, joint_traj_list, robot, freq, replays_flag, do_
                     print("Command:", command_torques.get_torques())
                     print("TORQUES TOO BIG !!!")
                     # break
-
-                robot.send_command(command)
+                else:
+                    robot.send_command(command)
 
             elif ctrl_flag == 'Replay':
                 ## Feedback state
@@ -486,7 +490,7 @@ def control_loop(cart_traj_dict, joint_traj_list, robot, freq, replays_flag, do_
                 if np.any(command_torques.get_torques() > 30):
                     print("TORQUES TOO BIG !!!")
                     print("Command:", command.joint_state.get_torques())
-                    break
+                    # break
 
                 else:
                     robot.send_command(command)
@@ -647,7 +651,7 @@ if __name__ == '__main__':
     user_number, number_of_demos, replays_flag, do_plots, in_sim = parser()
 
     print("\n Running User Evaluation Controller for User_"+user_number+"\n")
-    print("Total number of demos: "+str(int(number_of_demos)*3 + int(number_of_demos)*3*int(replays_flag))+"\n")
+    print("Total number of demos: "+str(int(number_of_demos)*2 + int(number_of_demos)*3*int(replays_flag))+"\n")
 
     # Set up directories
     data_dir = "/home/ros/ros_ws/src/learning_safety_margin/data/User_" + user_number + "/"
@@ -676,7 +680,7 @@ if __name__ == '__main__':
     traj_generator = trajGenerator(centers, stds, params, bias_param, dt=dt, n_steps=n_steps, r_gains=0.01, zero_acc_start=True)
     print("FINISH INSTANTIATING TRAJ PLANNER IN %s seconds \n" % (time.time() - instantiate_start))
 
-    print("Planning %s trajectories... \n" % nbr_demos*3)
+    print("Planning %s trajectories... \n" % (nbr_demos*2))
     plan_start = time.time()
     cbf_traj = traj_generator.generate_all_trajectories(num_demos=nbr_demos)#, init_guess_list=fpath_list)#, plot_debug=show_plots)
     print("FINISH planning trajectories in %s seconds \n" % (time.time() - plan_start))
