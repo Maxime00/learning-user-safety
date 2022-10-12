@@ -22,6 +22,7 @@ set(CONTROL_SCRIPTS
     joint_space_traj_replay_control
     cartesian_space_traj_follow_control
     user_eval_joint_control
+    test_modulation_control
 )
 
 foreach(SCRIPT ${CONTROL_SCRIPTS})

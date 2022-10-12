@@ -140,35 +140,32 @@ class trajGenerator():
 
         while not inRange:
             x = np.random.uniform(x_lim[0], x_lim[1])
-            # print("x:", x)
-            if 0.3 <= x <= 0.7:
+            if 0.35 <= x <= 0.66:
                 if random.random() < 0.5:
                     y = np.random.uniform(0.3, 0.45)
-                    # print("y :", y)
                 else:
                     y = np.random.uniform(-0.3, -0.45)
-                xt = x + np.random.uniform(0.3-x, 0.7-x)
+                xt = x + np.random.uniform(0.35 - x, 0.66 - x)
                 yt = -y
-                # print("x, y : ", x, y, xt, yt)
             else:
                 y = np.random.uniform(y_lim[0], y_lim[1])
-                if x < 0.3:
-                    xt = 0.7 + (0.3-x)
+                if x < 0.35:
+                    xt = 0.66 + (0.35 - x)
                 else:
                     xt = x - 0.45
-                yt = y + np.random.uniform(y_lim[0]-y, y_lim[1]-y)
+                yt = y + np.random.uniform(y_lim[0] - y, y_lim[1] - y)
+
+            z0 = np.random.uniform(0.05, 0.3)
+            zt = np.random.uniform(0.05, 0.3)
 
             # check coordinates are reachable by robot
-            if .25 <= np.linalg.norm([x,y]) <= .75: # .8 should do it
+            if .3 <= np.linalg.norm([x, y, z0]) <= .77 and .3 <= np.linalg.norm([xt, yt, zt]) <= .77:  # .8 should do it
                 inRange = True
 
-        z = 0.15
-        z0 = np.random.uniform(0.14, 0.4)
-        zt = np.random.uniform(0.14, 0.4)
         xdot = 0
         ydot = 0
         zdot = 0
-        print(f"x, y :[{x:.2f},{y:.2f}] and xt,yt : [{xt:.2f},{yt:.2f}] ")
+        print(f"start: [{x:.2f},{y:.2f},{z0:.2f}] \t end: [{xt:.2f},{yt:.2f},{zt:.2f}] ")
         x0 = np.hstack((x, y, z0, xdot, ydot, zdot))
         xt = np.hstack((xt, yt, zt, xdot, ydot, zdot))
 
