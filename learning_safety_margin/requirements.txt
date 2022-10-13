@@ -8,3 +8,4 @@ jax==0.3.13
 jaxlib==0.3.10
 pandas==1.4.2
 Mosek==9.3.20
+keyboard==0.13.5

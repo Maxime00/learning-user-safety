@@ -136,7 +136,7 @@ aica-docker interactive learning-safety-margin:noetic -u ros --net host --no-hos
 roslaunch learning_safety_margin demo.launch demo:=joint_space_traj_replay_control args_for_control:="0 2"
 roslaunch learning_safety_margin demo.launch demo:=cartesian_space_traj_follow_control args_for_control:="0 4"
 roslaunch learning_safety_margin demo.launch demo:=user_eval_joint_control args_for_control:="-u 0 -n 3 -p True -t planned"
-roslaunch learning_safety_margin demo.launch demo:=user_eval_joint_control args_for_control:="-u 1 -n 5 -t replay"
+roslaunch learning_safety_margin demo.launch demo:=user_eval_joint_control args_for_control:="-u 1 -n 5 -p True"
 ```
 
 ## Development
