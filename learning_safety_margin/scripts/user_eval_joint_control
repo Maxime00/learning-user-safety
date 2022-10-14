@@ -739,6 +739,11 @@ def control_loop(cart_traj_dict, joint_traj_list, robot, freq, traj_type, do_plo
 
         rate.sleep()
 
+def traj_selector(df, planned_traj_to_keep):
+
+    new_df = df.iloc[planned_traj_to_keep]
+    return new_df
+
 def parser():
     # Parse arguments calls functions accordingly
     myparser = argparse.ArgumentParser(description="Plays replays and planned trajectories from user specific CBF planner on Franka Panda robot")
@@ -816,12 +821,12 @@ if __name__ == '__main__':
         print("FINISH planning trajectories in %s seconds \n" % (time.time() - plan_start))
     else:
         print("LOADING PLANNED TRAJECTORIES FROM SAVED FILE")
-        with open(data_dir+'30_planned_trajectories.pkl', 'rb') as f:
+        with open(data_dir+'24_planned_trajectories.pkl', 'rb') as f:
             cbf_traj = pickle.load(f)
 
     ## Make list of trajectories for replaying
     traj_nbr_per_category = int(number_of_demos)
-    category_list = ["unsafe/"] ##"safe/", "daring/",
+    category_list = ["safe/", "daring/","unsafe/"] ##
     fpath_list = []
     for category in category_list:
         ## count nbr of traj in category folder, make a list
@@ -836,8 +841,9 @@ if __name__ == '__main__':
     fpath_list = sum(fpath_list, [])
     random.shuffle(fpath_list)
 
-    # ADD desired traj by hand
+    # CHOOSE TRAJECTORIES MANUALLY
     fpath_list[0] = data_dir + "csv/" + "unsafe/2_jointState.pkl"
+    cbf_traj = traj_selector(cbf_traj, [18])
 
     # Save name and category of each traj in a txt file
     fn_list = [os.path.join(os.path.basename(os.path.normpath(os.path.split(fn)[0])),
