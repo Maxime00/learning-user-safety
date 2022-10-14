@@ -6,6 +6,7 @@ import numpy as np
 import glob
 import pickle
 import time
+import matplotlib.pyplot as plt
 
 from robot_model import Model, InverseKinematicsParameters, QPInverseVelocityParameters
 import state_representation as sr
@@ -87,9 +88,11 @@ def process_user_rosbags(user_num='0', smooth_flag = '1'):
 				# must convert to sr to compute forward kinematics
 				# print(topic)
 				jointPos = sr.JointPositions("franka", np.array(msg.position))
-				eePos = robot.forward_kinematics(jointPos, 'panda_link8')  # outputs cartesian pose (7d)
+				temp_eePos = robot.forward_kinematics(jointPos, 'panda_link8')  # outputs cartesian pose (7d)
+				# Add gripper offset
+				eePos = temp_eePos.get_position() + [0.,0.,-0.1034]
 				# convert back from sr to save to list
-				eePositions.append(eePos.data()) # only saving transitional pos, not orientation
+				eePositions.append(eePos) # only saving transitional pos, not orientation
 
 				# velocities
 				# must convert to sr Joint state to compute forward velocities
@@ -112,7 +115,15 @@ def process_user_rosbags(user_num='0', smooth_flag = '1'):
 			jointVel2save = np.array(jointVelocities)
 			jointTorq2save = np.array(jointTorques)
 
-
+			# ADD JOINT VELOCITY LIMIT CHECK
+			if np.any(np.abs(jointVel2save) > 2.1):
+				print("EXCEEDING JOINT VELOCITY LIMIT, NOT SAVING CSV")
+				plt.figure
+				plt.plot(time_idx, jointVel2save)
+				plt.title("raw joint vel")
+				plt.legend()
+				plt.show()
+				continue
 
 			# make time relative to traj
 			time_idx = np.array(time_idx)

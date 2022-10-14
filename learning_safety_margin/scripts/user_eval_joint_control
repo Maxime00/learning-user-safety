@@ -98,10 +98,10 @@ def control_loop(cart_traj_dict, joint_traj_list, robot, freq, traj_type, do_plo
         # Getting to start position
         # stiffness = np.array([220, 220, 200, 180, 110, 100, 40]) * 0.3
         # damping = np.array([18, 17, 15.5, 13, 6, 5, 1.2]) * 2.0  ## Works well, bit too high in velocity for reaching start
-        stiffness_start = np.array([220, 220, 220, 180, 120, 80, 50]) * 0.6
+        stiffness_start = np.array([220, 220, 220, 180, 120, 100, 50]) * 0.5
         damping_start = np.array([15, 15, 15, 13, 8, 7, 4]) * 0.9
         stiffness = np.array([220, 220, 220, 180, 80, 80, 50]) * 0.3
-        damping = np.array([15, 15, 15, 13, 8, 7, 4]) * 1.3
+        damping = np.array([15, 15, 15, 13, 8, 7, 4]) * 1.5
         # joint_ctrl.set_parameter_value("stiffness", [220, 200, 200, 180, 120, 100, 80], sr.ParameterType.DOUBLE_ARRAY)
         # joint_ctrl.set_parameter_value("damping", [15, 15, 15, 13, 9, 8, 6], sr.ParameterType.DOUBLE_ARRAY)
         joint_ctrl.set_parameter_value("stiffness", stiffness_start.tolist(), sr.ParameterType.DOUBLE_ARRAY)
@@ -122,11 +122,7 @@ def control_loop(cart_traj_dict, joint_traj_list, robot, freq, traj_type, do_plo
     flag = 1
     print_freq = freq # *X (prints every X seconds)
 
-    # Avoid obstacle logic
-    obstacle_height = 0.15
-    cleared_height = obstacle_height + 0.15
-    avoiding_obstacle = False
-    checked_obstacle = False
+    # start logic
     reached_start = False
     reaching_jp = False
 
@@ -134,11 +130,11 @@ def control_loop(cart_traj_dict, joint_traj_list, robot, freq, traj_type, do_plo
     if in_sim:
         inte_gain = [3, 2.5, 2, 1.8, 1.5, 1.3, 1]   # SIM GAINS
     else:
-        inte_gain = [65, 55, 50, 45, 40, 30, 20]   #IRL GAINS
+        inte_gain = np.array([65, 55, 50, 45, 40, 30, 20])*0.2  #IRL GAINS
     start_integrator_threshold = 0.1 #now cartesian space in [m] # ideal 0.25 but doesn't reach that sometimes
     init_pos_err_threshold_cart = 0.01 # in m
     init_pos_err_threshold_joint = 0.02 # in rad
-    integrator_reset_threshold = 0.05
+    integrator_reset_threshold = 0.5#0.10 # in rad #0.05
     time_period = 1. / freq
     integral = np.zeros(nb_joints)
     inte_torques = np.zeros(nb_joints)
@@ -228,6 +224,7 @@ def control_loop(cart_traj_dict, joint_traj_list, robot, freq, traj_type, do_plo
 
         state = robot.get_state()
 
+
         if not state:
             continue
 
@@ -248,6 +245,25 @@ def control_loop(cart_traj_dict, joint_traj_list, robot, freq, traj_type, do_plo
             error_cart = abs(initial_cart_pose.get_position() - state.ee_state.get_position())
             error_joint = abs(initial_joint_pos - state.joint_state.get_positions())
             time_f0 = time.time() - start_f0
+
+            # Check for time, move on if takes too long
+            if time_f0 > 20.0 :
+                # Stop robot
+                command.joint_state = state.joint_state
+                command.joint_state.set_torques(np.zeros(7))
+                robot.send_command(command)
+                rospy.sleep(0.2)
+                robot.send_command(command)
+
+                print("EXCEEDED ALLOTED TIME TO REACH START POSITION")
+                print("CARTESIAN ERROR :", error_cart)
+                print("JP ERROR:", error_joint)
+                moving_on = input("Attempt to play trajectory anyway?")
+                if moving_on == 'y' or moving_on=='Y' or moving_on=='yes':
+                    flag = 2
+                else:
+                    flag = 3
+                continue
 
             if ctrl_flag == 'Planned' and np.all(error_cart < init_pos_err_threshold_cart):
                 reached_start = True
@@ -299,41 +315,10 @@ def control_loop(cart_traj_dict, joint_traj_list, robot, freq, traj_type, do_plo
                 timeZero = time.time()
                 continue
 
-            ## Check if too low, set target accordingly
-            # if not checked_obstacle:
-            #     if state.ee_state.get_position()[2] < cleared_height:
-            #         cart_target = state.ee_state.get_position()[0:3]
-            #         cart_target[2] = cleared_height + 0.3
-            #         if cart_target[0] > 0.60 : # change cart target to avoid kin inv error
-            #             cart_target = np.array([0.65, 0.0, 0.55])
-            #         if np.sign(initial_cart_pose.get_position()[1]) != np.sign(state.ee_state.get_position()[1]): # if target n other side of obstacle
-            #             cart_target = np.array([0.50, 0.0, 0.60])
-            #         # if ctrl_flag == 'Planned':
-            #         target_cart = sr.CartesianPose(state.ee_state.get_name(), cart_target, np.array([0., 1., 0., 0.]), state.ee_state.get_reference_frame())
-            #         start_ds.set_parameter_value("attractor", target_cart, sr.ParameterType.STATE,
-            #                                      sr.StateType.CARTESIAN_POSE)
-            #         # elif ctrl_flag == 'Replay':
-            #         #     target_joint = setup_jp(cart_target, state.joint_state, robot_model)
-            #         avoiding_obstacle = True
-            #         print("Going up !")
-            #         print("TARGET :", cart_target)
-            #     checked_obstacle = True
-            #
-            # # once high enough, switch target to home
-            # elif checked_obstacle:
-            #     if state.ee_state.get_position()[2] >= cleared_height and avoiding_obstacle:
-            #         avoiding_obstacle = False
-            #         # if ctrl_flag == 'Planned':
-            #         start_ds.set_parameter_value("attractor", initial_cart_pose, sr.ParameterType.STATE,
-            #                                      sr.StateType.CARTESIAN_POSE)
-            #         # elif ctrl_flag == 'Replay':
-            #         #     target_joint = initial_joint_pos
-            #         print("Reached cleared height !!")
-            #         print("TARGET (init_pos):", initial_cart_pose.get_position())
-
             # Adding integrator when getting close to target
-            if np.all(error_cart < start_integrator_threshold) and not avoiding_obstacle:
+            if np.all(error_cart < start_integrator_threshold):
                 integral += (initial_joint_pos - state.joint_state.get_positions()) * time_period
+                # To avoid going through the target and stopping too late
                 if ctrl_flag == 'Replay' and reaching_jp is False:
                     reaching_jp = True
                     command.joint_state = state.joint_state
@@ -345,6 +330,7 @@ def control_loop(cart_traj_dict, joint_traj_list, robot, freq, traj_type, do_plo
 
                 # reset integral if overhsoot
                 if np.any(abs(integral) > integrator_reset_threshold):
+                    print("RESETTING INTEGRATOR ")
                     integral *= 0
                 inte_torques = inte_gain * integral
                 if print_count % print_freq == 0:
@@ -433,16 +419,6 @@ def control_loop(cart_traj_dict, joint_traj_list, robot, freq, traj_type, do_plo
         if flag == 2:
             # GET current time
             nIter_time = time.time() - timeZero
-
-            # if keyboard.is_pressed("s"):
-            #     print("Pressed S, stopping trajectory")
-            #     command.joint_state = state.joint_state
-            #     command.joint_state.set_torques(np.zeros(7))
-            #     robot.send_command(command)
-            #     rospy.sleep(0.1)
-            #     robot.send_command(command)
-            #     flag = 3
-            #     continue
 
             # Check if reached end of traj
             if nIter_time > max_time:
@@ -705,8 +681,6 @@ def control_loop(cart_traj_dict, joint_traj_list, robot, freq, traj_type, do_plo
                                          sr.StateType.CARTESIAN_POSE)
 
             # Reset obstacle avoidance
-            avoiding_obstacle = False
-            checked_obstacle = False
             reached_start = False
             reaching_jp = False
 
@@ -740,7 +714,6 @@ def control_loop(cart_traj_dict, joint_traj_list, robot, freq, traj_type, do_plo
         rate.sleep()
 
 def traj_selector(df, planned_traj_to_keep):
-
     new_df = df.iloc[planned_traj_to_keep]
     return new_df
 
@@ -821,7 +794,7 @@ if __name__ == '__main__':
         print("FINISH planning trajectories in %s seconds \n" % (time.time() - plan_start))
     else:
         print("LOADING PLANNED TRAJECTORIES FROM SAVED FILE")
-        with open(data_dir+'24_planned_trajectories.pkl', 'rb') as f:
+        with open(data_dir+'30_planned_trajectories.pkl', 'rb') as f:
             cbf_traj = pickle.load(f)
 
     ## Make list of trajectories for replaying
@@ -842,8 +815,8 @@ if __name__ == '__main__':
     random.shuffle(fpath_list)
 
     # CHOOSE TRAJECTORIES MANUALLY
-    fpath_list[0] = data_dir + "csv/" + "unsafe/2_jointState.pkl"
-    cbf_traj = traj_selector(cbf_traj, [18])
+    # fpath_list[0] = data_dir + "csv/" + "unsafe/2_jointState.pkl"
+    # cbf_traj = traj_selector(cbf_traj, [18])
 
     # Save name and category of each traj in a txt file
     fn_list = [os.path.join(os.path.basename(os.path.normpath(os.path.split(fn)[0])),

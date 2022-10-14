@@ -101,7 +101,7 @@ if __name__ == "__main__":
     user_nbr, safety, remove = parser()
 
     # Index list of trajectories to be removed form dict
-    traj_to_remove = [12, 4, 2, 20, 22, 23]
+    traj_to_remove = [4,18,22,23]
 
     # Check directories and create them if needed
     data_dir = "/home/ros/ros_ws/src/learning_safety_margin/data/User_" + user_nbr +"/"
