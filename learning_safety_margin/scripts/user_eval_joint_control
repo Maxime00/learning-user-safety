@@ -134,7 +134,7 @@ def control_loop(cart_traj_dict, joint_traj_list, robot, freq, traj_type, do_plo
     start_integrator_threshold = 0.1 #now cartesian space in [m] # ideal 0.25 but doesn't reach that sometimes
     init_pos_err_threshold_cart = 0.01 # in m
     init_pos_err_threshold_joint = 0.02 # in rad
-    integrator_reset_threshold = 0.5#0.10 # in rad #0.05
+    integrator_reset_threshold = 0.6#0.10 # in rad #0.05
     time_period = 1. / freq
     integral = np.zeros(nb_joints)
     inte_torques = np.zeros(nb_joints)
