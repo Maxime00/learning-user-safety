@@ -98,7 +98,7 @@ def control_loop(cart_traj_dict, joint_traj_list, robot, freq, traj_type, do_plo
         # Getting to start position
         # stiffness = np.array([220, 220, 200, 180, 110, 100, 40]) * 0.3
         # damping = np.array([18, 17, 15.5, 13, 6, 5, 1.2]) * 2.0  ## Works well, bit too high in velocity for reaching start
-        stiffness_start = np.array([220, 220, 220, 180, 120, 100, 50]) * 0.6
+        stiffness_start = np.array([220, 220, 220, 180, 120, 100, 50]) * 0.5
         damping_start = np.array([15, 15, 15, 13, 8, 7, 4]) * 0.9
         stiffness = np.array([220, 220, 220, 180, 80, 80, 50]) * 0.3
         damping = np.array([18, 17, 15, 14, 8, 7, 4]) * 1.8
