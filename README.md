@@ -127,16 +127,16 @@ The trajectory replaying and following take in as argument the user_number and t
 Other arguments are options for plots and playing only planned trajectories (use -h for help):
 -u <user_number>
 -n <number_of_demos>
--r <use_replay> [True, False]
+-r <use_replay> [replay, planned, both]
 -p <plot> [True, False]
-
+-g <generate_trajectories> [True, False]
 ```console
 bash build-server.sh
 aica-docker interactive learning-safety-margin:noetic -u ros --net host --no-hostname -v data_vol:/home/ros/ros_ws/src/learning_safety_margin/data
 roslaunch learning_safety_margin demo.launch demo:=joint_space_traj_replay_control args_for_control:="0 2"
 roslaunch learning_safety_margin demo.launch demo:=cartesian_space_traj_follow_control args_for_control:="0 4"
-roslaunch learning_safety_margin demo.launch demo:=user_eval_joint_control args_for_control:="-u 0 -n 3 -p True -t planned"
-roslaunch learning_safety_margin demo.launch demo:=user_eval_joint_control args_for_control:="-u 0 -n 15"
+roslaunch learning_safety_margin demo.launch demo:=user_eval_joint_control args_for_control:="-u 0 -n 5 -p True -t replay"
+roslaunch learning_safety_margin demo.launch demo:=user_eval_joint_control args_for_control:="-u 0 -n 2"
 ```
 
 ## Development
