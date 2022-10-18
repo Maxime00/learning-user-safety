@@ -122,7 +122,7 @@ def process_user_rosbags(user_num='0', smooth_flag = '1'):
 				plt.plot(time_idx, jointVel2save)
 				plt.title("raw joint vel")
 				plt.legend()
-				plt.show()
+				# plt.show()
 				continue
 
 			# make time relative to traj

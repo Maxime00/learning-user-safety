@@ -65,7 +65,7 @@ class trajGenerator():
             self.h_unsafe_fun = casadi.Function('h_unsafe_fun', [self.x], [self.h_unsafe])
 
         # Generate Planners
-        if self.safe: self.safe_mpc_planner = CBFMPC_Controller(self.centers, self.stds, self.theta, self.bias, dt=self.dt, n_steps=self.n_steps, pos_gains=2, r_gains = self.r_gains, zero_acc_start=self.zero_acc_start)
+        if self.safe: self.safe_mpc_planner = CBFMPC_Controller(self.centers, self.stds, self.theta, self.bias, dt=self.dt, n_steps=self.n_steps, pos_gains=1, r_gains = self.r_gains, zero_acc_start=self.zero_acc_start)
         if self.semisafe: self.daring_mpc_planner = CBFMPC_Controller(self.centers, self.stds, self.theta, self.daring_bias, dt=self.dt, n_steps=self.n_steps, r_gains = self.r_gains, zero_acc_start=self.zero_acc_start)
         if self.unsafe: self.unsafe_mpc_planner = CBFMPC_Controller(self.centers, self.stds, self.theta, self.unsafe_bias, dt=self.dt, n_steps=self.n_steps, r_gains = self.r_gains, zero_acc_start=self.zero_acc_start)
 
@@ -75,6 +75,11 @@ class trajGenerator():
         X = np.array(X)  # pos + vel  (n_steps, 6)
         U = np.array(U)  # accel (n_steps, 3)
         T = np.array(T)
+
+        # check if trajectory stops correctly
+        if np.any(np.abs(X[-1, 3:6]) > 0.01):
+            print("End point has NON ZERO velocity :", X[-1, 3:6])
+            return None
         # check if safe
         hvals = np.zeros(X.shape[0])
         for i in range(len(X)):
@@ -152,7 +157,7 @@ class trajGenerator():
                 if x < 0.35:
                     xt = 0.66 + (0.35 - x)
                 else:
-                    xt = x - 0.45
+                    xt = x - 0.38
                 yt = y + np.random.uniform(y_lim[0] - y, y_lim[1] - y)
 
             z0 = np.random.uniform(0.05, 0.3)
@@ -291,7 +296,9 @@ class trajGenerator():
             'X': x_list,
             'U': u_list,
             'T': t_list,
-            'Labels': labels
+            'Labels': labels,
+            'Start points' : start_list,
+            'End points': end_list
         }
         # print(ref_traj)
 

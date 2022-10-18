@@ -10,6 +10,8 @@ def plot_ref_vs_rec(user, safety, traj_df):
     # Formatting for ease
     x_list = traj_df['X'].to_numpy()
     labels = traj_df['Labels'].to_numpy()
+    # start_list = traj_df['Start points'].to_numpy()
+    # end_list = traj_df['End points'].to_numpy()
 
     # count number of safe and unsafe trajectories
     nbr_safe = len(traj_df.index[traj_df['Labels'] == 'safe'])
@@ -39,8 +41,9 @@ def plot_ref_vs_rec(user, safety, traj_df):
             plt.plot(x_list[i][:, 0], x_list[i][:, 1], x_list[i][:, 2], color=rgba, label=f'Safe #{i + 1} [{i}]')
 
             # Plot Start and End Points
-            ax.scatter(x_list[i][0, 0], x_list[i][0, 1], x_list[i][0, 2], s=3, color=rgba)
-            ax.scatter(x_list[i][-1, 0], x_list[i][-1, 1], x_list[i][-1, 2], '*', s=5, color=rgba)
+            # Plot Start and End Points
+            # ax.scatter(start_list[i][0], start_list[i][1], start_list[i][2], s=3, c=rgba)
+            # ax.scatter(end_list[i][0], end_list[i][1], end_list[i][2], '*', s=6, c=rgba)
 
         if labels[i] == 'unsafe' and (safety =='unsafe' or safety=='both'):
             # Plot Trajectories
@@ -49,8 +52,9 @@ def plot_ref_vs_rec(user, safety, traj_df):
                      label=f'Unsafe #{i - nbr_safe  + 1} [{i}]')
 
             # Plot Start and End Points
-            ax.scatter(x_list[i][0, 0], x_list[i][0, 1], x_list[i][0, 2], s=3, color=rgba)
-            ax.scatter(x_list[i][-1, 0], x_list[i][-1, 1], x_list[i][-1, 2], '*', s=5, color=rgba)
+            # Plot Start and End Points
+            # ax.scatter(start_list[i][0], start_list[i][1], start_list[i][2], s=3, c=rgba)
+            # ax.scatter(end_list[i][0], end_list[i][1], end_list[i][2], '*', s=5, c=rgba)
 
     ax.set_xlim(x_lim)
     ax.set_ylim(y_lim)

@@ -46,7 +46,7 @@ def find_closest_time(df, time):
 
 def desired_orientation():
     # add -45 deg compensation (ref frame offset from link8 to hand)
-    offset_rot = Quaternion(axis=[0., 0., 1.], degrees=45)  # 0.9238, 0.0, 0.3826, 0.)
+    offset_rot = Quaternion(axis=[0., 0., 1.], degrees=40)  # 0.9238, 0.0, 0.3826, 0.)
     temp_orient = Quaternion(0., 1., 0., 0.)
     desired_orientation = temp_orient * offset_rot
     return desired_orientation.elements
@@ -83,7 +83,7 @@ def control_loop(cart_traj_dict, joint_traj_list, robot, freq, traj_type, do_plo
     start_ds.set_parameter_value("gain", [10., 10., 10., 10., 10., 10.], sr.ParameterType.DOUBLE_ARRAY)
 
     # ADD OBSTACLE
-    obstacle = Ellipsoid([0.55, 0.0, 0.035], [.10, .12, .12 ], 1.0)
+    obstacle = Ellipsoid([0.55, 0.0, 0.035], [.10, .12, .12 ], 0.6) # x=0.55 when table obstacle against table
 
     # SET UP TORQUE controller - reach start position
     nb_joints = 7
@@ -99,8 +99,8 @@ def control_loop(cart_traj_dict, joint_traj_list, robot, freq, traj_type, do_plo
         # stiffness = np.array([220, 220, 200, 180, 110, 100, 40]) * 0.3
         # damping = np.array([18, 17, 15.5, 13, 6, 5, 1.2]) * 2.0  ## Works well, bit too high in velocity for reaching start
         stiffness_start = np.array([220, 220, 220, 180, 120, 100, 50]) * 0.5
-        damping_start = np.array([15, 15, 15, 13, 8, 7, 4]) * 0.9
-        stiffness = np.array([220, 220, 220, 180, 80, 80, 50]) * 0.3
+        damping_start = np.array([15, 15, 15, 13, 8, 7, 4]) * 0.8
+        stiffness = np.array([220, 220, 220, 180, 100, 80, 50]) * 0.3
         damping = np.array([18, 17, 15, 14, 8, 7, 4]) * 1.8
         # joint_ctrl.set_parameter_value("stiffness", [220, 200, 200, 180, 120, 100, 80], sr.ParameterType.DOUBLE_ARRAY)
         # joint_ctrl.set_parameter_value("damping", [15, 15, 15, 13, 9, 8, 6], sr.ParameterType.DOUBLE_ARRAY)
@@ -114,7 +114,7 @@ def control_loop(cart_traj_dict, joint_traj_list, robot, freq, traj_type, do_plo
     robot_model = Model('panda', urdf_path)
 
     # Set up state variables
-    desired_state = sr.CartesianState('panda_ee', robot_model.get_base_frame())
+    desired_state = sr.CartesianState('panda_ee', 'panda_base')
     feedback_state = sr.CartesianState('panda_ee', 'panda_base')
     desired_joint_state = sr.JointState("franka", nb_joints)
     feedback_joint_state = sr.JointState("franka", nb_joints)
@@ -127,13 +127,10 @@ def control_loop(cart_traj_dict, joint_traj_list, robot, freq, traj_type, do_plo
     reaching_jp = False
 
     # Integrator Variables
-    if in_sim:
-        inte_gain = [3, 2.5, 2, 1.8, 1.5, 1.3, 1]   # SIM GAINS
-    else:
-        inte_gain = np.array([65, 55, 50, 45, 40, 30, 20])*1.0  #IRL GAINS
-    start_joint_control_m = 0.12 #m cartesian distance to start controlling joint position to reach start jp
-    start_joint_control_rad = 0.3 #rad # ideal 0.25 but doesn't reach that sometimes
-    init_pos_err_threshold_cart = 0.02 # in m
+    start_joint_control_m = 0.10 #m cartesian distance to start controlling joint position to reach start jp
+    start_integrator_rad = 0.3 #rad # ideal 0.25 but doesn't reach that sometimes
+    start_integrator_m = 0.12 #m #threshold for itnegrator in Planned
+    init_pos_err_threshold_cart = 0.01 # in m
     init_pos_err_threshold_joint = 0.02 # in rad
     integrator_reset_threshold = 0.05#0.10 # in rad #0.05
     time_period = 1. / freq
@@ -206,6 +203,8 @@ def control_loop(cart_traj_dict, joint_traj_list, robot, freq, traj_type, do_plo
         full_desired_U = np.append(full_desired_U, [[0, 0, 0]], axis=0)
         initial_joint_pos = setup_jp(full_desired_X[0, 0:3], sr.JointPositions(robot_model.get_robot_name(),home_position), robot_model)
         initial_cart_pose = sr.CartesianPose('panda_ee', full_desired_X[0, 0:3],  np.array([0., 1., 0., 0.]), 'panda_base')
+        # Set integrator gains
+        inte_gain = np.array([65, 55, 50, 45, 40, 30, 20]) * 0.5
 
     elif ctrl_flag == 'Replay':
         ## Set up joint trajectory + initial position
@@ -214,7 +213,10 @@ def control_loop(cart_traj_dict, joint_traj_list, robot, freq, traj_type, do_plo
         temp = sr.CartesianPose(robot_model.forward_kinematics(sr.JointPositions(robot_model.get_robot_name(), initial_joint_pos), "panda_link8"))
         # Hard code orientation - known due to fixed orientation in data recording
         initial_cart_pose = sr.CartesianPose('panda_ee', temp.get_position()+ [0,0,-.1034], np.array([0., 1., 0., 0.]), 'panda_base')
+        # Set integrator gains
+        inte_gain = np.array([65, 55, 50, 45, 40, 30, 20]) * 1.0
 
+    if in_sim: inte_gain = [3, 2.5, 2, 1.8, 1.5, 1.3, 1]  # SIM GAINS
     start_ds.set_parameter_value("attractor", initial_cart_pose, sr.ParameterType.STATE, sr.StateType.CARTESIAN_POSE)
 
     print_count = 0
@@ -248,7 +250,7 @@ def control_loop(cart_traj_dict, joint_traj_list, robot, freq, traj_type, do_plo
             time_f0 = time.time() - start_f0
 
             # Check for time, move on if takes too long
-            if time_f0 > 16.0 :
+            if time_f0 > 12.0 :
                 # Stop robot
                 command.joint_state = state.joint_state
                 command.joint_state.set_torques(np.zeros(7))
@@ -329,18 +331,16 @@ def control_loop(cart_traj_dict, joint_traj_list, robot, freq, traj_type, do_plo
                 continue
 
             # Adding integrator when getting close to target
-            if (np.all(error_joint < start_joint_control_rad) and reaching_jp) or (np.all(error_cart < 0.05) and ctrl_flag == 'Planned'):
+            if (np.all(error_joint < start_integrator_rad) and reaching_jp) or (np.all(error_cart < start_integrator_m) and ctrl_flag == 'Planned'):
                 integral += (initial_joint_pos - state.joint_state.get_positions()) * time_period
 
                 # set different gains for each controller
                 if ctrl_flag == 'Replay':
-                    inte_gain = np.array([65, 55, 50, 45, 40, 30, 20]) * 1.0
                     # reset integral if overhsoot
                     if np.any(abs(integral) > integrator_reset_threshold):
                         print("RESETTING INTEGRATOR ")
                         integral *= 0
                 elif ctrl_flag == 'Planned':
-                    inte_gain = np.array([65, 55, 50, 45, 40, 30, 1]) * 0.6
                     if np.any(abs(integral) > 2*integrator_reset_threshold):
                         print("RESETTING INTEGRATOR ")
                         integral *= 0
@@ -362,10 +362,10 @@ def control_loop(cart_traj_dict, joint_traj_list, robot, freq, traj_type, do_plo
             else:
                 # Get twist from DS
                 ds_twist = sr.CartesianTwist(start_ds.evaluate(state.ee_state))
-
+                ds_twist.clamp(.25, .5)
                 ## ADD MODULATION
                 modulated_lin_vel = doModulation(obstacle, state.ee_state.get_position(), ds_twist.get_linear_velocity())
-                mod_dif = ds_twist.get_linear_velocity()-modulated_lin_vel
+                # mod_dif = ds_twist.get_linear_velocity()-modulated_lin_vel
                 ds_twist.set_linear_velocity(modulated_lin_vel)
 
                 # clamp and set desired angular velocities
@@ -446,7 +446,8 @@ def control_loop(cart_traj_dict, joint_traj_list, robot, freq, traj_type, do_plo
                 command.joint_state = state.joint_state
                 command.joint_state.set_torques(np.zeros(7))
                 robot.send_command(command)
-
+                rospy.sleep(0.2)
+                robot.send_command(command)
                 print("WAIT ...")
                 rospy.sleep(0.2)
                 continue
@@ -674,7 +675,8 @@ def control_loop(cart_traj_dict, joint_traj_list, robot, freq, traj_type, do_plo
                                                  robot_model)
                     initial_cart_pose = sr.CartesianPose('panda_ee', full_desired_X[0, 0:3], np.array([0., 1., 0., 0.]),
                                                          'panda_base')
-                    # start_feedback_state = sr.CartesianState('panda_ee', robot_model.get_base_frame())
+                    # Set integrator gains
+                    inte_gain = np.array([65, 55, 50, 45, 40, 30, 0.0]) * 0.5
 
                 elif ctrl_flag == 'Replay':
                     ## Set up joint trajectory + initial position
@@ -686,6 +688,8 @@ def control_loop(cart_traj_dict, joint_traj_list, robot, freq, traj_type, do_plo
                     initial_cart_pose = sr.CartesianPose('panda_ee', temp.get_position() + [0, 0, -.1034],
                                                          np.array([0., 1., 0., 0.]),
                                                          'panda_base')
+                    # Set integrator gains
+                    inte_gain = np.array([65, 55, 50, 45, 40, 30, 20]) * 1.0
 
             start_ds.set_parameter_value("attractor", initial_cart_pose, sr.ParameterType.STATE,
                                          sr.StateType.CARTESIAN_POSE)
@@ -726,7 +730,8 @@ def control_loop(cart_traj_dict, joint_traj_list, robot, freq, traj_type, do_plo
 
         rate.sleep()
 
-def traj_selector(df, planned_traj_to_keep):
+def traj_selector(traj_dict, planned_traj_to_keep):
+    df = pd.DataFrame.from_dict(traj_dict)
     new_df = df.iloc[planned_traj_to_keep]
     return new_df
 
@@ -829,7 +834,7 @@ if __name__ == '__main__':
 
     # CHOOSE TRAJECTORIES MANUALLY
     # fpath_list[0] = data_dir + "csv/" + "unsafe/13_jointState.pkl"
-    # cbf_traj = traj_selector(cbf_traj, [18])
+    # cbf_traj = traj_selector(cbf_traj, [2, 7, 8, 5, 11, 12])
 
     # Save name and category of each traj in a txt file
     fn_list = [os.path.join(os.path.basename(os.path.normpath(os.path.split(fn)[0])),

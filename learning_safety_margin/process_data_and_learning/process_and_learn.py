@@ -33,6 +33,22 @@ def bags_need_processing(user_number):
     elif count_csv < 5*count_rosbags:
         return True
 
+def process_and_learn(user_number, learning_algorithm ='vel', to_smooth = '1'):
+    set_up_dir(user_number)
+
+    if bags_need_processing(user_number):
+        print("Processing rosbags for User_" + user_number)
+        process_user_rosbags(user_number, to_smooth)
+        print("Finished processing rosbags for User_" + user_number)
+    else:
+        print("Rosbags already processed for User_"+ user_number)
+
+    if learning_algorithm == 'pos':
+        print("Learning position limits cbf for User_" + user_number)
+        pos_learning(user_number)
+    if learning_algorithm == 'vel':
+        print("Learning velocity limits cbf for User_" + user_number)
+        vel_learning(user_number)
 
 def parser():
     # Parse arguments calls functions accordingly
@@ -49,22 +65,8 @@ def parser():
 
     args = parser.parse_args()
 
-    set_up_dir(args.user_number)
-
-    if bags_need_processing(args.user_number):
-        print("Processing rosbags for User_" + args.user_number)
-        process_user_rosbags(args.user_number, args.to_smooth)
-        print("Finished processing rosbags for User_" + args.user_number)
-    else:
-        print("Rosbags already processed for User_"+ args.user_number)
-
-    if args.learning_algorithm == 'pos':
-        print("Learning position limits cbf for User_" + args.user_number)
-        pos_learning(args.user_number)
-    if args.learning_algorithm == 'vel':
-        print("Learning velocity limits cbf for User_" + args.user_number)
-        vel_learning(args.user_number)
+    return args.user_number, args.learning_algorithm, args.to_smooth
 
 if __name__ == "__main__":
-    parser()
-
+    user_nbr, learning_alg, smooth_flag = parser()
+    process_and_learn(user_nbr, learning_alg, smooth_flag)
