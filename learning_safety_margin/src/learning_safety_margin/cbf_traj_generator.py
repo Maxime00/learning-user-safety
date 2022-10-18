@@ -125,6 +125,11 @@ class trajGenerator():
         U = np.array(U)  # accel (n_steps, 3)
         T = np.array(T)
 
+        # Check low velocity at end point
+        if np.any(np.abs(X[-1, 3:6]) > 0.1):
+            print("End point has NON ZERO velocity :", X[-1, 3:6])
+            return None
+
         # Check if unsafe
         hvals = np.zeros(X.shape[0])
         for i in range(len(X)):
