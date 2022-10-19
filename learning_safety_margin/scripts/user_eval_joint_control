@@ -44,27 +44,21 @@ def find_closest_time(df, time):
     dist = (df['time'] - time).abs()
     return df.loc[dist.idxmin()]
 
-def desired_orientation():
-    # add -45 deg compensation (ref frame offset from link8 to hand)
-    offset_rot = Quaternion(axis=[0., 0., 1.], degrees=40)  # 0.9238, 0.0, 0.3826, 0.)
-    temp_orient = Quaternion(0., 1., 0., 0.)
-    desired_orientation = temp_orient * offset_rot
-    return desired_orientation.elements
-
 def setup_jp(cart_pos, joint_state, robot_model):
     # Set up initial position in Joint State from cartesian state and urdf model
-    initial_cart_pos = sr.CartesianState("panda_ee", robot_model.get_base_frame())
-    # add z-axis offset for gripper of value 0.1034
-    if not in_sim :
-        cart_pos = cart_pos + [0, 0, 0.1034]
-    initial_cart_pos.set_position(cart_pos)
-    initial_cart_pos.set_orientation(desired_orientation())
+    joint_state_model = sr.JointState('panda', robot_model.get_number_of_joints())
+    cart_state = sr.CartesianState("panda_ee", robot_model.get_base_frame())
+    cart_state.set_position(cart_pos)
+    cart_state.set_orientation(np.array([0., 1., 0., 0.]))
+    temp = np.zeros(9)
+    temp[0:7] = joint_state.get_positions()
+    joint_state_model.set_positions(temp)
     param = InverseKinematicsParameters()
     param.max_number_of_iterations = 15000
     param.tolerance = 0.005
     initial_joint_pos_sr = sr.JointPositions(
-        robot_model.inverse_kinematics(sr.CartesianPose(initial_cart_pos), sr.JointPositions(joint_state), param, "panda_link8"))
-    return initial_joint_pos_sr.data()
+        robot_model.inverse_kinematics(sr.CartesianPose(cart_state), sr.JointPositions(joint_state_model), param, "panda_grasptarget"))
+    return initial_joint_pos_sr.data()[0:7]
 
 def control_loop(cart_traj_dict, joint_traj_list, robot, freq, traj_type, do_plots, in_sim):
 
@@ -110,7 +104,7 @@ def control_loop(cart_traj_dict, joint_traj_list, robot, freq, traj_type, do_plo
 
 
     # Import panda urdf
-    urdf_path = "/home/ros/ros_ws/src/learning_safety_margin/urdf/panda_arm.urdf"
+    urdf_path = "/home/ros/ros_ws/src/learning_safety_margin/urdf/panda_arm_hand.urdf"
     robot_model = Model('panda', urdf_path)
 
     # Set up state variables
@@ -210,9 +204,13 @@ def control_loop(cart_traj_dict, joint_traj_list, robot, freq, traj_type, do_plo
         ## Set up joint trajectory + initial position
         traj = pd.read_pickle(fpath_list[traj_idx - nbr_planned_traj])
         initial_joint_pos = traj['position'].at[0]
-        temp = sr.CartesianPose(robot_model.forward_kinematics(sr.JointPositions(robot_model.get_robot_name(), initial_joint_pos), "panda_link8"))
+        joint_state_model = sr.JointState('panda', robot_model.get_number_of_joints())
+        temp = np.zeros(9)
+        temp[0:7] = initial_joint_pos
+        joint_state_model.set_positions(temp)
+        temp = sr.CartesianPose(robot_model.forward_kinematics(sr.JointPositions(joint_state_model), "panda_grasptarget"))
         # Hard code orientation - known due to fixed orientation in data recording
-        initial_cart_pose = sr.CartesianPose('panda_ee', temp.get_position()+ [0,0,-.1034], np.array([0., 1., 0., 0.]), 'panda_base')
+        initial_cart_pose = sr.CartesianPose('panda_ee', temp.get_position(), np.array([0., 1., 0., 0.]), 'panda_base')
         # Set integrator gains
         inte_gain = np.array([65, 55, 50, 45, 40, 30, 20]) * 1.0
 
@@ -297,8 +295,8 @@ def control_loop(cart_traj_dict, joint_traj_list, robot, freq, traj_type, do_plo
                     f_U = interpolate.interp1d(full_desired_T, full_desired_U, axis=0)
 
                     # set DS target for orientation control
-                    target_ds = sr.CartesianPose(state.ee_state.get_name(),  full_desired_X[-1, 0:3],  desired_orientation(),
-                                                state.ee_state.get_reference_frame())  #robot_model.get_base_frame())#
+                    target_ds = sr.CartesianPose(state.ee_state.get_name(),  full_desired_X[-1, 0:3],  np.array([0., 1., 0., 0.]),
+                                                state.ee_state.get_reference_frame())
                     ds.set_parameter_value("attractor", target_ds, sr.ParameterType.STATE, sr.StateType.CARTESIAN_POSE)
                     # Set up for end of traj follow
                     max_time = full_desired_T[-1]
@@ -479,7 +477,7 @@ def control_loop(cart_traj_dict, joint_traj_list, robot, freq, traj_type, do_plo
                 # Set desired angular velocity
                 ds_twist = sr.CartesianTwist(ds.evaluate(feedback_state))
                 # clamp and set desired angular velocities
-                ds_twist.clamp(.25, .25)
+                ds_twist.clamp(.25, .5)
 
                 # Get joint positions
                 joint_pos = setup_jp(X_desired[0:3],state.joint_state, robot_model)
@@ -673,21 +671,24 @@ def control_loop(cart_traj_dict, joint_traj_list, robot, freq, traj_type, do_plo
                     initial_joint_pos = setup_jp(full_desired_X[0, 0:3],
                                                  sr.JointPositions(robot_model.get_robot_name(), home_position),
                                                  robot_model)
-                    initial_cart_pose = sr.CartesianPose('panda_ee', full_desired_X[0, 0:3], np.array([0., 1., 0., 0.]),
-                                                         'panda_base')
+                    initial_cart_pose = sr.CartesianPose('panda_ee', full_desired_X[0, 0:3],
+                                                         np.array([0., 1., 0., 0.]), 'panda_base')
                     # Set integrator gains
-                    inte_gain = np.array([65, 55, 50, 45, 40, 30, 0.0]) * 0.5
+                    inte_gain = np.array([65, 55, 50, 45, 40, 30, 20]) * 0.5
 
                 elif ctrl_flag == 'Replay':
                     ## Set up joint trajectory + initial position
                     traj = pd.read_pickle(fpath_list[traj_idx - nbr_planned_traj])
                     initial_joint_pos = traj['position'].at[0]
-                    temp = sr.CartesianPose(robot_model.forward_kinematics(
-                        sr.JointPositions(robot_model.get_robot_name(), initial_joint_pos), "panda_link8"))
+                    joint_state_model = sr.JointState('panda', robot_model.get_number_of_joints())
+                    temp = np.zeros(9)
+                    temp[0:7] = initial_joint_pos
+                    joint_state_model.set_positions(temp)
+                    temp = sr.CartesianPose(
+                        robot_model.forward_kinematics(sr.JointPositions(joint_state_model), "panda_grasptarget"))
                     # Hard code orientation - known due to fixed orientation in data recording
-                    initial_cart_pose = sr.CartesianPose('panda_ee', temp.get_position() + [0, 0, -.1034],
-                                                         np.array([0., 1., 0., 0.]),
-                                                         'panda_base')
+                    initial_cart_pose = sr.CartesianPose('panda_ee', temp.get_position(),
+                                                         np.array([0., 1., 0., 0.]), 'panda_base')
                     # Set integrator gains
                     inte_gain = np.array([65, 55, 50, 45, 40, 30, 20]) * 1.0
 

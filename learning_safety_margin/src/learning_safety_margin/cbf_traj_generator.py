@@ -21,8 +21,8 @@ class trajGenerator():
         self.theta = theta
         self.bias = bias
         # print("TRAJ BIAS:", bias, self.bias)
-        self.safe = True
-        self.unsafe = False
+        self.safe = False
+        self.unsafe = True
         self.semisafe = False
         if self.semisafe: self.daring_offset = daring_offset
         if self.unsafe: self.unsafe_offset = unsafe_offset
