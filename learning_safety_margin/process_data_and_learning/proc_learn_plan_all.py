@@ -7,7 +7,7 @@ from learning_safety_margin.cbf_traj_generator import trajGenerator
 data_dir = "/home/ros/ros_ws/src/learning_safety_margin/data/" #User_" + user_number + "/csv"
 
 #For each user
-for user in range(0,10):
+for user in range(2,10):
 
     user_number =str(user)
     # Remove all csv repos
@@ -47,3 +47,4 @@ for user in range(0,10):
     print("Finished generating trajectories for User_"+ user_number)
     with open(user_dir + str(nbr_demos * 2) + '_planned_trajectories.pkl', 'wb') as f:
         pickle.dump(cbf_traj, f)
+

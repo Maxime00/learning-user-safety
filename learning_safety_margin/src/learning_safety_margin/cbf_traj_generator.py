@@ -22,7 +22,7 @@ class trajGenerator():
         self.bias = bias
         # print("TRAJ BIAS:", bias, self.bias)
         self.safe = True
-        self.unsafe = True
+        self.unsafe = False
         self.semisafe = False
         if self.semisafe: self.daring_offset = daring_offset
         if self.unsafe: self.unsafe_offset = unsafe_offset
@@ -77,7 +77,7 @@ class trajGenerator():
         T = np.array(T)
 
         # check if trajectory stops correctly
-        if np.any(np.abs(X[-1, 3:6]) > 0.01):
+        if np.any(np.abs(X[-1, 3:6]) > 0.1):
             print("End point has NON ZERO velocity :", X[-1, 3:6])
             return None
         # check if safe
@@ -165,8 +165,8 @@ class trajGenerator():
                     xt = x - 0.38
                 yt = y + np.random.uniform(y_lim[0] - y, y_lim[1] - y)
 
-            z0 = np.random.uniform(0.05, 0.3)
-            zt = np.random.uniform(0.05, 0.3)
+            z0 = 0.08 # np.random.uniform(0.05, 0.3)
+            zt = 0.08 # np.random.uniform(0.05, 0.3)
 
             # check coordinates are reachable by robot
             if .3 <= np.linalg.norm([x, y, z0]) <= .77 and .3 <= np.linalg.norm([xt, yt, zt]) <= .77:  # .8 should do it
@@ -402,6 +402,6 @@ class trajGenerator():
                 plt.plot(t_list[i][:-1], u_list[i][:, 2], label='az')
                 fig.legend()
                 fig.suptitle(f"Planned acceleration #{i+1}")
-        plt.show()
+        # plt.show()
 
         return cbf_traj_data

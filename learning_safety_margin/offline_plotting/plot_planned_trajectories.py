@@ -10,8 +10,10 @@ def plot_ref_vs_rec(user, safety, traj_df):
     # Formatting for ease
     x_list = traj_df['X'].to_numpy()
     labels = traj_df['Labels'].to_numpy()
-    # start_list = traj_df['Start points'].to_numpy()
-    # end_list = traj_df['End points'].to_numpy()
+
+    if 'Start points' in traj_df.columns:
+        start_list = traj_df['Start points'].to_numpy()
+        end_list = traj_df['End points'].to_numpy()
 
     # count number of safe and unsafe trajectories
     nbr_safe = len(traj_df.index[traj_df['Labels'] == 'safe'])
@@ -41,9 +43,9 @@ def plot_ref_vs_rec(user, safety, traj_df):
             plt.plot(x_list[i][:, 0], x_list[i][:, 1], x_list[i][:, 2], color=rgba, label=f'Safe #{i + 1} [{i}]')
 
             # Plot Start and End Points
-            # Plot Start and End Points
-            # ax.scatter(start_list[i][0], start_list[i][1], start_list[i][2], s=3, c=rgba)
-            # ax.scatter(end_list[i][0], end_list[i][1], end_list[i][2], '*', s=6, c=rgba)
+            if 'Start points' in traj_df.columns:
+                ax.scatter(start_list[i][0], start_list[i][1], start_list[i][2], s=3, c=rgba)
+                ax.scatter(end_list[i][0], end_list[i][1], end_list[i][2], '*', s=6, c=rgba)
 
         if labels[i] == 'unsafe' and (safety =='unsafe' or safety=='both'):
             # Plot Trajectories
@@ -52,9 +54,9 @@ def plot_ref_vs_rec(user, safety, traj_df):
                      label=f'Unsafe #{i - nbr_safe  + 1} [{i}]')
 
             # Plot Start and End Points
-            # Plot Start and End Points
-            # ax.scatter(start_list[i][0], start_list[i][1], start_list[i][2], s=3, c=rgba)
-            # ax.scatter(end_list[i][0], end_list[i][1], end_list[i][2], '*', s=5, c=rgba)
+            if 'Start points' in traj_df.columns:
+                ax.scatter(start_list[i][0], start_list[i][1], start_list[i][2], s=3, c=rgba)
+                ax.scatter(end_list[i][0], end_list[i][1], end_list[i][2], '*', s=5, c=rgba)
 
     ax.set_xlim(x_lim)
     ax.set_ylim(y_lim)
@@ -109,7 +111,7 @@ if __name__ == "__main__":
 
     # Check directories and create them if needed
     data_dir = "/home/ros/ros_ws/src/learning_safety_margin/data/User_" + user_nbr +"/"
-    fn = data_dir + "30_planned_trajectories.pkl"
+    fn = data_dir + "30_planned_trajectories_19-10.pkl"
 
     with open(fn, 'rb') as f:
         plannedTraj = pickle.load(f)
