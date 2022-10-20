@@ -31,7 +31,7 @@ def plot_ref_vs_rec(user, traj, rec):
     for i, ax in enumerate(axs.ravel()[:-1]):
         ax.plot(rec_time[:], rec_pos[:, i])
         ax.plot(rec_time[:], ref_pos[:, i])
-        ax.set(ylabel="joint {}".format(i))
+        ax.set(ylabel="joint {}".format(i+1))
         ax.set(xlabel="Time [sec]")
     fig.legend(labels=['Recorded', 'Reference'], loc=(.6,.15))
 
@@ -41,7 +41,7 @@ def plot_ref_vs_rec(user, traj, rec):
 
     for i, ax in enumerate(axs.ravel()[:-1]):
         ax.plot(rec_time, error_pos[:, i])
-        ax.set(ylabel="joint {}".format(i))
+        ax.set(ylabel="joint {}".format(i+1))
         ax.set(xlabel="Time [sec]")
 
 
@@ -52,7 +52,7 @@ def plot_ref_vs_rec(user, traj, rec):
     for i, ax in enumerate(axs.ravel()[:-1]):
         ax.plot(rec_time, rec_vel[:, i])
         ax.plot(rec_time, ref_vel[:, i])
-        ax.set(ylabel="joint {}".format(i))
+        ax.set(ylabel="joint {}".format(i+1))
         ax.set(xlabel="Time [sec]")
     fig.legend(labels=['Recorded', 'Reference'], loc=(.6, .15))
 
@@ -62,7 +62,7 @@ def plot_ref_vs_rec(user, traj, rec):
 
     for i, ax in enumerate(axs.ravel()[:-1]):
         ax.plot(rec_time, error_vel[:, i])
-        ax.set(ylabel="joint {}".format(i))
+        ax.set(ylabel="joint {}".format(i+1))
         ax.set(xlabel="Time [sec]")
 
     # Plot torques and reference
@@ -72,7 +72,7 @@ def plot_ref_vs_rec(user, traj, rec):
     for i, ax in enumerate(axs.ravel()[:-1]):
         ax.plot(rec_time, rec_tor[:, i])
         ax.plot(rec_time, ref_tor[:, i])
-        ax.set(ylabel="joint {}".format(i))
+        ax.set(ylabel="joint {}".format(i+1))
         ax.set(xlabel="Time [sec]")
     fig.legend(labels=['Recorded', 'Reference'], loc=(.6, .15))
 
@@ -82,7 +82,7 @@ def plot_ref_vs_rec(user, traj, rec):
 
     for i, ax in enumerate(axs.ravel()[:-1]):
         ax.plot(rec_time, error_tor[:, i])
-        ax.set(ylabel="joint {}".format(i))
+        ax.set(ylabel="joint {}".format(i+1))
         ax.set(xlabel="Time [sec]")
 
     plt.show()
@@ -110,8 +110,8 @@ if __name__ == "__main__":
     user_nbr, safety, traj_nbr = parser()
 
     # Check directories and create them if needed
-    data_dir = "/home/ros/ros_ws/src/learning_safety_margin/data/User_" + user_nbr + "/replays/" + safety +"/"
-    fn = data_dir + traj_nbr+"_replay_jointState.npy"
+    data_dir = "/home/ros/ros_ws/src/learning_safety_margin/data/User_" + user_nbr + "/evaluations/" + safety +"/"
+    fn = data_dir + traj_nbr+"_jointState_"+safety+"Replay.npy"
 
     # data_dir = "/home/ros/ros_ws/src/learning_safety_margin/data/example_traj_to_replay/csv/"
     # fn = data_dir + "recorded_jointState.npy"

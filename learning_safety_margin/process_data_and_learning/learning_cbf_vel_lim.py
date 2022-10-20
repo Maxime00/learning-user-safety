@@ -501,7 +501,7 @@ def vel_learning(user_number):
                 constraints.append(unsafe_slack[i] >= 0.)
             else:
                 constraints.append(unsafe_slack[i] == 0)
-                print('no slack allowed on neg constraint')
+                # print('no slack allowed on neg constraint')
     else:
         print("adding no slack constraints")
         for i in range(n_unsafe):
@@ -624,7 +624,7 @@ def vel_learning(user_number):
 
     pickle.dump(data, open(data_dir+"vel_data_dict.p", "wb"))
     print("COMPLETE LEARNING TIME : ", time.time() - start_time, " seconds \n")
-    plt.show()
+    # plt.show()
 
 if __name__ == '__main__':
 

@@ -17,7 +17,7 @@ class trajGenerator():
         self.theta = theta
         self.bias = bias
         # print("TRAJ BIAS:", bias, self.bias)
-        self.safe = True
+        self.safe = False
         self.unsafe = True
         self.semisafe = False
         if self.semisafe: self.daring_offset = daring_offset
@@ -61,7 +61,7 @@ class trajGenerator():
             self.h_unsafe_fun = casadi.Function('h_unsafe_fun', [self.x], [self.h_unsafe])
 
         # Generate Planners
-        if self.safe: self.safe_mpc_planner = CBFMPC_Controller(self.centers, self.stds, self.theta, self.bias, dt=self.dt, n_steps=self.n_steps,pos_gains=5, r_gains = self.r_gains, zero_acc_start=self.zero_acc_start)
+        if self.safe: self.safe_mpc_planner = CBFMPC_Controller(self.centers, self.stds, self.theta, self.bias, dt=self.dt, n_steps=self.n_steps, pos_gains=1, r_gains = self.r_gains, zero_acc_start=self.zero_acc_start)
         if self.semisafe: self.daring_mpc_planner = CBFMPC_Controller(self.centers, self.stds, self.theta, self.daring_bias, dt=self.dt, n_steps=self.n_steps, r_gains = self.r_gains, zero_acc_start=self.zero_acc_start)
         if self.unsafe: self.unsafe_mpc_planner = CBFMPC_Controller(self.centers, self.stds, self.theta, self.unsafe_bias, dt=self.dt, n_steps=self.n_steps, r_gains = self.r_gains, zero_acc_start=self.zero_acc_start)
 
@@ -71,6 +71,11 @@ class trajGenerator():
         X = np.array(X)  # pos + vel  (n_steps, 6)
         U = np.array(U)  # accel (n_steps, 3)
         T = np.array(T)
+
+        # check if trajectory stops correctly
+        if np.any(np.abs(X[-1, 3:6]) > 0.1):
+            print("End point has NON ZERO velocity :", X[-1, 3:6])
+            return None
         # check if safe
         hvals = np.zeros(X.shape[0])
         for i in range(len(X)):
@@ -116,6 +121,11 @@ class trajGenerator():
         U = np.array(U)  # accel (n_steps, 3)
         T = np.array(T)
 
+        # Check low velocity at end point
+        if np.any(np.abs(X[-1, 3:6]) > 0.1):
+            print("End point has NON ZERO velocity :", X[-1, 3:6])
+            return None
+
         # Check if unsafe
         hvals = np.zeros(X.shape[0])
         for i in range(len(X)):
@@ -141,21 +151,36 @@ class trajGenerator():
                     y = np.random.uniform(0.3, 0.45)
                 else:
                     y = np.random.uniform(-0.3, -0.45)
+<<<<<<< HEAD
                 xt = x + np.random.uniform(0.35-x, 0.66-x)
+=======
+                xt = x + np.random.uniform(0.35 - x, 0.66 - x)
+>>>>>>> feature/use_ds_for_start_pos
                 yt = -y
             else:
                 y = np.random.uniform(y_lim[0], y_lim[1])
                 if x < 0.35:
+<<<<<<< HEAD
                     xt = 0.66 + (0.35-x)
+=======
+                    xt = 0.66 + (0.35 - x)
+>>>>>>> feature/use_ds_for_start_pos
                 else:
-                    xt = x - 0.45
-                yt = y + np.random.uniform(y_lim[0]-y, y_lim[1]-y)
+                    xt = x - 0.38
+                yt = y + np.random.uniform(y_lim[0] - y, y_lim[1] - y)
+
+            z0 = 0.08 # np.random.uniform(0.05, 0.3)
+            zt = 0.08 # np.random.uniform(0.05, 0.3)
 
             z0 = np.random.uniform(0.05, 0.3)
             zt = np.random.uniform(0.05, 0.3)
 
             # check coordinates are reachable by robot
+<<<<<<< HEAD
             if  .3 <= np.linalg.norm([x,y,z0]) <= .77 and .3 <= np.linalg.norm([xt,yt,zt]) <= .77: # .8 should do it
+=======
+            if .3 <= np.linalg.norm([x, y, z0]) <= .77 and .3 <= np.linalg.norm([xt, yt, zt]) <= .77:  # .8 should do it
+>>>>>>> feature/use_ds_for_start_pos
                 inRange = True
 
         xdot = 0
@@ -287,7 +312,9 @@ class trajGenerator():
             'X': x_list,
             'U': u_list,
             'T': t_list,
-            'Labels': labels
+            'Labels': labels,
+            'Start points' : start_list,
+            'End points': end_list
         }
         # print(ref_traj)
 

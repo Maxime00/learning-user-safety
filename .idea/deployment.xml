@@ -1,12 +1,12 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
-  <component name="PublishConfigData" autoUpload="Always" serverName="ros@localhost:2280" createEmptyFolders="true" preserveFilePermissions="true" remoteFilesAllowedToDisappearOnAutoupload="false" confirmBeforeUploading="false">
+  <component name="PublishConfigData" autoUpload="Always" serverName="ros@localhost:2280 agent" createEmptyFolders="true" preserveFilePermissions="true" remoteFilesAllowedToDisappearOnAutoupload="false" confirmBeforeUploading="false">
     <option name="confirmBeforeUploading" value="false" />
     <serverData>
-      <paths name="ros@localhost:2280">
+      <paths name="ros@localhost:2280 agent">
         <serverdata>
           <mappings>
-            <mapping deploy="/ros_ws/src/learning_safety_margin" local="$PROJECT_DIR$/learning_safety_margin" web="/ros_ws/src/learning_safety_margin" />
+            <mapping deploy="ros_ws/src/learning_safety_margin/" local="$PROJECT_DIR$/learning_safety_margin/" web="ros_ws/src/learning_safety_margin/" />
           </mappings>
         </serverdata>
       </paths>

@@ -260,7 +260,7 @@ def plot_rec_from_replay(df_ref, rec, traj_name):
     for i, ax in enumerate(axs.ravel()[:-1]):
         ax.plot(rec_time[:], rec_pos[:, i])
         ax.plot(ref_time[:], ref_pos[:, i])
-        ax.set(ylabel="joint {}".format(i))
+        ax.set(ylabel="joint {}".format(i+1))
         ax.set(xlabel="Time [sec]")
     fig.legend(labels=['Recorded', 'Reference'], loc=(.6,.15))
 
@@ -270,7 +270,7 @@ def plot_rec_from_replay(df_ref, rec, traj_name):
 
     for i, ax in enumerate(axs.ravel()[:-1]):
         ax.plot(rec_time, error_pos[:, i])
-        ax.set(ylabel="joint {}".format(i))
+        ax.set(ylabel="joint {}".format(i+1))
         ax.set(xlabel="Time [sec]")
 
 
@@ -281,7 +281,7 @@ def plot_rec_from_replay(df_ref, rec, traj_name):
     for i, ax in enumerate(axs.ravel()[:-1]):
         ax.plot(rec_time, rec_vel[:, i])
         ax.plot(ref_time, ref_vel[:, i])
-        ax.set(ylabel="joint {}".format(i))
+        ax.set(ylabel="joint {}".format(i+1))
         ax.set(xlabel="Time [sec]")
     fig.legend(labels=['Recorded', 'Reference'], loc=(.6, .15))
 
@@ -291,7 +291,7 @@ def plot_rec_from_replay(df_ref, rec, traj_name):
 
     for i, ax in enumerate(axs.ravel()[:-1]):
         ax.plot(rec_time, error_vel[:, i])
-        ax.set(ylabel="joint {}".format(i))
+        ax.set(ylabel="joint {}".format(i+1))
         ax.set(xlabel="Time [sec]")
 
     # Plot torques and reference
@@ -301,7 +301,7 @@ def plot_rec_from_replay(df_ref, rec, traj_name):
     for i, ax in enumerate(axs.ravel()[:-1]):
         ax.plot(rec_time, rec_tor[:, i])
         ax.plot(ref_time, ref_tor[:, i])
-        ax.set(ylabel="joint {}".format(i))
+        ax.set(ylabel="joint {}".format(i+1))
         ax.set(xlabel="Time [sec]")
     fig.legend(labels=['Recorded', 'Reference'], loc=(.6, .15))
 
@@ -311,7 +311,7 @@ def plot_rec_from_replay(df_ref, rec, traj_name):
 
     for i, ax in enumerate(axs.ravel()[:-1]):
         ax.plot(rec_time, error_tor[:, i])
-        ax.set(ylabel="joint {}".format(i))
+        ax.set(ylabel="joint {}".format(i+1))
         ax.set(xlabel="Time [sec]")
 
     plt.show()

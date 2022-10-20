@@ -6,6 +6,7 @@ import numpy as np
 import glob
 import pickle
 import time
+import matplotlib.pyplot as plt
 
 from robot_model import Model, InverseKinematicsParameters, QPInverseVelocityParameters
 import state_representation as sr
@@ -23,7 +24,7 @@ def process_user_rosbags(user_num='0', smooth_flag = '1'):
 	csv_dir = os.path.join(subject_dir, "csv")
 
 	# import panda urdf
-	urdf_path = "/home/ros/ros_ws/src/learning_safety_margin/urdf/panda_arm.urdf"
+	urdf_path = "/home/ros/ros_ws/src/learning_safety_margin/urdf/panda_arm_hand.urdf"
 	robot = Model("franka", urdf_path)
 
 	# Verify directory
@@ -64,6 +65,7 @@ def process_user_rosbags(user_num='0', smooth_flag = '1'):
 		jointTorques = []
 		time_idx = []
 		temp_jointState = sr.JointState("franka", robot.get_joint_frames())
+		temp = np.zeros(9)
 
 		# access bag
 		bag = rosbag.Bag(bagFile)
@@ -85,17 +87,18 @@ def process_user_rosbags(user_num='0', smooth_flag = '1'):
 
 				# positions
 				# must convert to sr to compute forward kinematics
-				# print(topic)
-				jointPos = sr.JointPositions("franka", np.array(msg.position))
-				eePos = robot.forward_kinematics(jointPos, 'panda_link8')  # outputs cartesian pose (7d)
+				# Using temp because robot model has 9 joints
+				temp[0:7] = np.array(msg.position)
+				temp_jointState.set_positions(temp)
+				eePos = robot.forward_kinematics(sr.JointPositions(temp_jointState), 'panda_grasptarget')  # outputs cartesian pose (7d)
 				# convert back from sr to save to list
 				eePositions.append(eePos.data()) # only saving transitional pos, not orientation
 
 				# velocities
 				# must convert to sr Joint state to compute forward velocities
-				temp_jointState.set_velocities( np.array(msg.velocity))
-				temp_jointState.set_positions( np.array(msg.position))
-				eeVel = robot.forward_velocity(temp_jointState, 'panda_link8')  # outputs cartesian twist (6d)
+				temp[0:7] = np.array(msg.velocity)
+				temp_jointState.set_velocities(temp)
+				eeVel = robot.forward_velocity(temp_jointState, 'panda_grasptarget')  # outputs cartesian twist (6d)
 				# convert back from sr to save to list
 				eeVelocities.append(eeVel.data())  # only saving transitional vel, not orientation
 
@@ -112,7 +115,15 @@ def process_user_rosbags(user_num='0', smooth_flag = '1'):
 			jointVel2save = np.array(jointVelocities)
 			jointTorq2save = np.array(jointTorques)
 
-
+			# ADD JOINT VELOCITY LIMIT CHECK
+			if np.any(np.abs(jointVel2save) > 2.1):
+				print("EXCEEDING JOINT VELOCITY LIMIT, NOT SAVING CSV")
+				plt.figure
+				plt.plot(time_idx, jointVel2save)
+				plt.title("raw joint vel")
+				plt.legend()
+				# plt.show()
+				continue
 
 			# make time relative to traj
 			time_idx = np.array(time_idx)

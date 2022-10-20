@@ -3,6 +3,7 @@
 import pandas as pd
 import numpy as np
 import argparse
+# import keyboard
 import pickle
 import random
 import rospy
@@ -11,15 +12,18 @@ import time
 import os
 import state_representation as sr
 from controllers import create_joint_controller, create_cartesian_controller, CONTROLLER_TYPE
-from dynamical_systems import create_cartesian_ds, DYNAMICAL_SYSTEM_TYPE
+from dynamical_systems import create_cartesian_ds, create_joint_ds, DYNAMICAL_SYSTEM_TYPE
 from network_interfaces.control_type import ControlType
 from network_interfaces.zmq.network import CommandMessage
 from learning_safety_margin import RobotInterface
 from learning_safety_margin import plot_f0_traj, plot_rec_from_replay, plot_rec_from_planned_joint
 from sensor_msgs.msg import JointState
 from std_msgs.msg import Header
-from learning_safety_margin import *
-from learning_safety_margin import trajGenerator
+from learning_safety_margin.obstacle_avoidance import Ellipsoid, doModulation
+
+from learning_safety_margin.cbf_mpc_vel_planner import *
+from learning_safety_margin.vel_control_utils import *
+from learning_safety_margin.cbf_traj_generator import trajGenerator
 from robot_model import Model, InverseKinematicsParameters, QPInverseVelocityParameters
 from scipy import interpolate
 from pyquaternion import Quaternion
@@ -40,29 +44,23 @@ def find_closest_time(df, time):
     dist = (df['time'] - time).abs()
     return df.loc[dist.idxmin()]
 
-def desired_orientation():
-    # add -45 deg compensation (ref frame offset from link8 to hand)
-    offset_rot = Quaternion(axis=[0., 0., 1.], degrees=45)  # 0.9238, 0.0, 0.3826, 0.)
-    temp_orient = Quaternion(0., 1., 0., 0.)
-    desired_orientation = temp_orient * offset_rot
-    return desired_orientation.elements
-
 def setup_jp(cart_pos, joint_state, robot_model):
     # Set up initial position in Joint State from cartesian state and urdf model
-    initial_cart_pos = sr.CartesianState("panda_ee", robot_model.get_base_frame())
-    # add z-axis offset for gripper of value 0.1034
-    if not in_sim :
-        cart_pos = cart_pos + [0, 0, 0.1034]
-    initial_cart_pos.set_position(cart_pos)
-    initial_cart_pos.set_orientation(desired_orientation())
+    joint_state_model = sr.JointState('panda', robot_model.get_number_of_joints())
+    cart_state = sr.CartesianState("panda_ee", robot_model.get_base_frame())
+    cart_state.set_position(cart_pos)
+    cart_state.set_orientation(np.array([0., 1., 0., 0.]))
+    temp = np.zeros(9)
+    temp[0:7] = joint_state.get_positions()
+    joint_state_model.set_positions(temp)
     param = InverseKinematicsParameters()
     param.max_number_of_iterations = 15000
     param.tolerance = 0.005
     initial_joint_pos_sr = sr.JointPositions(
-        robot_model.inverse_kinematics(sr.CartesianPose(initial_cart_pos), sr.JointPositions(joint_state), param, "panda_link8"))
-    return initial_joint_pos_sr.data()
+        robot_model.inverse_kinematics(sr.CartesianPose(cart_state), sr.JointPositions(joint_state_model), param, "panda_grasptarget"))
+    return initial_joint_pos_sr.data()[0:7]
 
-def control_loop(cart_traj_dict, joint_traj_list, robot, freq, replays_flag, do_plots, in_sim):
+def control_loop(cart_traj_dict, joint_traj_list, robot, freq, traj_type, do_plots, in_sim):
 
     # create publisher
     pub = rospy.Publisher('/joint_states', JointState, queue_size=10)
@@ -73,6 +71,13 @@ def control_loop(cart_traj_dict, joint_traj_list, robot, freq, replays_flag, do_
     # DS for orientation control
     ds = create_cartesian_ds(DYNAMICAL_SYSTEM_TYPE.POINT_ATTRACTOR)
     ds.set_parameter_value("gain", [0., 0., 0., 5., 5., 5.], sr.ParameterType.DOUBLE_ARRAY)
+
+    # DS to reach initial position
+    start_ds = create_cartesian_ds(DYNAMICAL_SYSTEM_TYPE.POINT_ATTRACTOR)
+    start_ds.set_parameter_value("gain", [10., 10., 10., 10., 10., 10.], sr.ParameterType.DOUBLE_ARRAY)
+
+    # ADD OBSTACLE
+    obstacle = Ellipsoid([0.55, 0.0, 0.035], [.10, .12, .12 ], 0.6) # x=0.55 when table obstacle against table
 
     # SET UP TORQUE controller - reach start position
     nb_joints = 7
@@ -85,42 +90,57 @@ def control_loop(cart_traj_dict, joint_traj_list, robot, freq, replays_flag, do_
         damping = np.array([3., 2., 2., 1., .5, .5, .5])
     else:  # IRL GAINS
         # Getting to start position
-        joint_ctrl.set_parameter_value("stiffness", [220, 200, 200, 180, 120, 100, 80], sr.ParameterType.DOUBLE_ARRAY)
-        joint_ctrl.set_parameter_value("damping", [15, 15, 15, 13, 9, 8, 6], sr.ParameterType.DOUBLE_ARRAY)
+        # stiffness = np.array([220, 220, 200, 180, 110, 100, 40]) * 0.3
+        # damping = np.array([18, 17, 15.5, 13, 6, 5, 1.2]) * 2.0  ## Works well, bit too high in velocity for reaching start
+        stiffness_start = np.array([220, 220, 220, 180, 120, 100, 50]) * 0.5
+        damping_start = np.array([15, 15, 15, 13, 8, 7, 4]) * 0.8
+        stiffness = np.array([220, 220, 220, 180, 100, 80, 50]) * 0.3
+        damping = np.array([18, 17, 15, 14, 8, 7, 4]) * 1.8
+        # joint_ctrl.set_parameter_value("stiffness", [220, 200, 200, 180, 120, 100, 80], sr.ParameterType.DOUBLE_ARRAY)
+        # joint_ctrl.set_parameter_value("damping", [15, 15, 15, 13, 9, 8, 6], sr.ParameterType.DOUBLE_ARRAY)
+        joint_ctrl.set_parameter_value("stiffness", stiffness_start.tolist(), sr.ParameterType.DOUBLE_ARRAY)
+        joint_ctrl.set_parameter_value("damping", damping_start.tolist(), sr.ParameterType.DOUBLE_ARRAY)
         # Trajectory following
+<<<<<<< HEAD
         stiffness = np.array([220, 220, 200, 180, 110, 100, 40]) * 0.3
         damping = np.array([18, 17, 15.5, 13, 6, 5, 1.2]) * 2.0 # 2.3 max lower this to avoid oscillations # reuse alberic gains ?? 6.5, 5.5 maybe ??
+=======
+
+>>>>>>> feature/use_ds_for_start_pos
 
     # Import panda urdf
-    urdf_path = "/home/ros/ros_ws/src/learning_safety_margin/urdf/panda_arm.urdf"
+    urdf_path = "/home/ros/ros_ws/src/learning_safety_margin/urdf/panda_arm_hand.urdf"
     robot_model = Model('panda', urdf_path)
 
     # Set up state variables
-    desired_state = sr.CartesianState('panda_ee', robot_model.get_base_frame())
+    desired_state = sr.CartesianState('panda_ee', 'panda_base')
     feedback_state = sr.CartesianState('panda_ee', 'panda_base')
     desired_joint_state = sr.JointState("franka", nb_joints)
     feedback_joint_state = sr.JointState("franka", nb_joints)
 
     flag = 1
+<<<<<<< HEAD
     print_freq = freq*2
+=======
+    print_freq = freq # *X (prints every X seconds)
+>>>>>>> feature/use_ds_for_start_pos
 
-    # Avoid obstacle logic
-    obstacle_height = 0.15
-    cleared_height = obstacle_height + 0.1
-    avoiding_obstacle = False
+    # Reaching start logic
+    reached_start = False
+    reaching_jp = False
 
     # Integrator Variables
-    if in_sim:
-        inte_gain = [3, 2.5, 2, 1.8, 1.5, 1.3, 1]   # SIM GAINS
-    else:
-        inte_gain = [65, 55, 50, 45, 40, 30, 20]   #IRL GAINS
-    start_integrator_threshold = 0.3 # ideal 0.25 but doesn't reach that sometimes
-    init_pos_err_threshold = 0.02
-    integrator_reset_threshold = 0.05
+    start_joint_control_m = 0.10 #m cartesian distance to start controlling joint position to reach start jp
+    start_integrator_rad = 0.3 #rad # ideal 0.25 but doesn't reach that sometimes
+    start_integrator_m = 0.12 #m #threshold for itnegrator in Planned
+    init_pos_err_threshold_cart = 0.01 # in m
+    init_pos_err_threshold_joint = 0.02 # in rad
+    integrator_reset_threshold = 0.05#0.10 # in rad #0.05
     time_period = 1. / freq
     integral = np.zeros(nb_joints)
     inte_torques = np.zeros(nb_joints)
     dq_filtered = np.zeros(nb_joints)
+    null_command = np.zeros(nb_joints)
 
     # filter parameters
     n_dim = 3  # cartesian space[x,y,z]]
@@ -148,19 +168,23 @@ def control_loop(cart_traj_dict, joint_traj_list, robot, freq, replays_flag, do_
     checked_first_state = False
     checked_obstacle = False
 
-    null_position = np.array([0.0, 0.1479, 0.0,  -2.2249, 0.0, 2.3723, 0.7]) ## home pos np.array([0.0, 0.0, 0.0,  -1.6478, 0.0, 1.6295, 0.785])
-    if in_sim:
-        null_gain = 0.0
-    else:
-        null_gain = 0
+    home_position = np.array([0.0, 0.0, 0.0,  -1.6478, 0.0, 1.6295, 0.785])
+    null_position = np.array([0.0, 0.1479, 0.0, -2.2249, 0.0, 2.3723, 0.7])  ## home pos np.array([0.0, 0.0, 0.0,  -1.6478, 0.0, 1.6295, 0.785])
+    if in_sim: null_gain = 0.0
+    else: null_gain = 2.0
 
     # Successive traj follow - make random idx list to shuffle planned trajectories
     nbr_planned_traj = len(cart_traj_dict['Labels'])
-    # Whether to use replays or only planned trajectories
-    if replays_flag:
+    # print("CHECK NUMBER OF PLANNED TRAJ :", nbr_planned_traj)
+
+    # Whether to use replays, planned trajectories or both (default is both)
+    if traj_type == 'both':
         idx_list = list(range(0, nbr_planned_traj+len(joint_traj_list)))
-    elif not replays_flag:
+    elif traj_type == 'planned':
         idx_list = list(range(0, nbr_planned_traj))
+    elif traj_type == 'replay':
+        idx_list = list(range(nbr_planned_traj, nbr_planned_traj+len(joint_traj_list)))
+
     random.shuffle(idx_list)
     idx_to_incr = 0
 
@@ -182,12 +206,31 @@ def control_loop(cart_traj_dict, joint_traj_list, robot, freq, replays_flag, do_
         correct_label = cart_traj_dict['Labels'][traj_idx]
         # append 0 accelerations to U to match size of other variables
         full_desired_U = np.append(full_desired_U, [[0, 0, 0]], axis=0)
+<<<<<<< HEAD
         initial_joint_pos = setup_jp(full_desired_X[0, 0:3], sr.JointPositions(robot_model.get_robot_name(),null_position), robot_model)
+=======
+        initial_joint_pos = setup_jp(full_desired_X[0, 0:3], sr.JointPositions(robot_model.get_robot_name(),home_position), robot_model)
+        initial_cart_pose = sr.CartesianPose('panda_ee', full_desired_X[0, 0:3],  np.array([0., 1., 0., 0.]), 'panda_base')
+        # Set integrator gains
+        inte_gain = np.array([65, 55, 50, 45, 40, 30, 20]) * 0.5
+>>>>>>> feature/use_ds_for_start_pos
 
     elif ctrl_flag == 'Replay':
         ## Set up joint trajectory + initial position
         traj = pd.read_pickle(fpath_list[traj_idx - nbr_planned_traj])
         initial_joint_pos = traj['position'].at[0]
+        joint_state_model = sr.JointState('panda', robot_model.get_number_of_joints())
+        temp = np.zeros(9)
+        temp[0:7] = initial_joint_pos
+        joint_state_model.set_positions(temp)
+        temp = sr.CartesianPose(robot_model.forward_kinematics(sr.JointPositions(joint_state_model), "panda_grasptarget"))
+        # Hard code orientation - known due to fixed orientation in data recording
+        initial_cart_pose = sr.CartesianPose('panda_ee', temp.get_position(), np.array([0., 1., 0., 0.]), 'panda_base')
+        # Set integrator gains
+        inte_gain = np.array([65, 55, 50, 45, 40, 30, 20]) * 1.0
+
+    if in_sim: inte_gain = [3, 2.5, 2, 1.8, 1.5, 1.3, 1]  # SIM GAINS
+    start_ds.set_parameter_value("attractor", initial_cart_pose, sr.ParameterType.STATE, sr.StateType.CARTESIAN_POSE)
 
     print_count = 0
     target = initial_joint_pos
@@ -197,6 +240,7 @@ def control_loop(cart_traj_dict, joint_traj_list, robot, freq, replays_flag, do_
     while not rospy.is_shutdown():
 
         state = robot.get_state()
+
 
         if not state:
             continue
@@ -208,17 +252,43 @@ def control_loop(cart_traj_dict, joint_traj_list, robot, freq, replays_flag, do_
             checked_first_state = True
             input("Waiting for user input... Press Enter to start")
             print("Going to home position...")
+            print("panda base ref frame :", state.ee_state.get_reference_frame())
             start_f0 = time.time()
             continue
 
         if flag == 1:
             #----------- GO TO START POSITION ---------------------
 
-            error = abs(initial_joint_pos - state.joint_state.get_positions())
+            error_cart = abs(initial_cart_pose.get_position() - state.ee_state.get_position())
+            error_joint = abs(initial_joint_pos - state.joint_state.get_positions())
             time_f0 = time.time() - start_f0
 
-            if np.all(error < init_pos_err_threshold):
-                print("Error :", error)
+            # Check for time, move on if takes too long
+            if time_f0 > 12.0 :
+                # Stop robot
+                command.joint_state = state.joint_state
+                command.joint_state.set_torques(np.zeros(7))
+                robot.send_command(command)
+                rospy.sleep(0.2)
+                robot.send_command(command)
+
+                print("EXCEEDED ALLOTED TIME TO REACH START POSITION")
+                print("CARTESIAN ERROR :", error_cart)
+                print("JP ERROR:", error_joint)
+                moving_on = input("Attempt to play trajectory anyway?\n")
+                if moving_on == 'y' or moving_on=='Y' or moving_on=='yes':
+                    reached_start = True
+                else:
+                    flag = 3
+                    continue
+
+            if ctrl_flag == 'Planned' and np.all(error_cart < init_pos_err_threshold_cart):
+                reached_start = True
+            if ctrl_flag == 'Replay' and np.all(error_joint < init_pos_err_threshold_joint):
+                reached_start = True
+
+            if reached_start:
+                print("Error :", error_cart)
                 print("Reached start position in %s seconds" % time_f0)
                 flag = 2
 
@@ -226,7 +296,7 @@ def control_loop(cart_traj_dict, joint_traj_list, robot, freq, replays_flag, do_
                 command.joint_state = state.joint_state
                 command.joint_state.set_torques(np.zeros(7))
                 robot.send_command(command)
-                rospy.sleep(1.0)
+                rospy.sleep(0.2)
                 robot.send_command(command)
 
                 ## plot f0 traj
@@ -241,8 +311,8 @@ def control_loop(cart_traj_dict, joint_traj_list, robot, freq, replays_flag, do_
                     f_U = interpolate.interp1d(full_desired_T, full_desired_U, axis=0)
 
                     # set DS target for orientation control
-                    target_ds = sr.CartesianPose(state.ee_state.get_name(),  full_desired_X[-1, 0:3],  desired_orientation(),
-                                                state.ee_state.get_reference_frame())  #robot_model.get_base_frame())#
+                    target_ds = sr.CartesianPose(state.ee_state.get_name(),  full_desired_X[-1, 0:3],  np.array([0., 1., 0., 0.]),
+                                                state.ee_state.get_reference_frame())
                     ds.set_parameter_value("attractor", target_ds, sr.ParameterType.STATE, sr.StateType.CARTESIAN_POSE)
                     # Set up for end of traj follow
                     max_time = full_desired_T[-1]
@@ -257,50 +327,75 @@ def control_loop(cart_traj_dict, joint_traj_list, robot, freq, replays_flag, do_
                     max_time = traj['time'].iat[-1]
                     print("Ready to play replay trajectory labeled #%s of %s [Progress: %s/%s] \n" % (traj_idx-nbr_planned_traj + 1, len(fpath_list), idx_to_incr+1, len(idx_list)))
 
-                input("Waiting for user input... Press Enter to start \n ")
+                input("Waiting for user input... Press Enter to play trajectory \n ")
                 rospy.sleep(0.2)
                 timeZero = time.time()
                 continue
 
-            ## Check if too low, set target accordingly
-            if not checked_obstacle :
-                if state.ee_state.get_position()[2] < cleared_height:
-                    cart_target = state.ee_state.get_position()[0:3]
-                    # Check to avoid inverse kinematics failing
-                    if cart_target[0] > 0.7 :
-                        target = null_position
-                    else:
-                        cart_target[2] = cleared_height + 0.2
-                        target = setup_jp(cart_target, state.joint_state, robot_model)
-                    avoiding_obstacle = True
-                    print("Going up !")
-                checked_obstacle = True
-
-            # once high enough, switch target to home
-            elif checked_obstacle :
-                if state.ee_state.get_position()[2] >= cleared_height and avoiding_obstacle:
-                    avoiding_obstacle = False
-                    target = initial_joint_pos
-                    print("Reached cleared height !!")
+            # Pass here once to start joint position control
+            if np.all(error_cart < start_joint_control_m) and ctrl_flag == 'Replay' and reaching_jp is False:
+                #Activate jp control and continue
+                reaching_jp = True
+                command.joint_state = state.joint_state
+                command.joint_state.set_torques(np.zeros(7))
+                robot.send_command(command)
+                rospy.sleep(0.1)    # To avoid going through the target and stopping too late
+                robot.send_command(command)
+                print("SWITCHED TO JOINT CONTROL !!  \n  ")
+                continue
 
             # Adding integrator when getting close to target
-            if np.all(error < start_integrator_threshold) and not avoiding_obstacle:
+            if (np.all(error_joint < start_integrator_rad) and reaching_jp) or (np.all(error_cart < start_integrator_m) and ctrl_flag == 'Planned'):
                 integral += (initial_joint_pos - state.joint_state.get_positions()) * time_period
-                # reset integral if overhsoot
-                if np.any(abs(integral) > integrator_reset_threshold):
-                    integral *= 0
+
+                # set different gains for each controller
+                if ctrl_flag == 'Replay':
+                    # reset integral if overhsoot
+                    if np.any(abs(integral) > integrator_reset_threshold):
+                        print("RESETTING INTEGRATOR ")
+                        integral *= 0
+                elif ctrl_flag == 'Planned':
+                    if np.any(abs(integral) > 2*integrator_reset_threshold):
+                        print("RESETTING INTEGRATOR ")
+                        integral *= 0
                 inte_torques = inte_gain * integral
+                if print_count % print_freq == 0:
+                    print("USING INTEGRATOR ")
 
             # Set feedback state
             feedback_joint_state.set_positions(state.joint_state.get_positions())
             dq_filtered = alpha_joint * dq_filtered + (1-alpha_joint) * state.joint_state.get_velocities()
             feedback_joint_state.set_velocities(dq_filtered)
 
-            # Set velocity and position error
-            velo_d = target - state.joint_state.get_positions()
+            # Use DS with modulation to avoidobstacle, when close to replay start position, switch to joint control
+            if reaching_jp:
+                # Set velocity and position error
+                velo_d = initial_joint_pos - state.joint_state.get_positions()
+                # Norm velocities
+                velo_d = velo_d / np.linalg.norm(velo_d) if np.linalg.norm(velo_d) > 1.0 else velo_d
+            else:
+                # Get twist from DS
+                ds_twist = sr.CartesianTwist(start_ds.evaluate(state.ee_state))
+                ds_twist.clamp(.25, .5)
+                ## ADD MODULATION
+                modulated_lin_vel = doModulation(obstacle, state.ee_state.get_position(), ds_twist.get_linear_velocity())
+                # mod_dif = ds_twist.get_linear_velocity()-modulated_lin_vel
+                ds_twist.set_linear_velocity(modulated_lin_vel)
 
-            # Norm velocities
-            velo_d = velo_d / np.linalg.norm(velo_d) if np.linalg.norm(velo_d) > 1.0 else velo_d
+                # clamp and set desired angular velocities
+                ds_twist.clamp(.25, .5)
+                velo_d = np.linalg.lstsq(state.jacobian.data(), ds_twist.data(), rcond=None)[0]
+                ## NULL SPACE
+                # Only remove when aiming for replay initial joint position
+                # Calculate jacobian pseudo inverse
+                jacobian = np.array(state.jacobian.data())
+                jacobian_damped_inverse = np.dot(jacobian.T, np.linalg.inv((np.dot(jacobian, jacobian.T) + 0.01 * np.eye(6))))
+                # calculate null space matrix and error
+                null_space_matrix = np.eye(nb_joints) - jacobian_damped_inverse.dot(jacobian)
+                null_error = null_position - state.joint_state.get_positions()
+                # get null space command
+                null_command = null_gain * null_space_matrix.dot(null_error)
+
             desired_joint_state.set_velocities(velo_d)
 
             pos_d = feedback_joint_state.get_positions() + time_period * velo_d
@@ -322,7 +417,11 @@ def control_loop(cart_traj_dict, joint_traj_list, robot, freq, replays_flag, do_
             command.joint_state.set_torques(command_torques.get_torques() + inte_torques + null_command)
 
             # record data for plots
+<<<<<<< HEAD
             if js_idx < js_record.shape[0] :
+=======
+            if js_idx < len(js_record[:,0]):
+>>>>>>> feature/use_ds_for_start_pos
                 js_record[js_idx, 0] = time_f0
                 js_record[js_idx, 1:8] = state.joint_state.get_positions()
                 js_record[js_idx, 8:15] = state.joint_state.get_velocities()
@@ -333,16 +432,26 @@ def control_loop(cart_traj_dict, joint_traj_list, robot, freq, replays_flag, do_
 
             # debug print
             if print_count % print_freq == 0:
-                print("Error :", error)
-                # print("ratio null to command :", null_command/(command_torques.get_torques() + inte_torques))
+                print("CTRL FLAG:", ctrl_flag)
+                # print("MODULATION DIFFERENCE:", mod_dif)
+                # print("Error :", error_joint)
+                # print("Command:", command_torques.get_torques())
+                print("TARGET:", initial_cart_pose.get_position())
+                print("CURR POS:", state.ee_state.get_position())
+                print("ERROR CART:", error_cart)
+                print("ERROR:", error_joint)
+                # if ctrl_flag == 'Planned': print("DS twist post clamping : ", ds_twist)
             print_count += 1
 
             # print("Command:", command.joint_state.get_torques())
             if np.any(command_torques.get_torques() > 30):
                 print("Command:", command_torques.get_torques())
                 print("TORQUES TOO BIG !!!")
+                command.joint_state.set_torques(np.zeros(7))
+                robot.send_command(command)
+                rospy.sleep(0.2)
+                robot.send_command(command)
                 # break
-
             else:
                 robot.send_command(command)
 
@@ -365,9 +474,10 @@ def control_loop(cart_traj_dict, joint_traj_list, robot, freq, replays_flag, do_
                 command.joint_state = state.joint_state
                 command.joint_state.set_torques(np.zeros(7))
                 robot.send_command(command)
-
+                rospy.sleep(0.2)
+                robot.send_command(command)
                 print("WAIT ...")
-                rospy.sleep(1.0)
+                rospy.sleep(0.2)
                 continue
 
             if ctrl_flag == 'Planned':
@@ -397,7 +507,7 @@ def control_loop(cart_traj_dict, joint_traj_list, robot, freq, replays_flag, do_
                 # Set desired angular velocity
                 ds_twist = sr.CartesianTwist(ds.evaluate(feedback_state))
                 # clamp and set desired angular velocities
-                ds_twist.clamp(.25, .25)
+                ds_twist.clamp(.25, .5)
 
                 # Get joint positions
                 joint_pos = setup_jp(X_desired[0:3],state.joint_state, robot_model)
@@ -453,6 +563,8 @@ def control_loop(cart_traj_dict, joint_traj_list, robot, freq, replays_flag, do_
                 if np.any(command_torques.get_torques() > 30):
                     print("Command:", command_torques.get_torques())
                     print("TORQUES TOO BIG !!!")
+                    command.joint_state.set_torques(np.zeros(7))
+                    robot.send_command(command)
                     # break
                 else:
                     robot.send_command(command)
@@ -490,6 +602,8 @@ def control_loop(cart_traj_dict, joint_traj_list, robot, freq, replays_flag, do_
                 if np.any(command_torques.get_torques() > 30):
                     print("TORQUES TOO BIG !!!")
                     print("Command:", command.joint_state.get_torques())
+                    command.joint_state.set_torques(np.zeros(7))
+                    robot.send_command(command)
                     # break
 
                 else:
@@ -503,14 +617,14 @@ def control_loop(cart_traj_dict, joint_traj_list, robot, freq, replays_flag, do_
             if ctrl_flag == 'Planned':
                 # count number of MPC trajectories and set name for this traj accordingly
                 count_prev_traj = sum(len(files) for _, _, files in os.walk(os.path.join(save_dir,correct_label)))
-                save_fn = str(count_prev_traj) + "_" + correct_label +"_Planned_eeState"
+                save_fn = str(count_prev_traj) + "_" + correct_label +"_Planned"
 
             elif ctrl_flag == 'Replay':
                 # save file, reuse same name
                 complete_fn = os.path.split(fpath_list[traj_idx - nbr_planned_traj])
                 correct_label = os.path.basename(os.path.normpath(complete_fn[0]))
                 fn = os.path.splitext(complete_fn[1])
-                save_fn = fn[0] + "_" + correct_label + "_Replay_jointState"
+                save_fn = fn[0] + "_" + correct_label + "_Replay"
 
             # print("Traj name : ", save_fn)
             # save file
@@ -584,12 +698,36 @@ def control_loop(cart_traj_dict, joint_traj_list, robot, freq, replays_flag, do_
                     correct_label = cart_traj_dict['Labels'][traj_idx]
                     # append 0 accelerations to U to match size of other variables
                     full_desired_U = np.append(full_desired_U, [[0, 0, 0]], axis=0)
-                    initial_joint_pos = setup_jp(full_desired_X[0, 0:3], state.joint_state, robot_model)
+                    initial_joint_pos = setup_jp(full_desired_X[0, 0:3],
+                                                 sr.JointPositions(robot_model.get_robot_name(), home_position),
+                                                 robot_model)
+                    initial_cart_pose = sr.CartesianPose('panda_ee', full_desired_X[0, 0:3],
+                                                         np.array([0., 1., 0., 0.]), 'panda_base')
+                    # Set integrator gains
+                    inte_gain = np.array([65, 55, 50, 45, 40, 30, 20]) * 0.5
 
                 elif ctrl_flag == 'Replay':
                     ## Set up joint trajectory + initial position
                     traj = pd.read_pickle(fpath_list[traj_idx - nbr_planned_traj])
                     initial_joint_pos = traj['position'].at[0]
+                    joint_state_model = sr.JointState('panda', robot_model.get_number_of_joints())
+                    temp = np.zeros(9)
+                    temp[0:7] = initial_joint_pos
+                    joint_state_model.set_positions(temp)
+                    temp = sr.CartesianPose(
+                        robot_model.forward_kinematics(sr.JointPositions(joint_state_model), "panda_grasptarget"))
+                    # Hard code orientation - known due to fixed orientation in data recording
+                    initial_cart_pose = sr.CartesianPose('panda_ee', temp.get_position(),
+                                                         np.array([0., 1., 0., 0.]), 'panda_base')
+                    # Set integrator gains
+                    inte_gain = np.array([65, 55, 50, 45, 40, 30, 20]) * 1.0
+
+            start_ds.set_parameter_value("attractor", initial_cart_pose, sr.ParameterType.STATE,
+                                         sr.StateType.CARTESIAN_POSE)
+
+            # Reset obstacle avoidance
+            reached_start = False
+            reaching_jp = False
 
             # Reset recording list
             recorded_state = np.zeros((15000, 1 + nb_joints * 6 + n_dim * 6 + 8)) * np.nan
@@ -598,7 +736,10 @@ def control_loop(cart_traj_dict, joint_traj_list, robot, freq, replays_flag, do_
             js_idx = 0
 
             # Reset integrator
-            integral = np.zeros(7)
+            integral = np.zeros(nb_joints)
+            inte_torques = np.zeros(nb_joints)
+            dq_filtered = np.zeros(nb_joints)
+            null_command = np.zeros(nb_joints)
 
             # Reset target + obstacle check
             target = initial_joint_pos
@@ -609,8 +750,10 @@ def control_loop(cart_traj_dict, joint_traj_list, robot, freq, replays_flag, do_
                 joint_ctrl.set_parameter_value("stiffness", [10., 5., 4., 2., 2, 2, 2], sr.ParameterType.DOUBLE_ARRAY)
                 joint_ctrl.set_parameter_value("damping", [3., 2., 2., 1., .5, .5, .5], sr.ParameterType.DOUBLE_ARRAY)
             else:  # IRL GAINS
-                joint_ctrl.set_parameter_value("stiffness", [220, 200, 200, 180, 120, 100, 80], sr.ParameterType.DOUBLE_ARRAY)
-                joint_ctrl.set_parameter_value("damping", [15, 15, 15, 13, 9, 8, 6], sr.ParameterType.DOUBLE_ARRAY)
+                # joint_ctrl.set_parameter_value("stiffness", [220, 200, 200, 180, 120, 100, 80], sr.ParameterType.DOUBLE_ARRAY)
+                # joint_ctrl.set_parameter_value("damping", [15, 15, 15, 13, 9, 8, 6], sr.ParameterType.DOUBLE_ARRAY)
+                joint_ctrl.set_parameter_value("stiffness", stiffness_start.tolist(), sr.ParameterType.DOUBLE_ARRAY)
+                joint_ctrl.set_parameter_value("damping", damping_start.tolist(), sr.ParameterType.DOUBLE_ARRAY)
 
             # Reset flag to start loop again
             input("Ready for next trajectory... Press Enter to start")
@@ -623,6 +766,11 @@ def control_loop(cart_traj_dict, joint_traj_list, robot, freq, replays_flag, do_
 
         rate.sleep()
 
+def traj_selector(traj_dict, planned_traj_to_keep):
+    df = pd.DataFrame.from_dict(traj_dict)
+    new_df = df.iloc[planned_traj_to_keep]
+    return new_df
+
 def parser():
     # Parse arguments calls functions accordingly
     myparser = argparse.ArgumentParser(description="Plays replays and planned trajectories from user specific CBF planner on Franka Panda robot")
@@ -630,17 +778,18 @@ def parser():
     myparser.add_argument("-u", "--user_number", type=str, default='0', nargs='?', help="The user data to process")
     myparser.add_argument("-n", "--number_of_demos", type=str, default='2',  nargs='?',
                         help="The number of demos to plan/replay for each safety category")
-    myparser.add_argument("-r", "--use_replays", type=str, choices=['True', 'False'], default='True',  nargs='?',
-                          help="Option to only play planned trajectories")
+    myparser.add_argument("-t", "--trajectory_type", type=str, choices=['planned', 'replay', 'both'], default='both',  nargs='?',
+                          help="Option only select type of trajectories")
     myparser.add_argument("-p", "--plot", type=str, choices=['True', 'False'], default='False',  nargs='?',
                           help="Option to plot reference vs recorded trajectories")
-    myparser.add_argument("-s", "--simulation", type=str, choices=['True', 'False'], default='False',  nargs='?',
-                          help="Option to run with simulator (lower gains)")
+    myparser.add_argument("-g", "--generate_trajectories", type=str, choices=['True', 'False'], default='False',  nargs='?',
+                          help="Option to generate planned traj or used previous dict trajectories")
 
     args, unknown = myparser.parse_known_args()
+
     print(args)
 
-    return args.user_number, args.number_of_demos, eval(args.use_replays), eval(args.plot), eval(args.simulation)
+    return args.user_number, args.number_of_demos, args.trajectory_type, eval(args.plot), eval(args.generate_trajectories)
 
 ### Controller to play replays and planned trajectories from user specific CBF planner
 if __name__ == '__main__':
@@ -648,10 +797,25 @@ if __name__ == '__main__':
     rospy.init_node("test", anonymous=True)
 
     # Arguments parser
-    user_number, number_of_demos, replays_flag, do_plots, in_sim = parser()
+    user_number, number_of_demos, traj_type, do_plots, gen_traj = parser()
 
+    # BOOL FOR USING SIMULATOR
+    in_sim = False
+    if in_sim:
+        print("USING SIMULATION PARAMETERS")
+
+    # SET PARAMETERS FOR MPC CONTROL
+    freq = 300
+    dt = 0.1  # 1./freq
+    n_steps = 50
+    nbr_demos = int(number_of_demos)
+
+    # PRINT INFO
     print("\n Running User Evaluation Controller for User_"+user_number+"\n")
-    print("Total number of demos: "+str(int(number_of_demos)*2 + int(number_of_demos)*3*int(replays_flag))+"\n")
+    if traj_type == 'planned': total_nbr_demos = nbr_demos*2
+    elif traj_type == 'replay': total_nbr_demos = nbr_demos * 3
+    elif traj_type == 'both': total_nbr_demos = nbr_demos * 5
+    print("Total number of demos: "+str(total_nbr_demos)+"\n")
 
     # Set up directories
     data_dir = "/home/ros/ros_ws/src/learning_safety_margin/data/User_" + user_number + "/"
@@ -668,26 +832,28 @@ if __name__ == '__main__':
     stds = data["rbf_stds"]
     if bias_param is None: bias_param = 0.1
 
-    # SET PARAMETERS FOR MPC CONTROL
-    freq = 300
-    dt = 0.1  # 1./freq
-    n_steps = 50
-    nbr_demos = int(number_of_demos)
+    # Generate traj if required, used previous generated ones from saved dictionary otherwise
+    if gen_traj:
+        # Init Trajectory Generation
+        print("Instantiating Traj Planner, should take around %s seconds... \n" % ((n_steps/2)*3))
+        instantiate_start = time.time()
+        traj_generator = trajGenerator(centers, stds, params, bias_param, dt=dt, n_steps=n_steps, r_gains=0.01, zero_acc_start=True)
+        print("FINISH INSTANTIATING TRAJ PLANNER IN %s seconds \n" % (time.time() - instantiate_start))
 
-    # Init Trajectory Generation
-    print("Instantiating Traj Planner, should take around %s seconds... \n" % ((n_steps/2)*3))
-    instantiate_start = time.time()
-    traj_generator = trajGenerator(centers, stds, params, bias_param, dt=dt, n_steps=n_steps, r_gains=0.01, zero_acc_start=True)
-    print("FINISH INSTANTIATING TRAJ PLANNER IN %s seconds \n" % (time.time() - instantiate_start))
-
-    print("Planning %s trajectories... \n" % (nbr_demos*2))
-    plan_start = time.time()
-    cbf_traj = traj_generator.generate_all_trajectories(num_demos=nbr_demos)#, init_guess_list=fpath_list)#, plot_debug=show_plots)
-    print("FINISH planning trajectories in %s seconds \n" % (time.time() - plan_start))
+        print("Planning %s trajectories... \n" %(nbr_demos*2))
+        plan_start = time.time()
+        cbf_traj = traj_generator.generate_all_trajectories(num_demos=nbr_demos)#, init_guess_list=fpath_list)#, plot_debug=show_plots)
+        with open(data_dir+str(nbr_demos*2)+'_planned_trajectories.pkl', 'wb') as f:
+            pickle.dump(cbf_traj, f)
+        print("FINISH planning trajectories in %s seconds \n" % (time.time() - plan_start))
+    else:
+        print("LOADING PLANNED TRAJECTORIES FROM SAVED FILE")
+        with open(data_dir+'30_planned_trajectories.pkl', 'rb') as f:
+            cbf_traj = pickle.load(f)
 
     ## Make list of trajectories for replaying
     traj_nbr_per_category = int(number_of_demos)
-    category_list = ["safe/", "daring/", "unsafe/"]
+    category_list = ["safe/", "daring/","unsafe/"] ##
     fpath_list = []
     for category in category_list:
         ## count nbr of traj in category folder, make a list
@@ -701,12 +867,18 @@ if __name__ == '__main__':
     # Reshape list to be 1D, then shuffle
     fpath_list = sum(fpath_list, [])
     random.shuffle(fpath_list)
+
+    # CHOOSE TRAJECTORIES MANUALLY
+    # fpath_list[0] = data_dir + "csv/" + "unsafe/13_jointState.pkl"
+    # cbf_traj = traj_selector(cbf_traj, [2, 7, 8, 5, 11, 12])
+
     # Save name and category of each traj in a txt file
     fn_list = [os.path.join(os.path.basename(os.path.normpath(os.path.split(fn)[0])),
                             os.path.splitext(os.path.split(fn)[1])[0]) for fn in fpath_list]
+
     print("Traj to be replayed :", fn_list)
     np.savetxt(save_dir + "temp_list_of_replayed_trajectories.txt", np.array(fn_list), fmt='%s')
 
     # Connect to robot and start control loop
     robot_interface = RobotInterface("*:1701", "*:1702")
-    control_loop(cbf_traj, fpath_list, robot_interface, freq, replays_flag, do_plots, in_sim)
+    control_loop(cbf_traj, fpath_list, robot_interface, freq, traj_type, do_plots, in_sim)

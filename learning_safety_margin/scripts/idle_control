@@ -12,6 +12,9 @@ from learning_safety_margin.robot_interface import RobotInterface
 from sensor_msgs.msg import JointState
 from std_msgs.msg import Header
 
+from robot_model import Model, InverseKinematicsParameters, QPInverseVelocityParameters
+from pyquaternion import Quaternion
+
 def convert_joint_state_msg(state):
     # Convert sr.joint_state msg to ros JointState msg
     header = Header()
@@ -24,6 +27,26 @@ def convert_joint_state_msg(state):
     msg = JointState(header, names, pos, vel, effort)
 
     return msg
+
+def desired_orientation():
+    # add -45 deg compensation (ref frame offset from link8 to hand)
+    offset_rot = Quaternion(axis=[0., 0., 1.], degrees=40)  # 0.9238, 0.0, 0.3826, 0.)
+    temp_orient = Quaternion(0., 1., 0., 0.)
+    desired_orientation = temp_orient * offset_rot
+    return desired_orientation.elements
+
+def setup_jp(cart_pos, joint_state, robot_model):
+    # Set up initial position in Joint State from cartesian state and urdf model
+    initial_cart_pos = sr.CartesianState("panda_ee", robot_model.get_base_frame())
+    # add z-axis offset for gripper of value 0.1034
+    cart_pos = cart_pos + [0, 0, 0.1034]
+    initial_cart_pos.set_position(cart_pos)
+    initial_cart_pos.set_orientation(desired_orientation())
+    param = InverseKinematicsParameters()
+    param.max_number_of_iterations = 15000
+    param.tolerance = 0.005
+    initial_joint_pos_sr = sr.JointPositions(robot_model.inverse_kinematics(sr.CartesianPose(initial_cart_pos), sr.JointPositions(joint_state), param, "panda_link8"))
+    return initial_joint_pos_sr.data()
 
 
 def control_loop(robot, freq):
@@ -46,6 +69,18 @@ def control_loop(robot, freq):
 
     print_count = 0
 
+    # DEBUG FOR URDF
+    # urdf_path = "/home/ros/ros_ws/src/learning_safety_margin/urdf/panda_arm.urdf"
+    urdf_path = "/home/ros/ros_ws/src/learning_safety_margin/urdf/panda_arm_hand.urdf"
+    robot_model = Model('panda', urdf_path)
+    link8_joint_loop = 0
+    eePos=0
+    link8_pose =0
+    grasp_pose = 0
+    hand_joint_loop= 0
+
+    js_for_model =sr.JointState("panda", 9)
+
     rate = rospy.Rate(freq)
     while not rospy.is_shutdown():
         state = robot.get_state()
@@ -54,10 +89,16 @@ def control_loop(robot, freq):
             continue
 
         # debug print
-        if print_count % freq == 0:
-            print("EEF position: ", state.ee_state.get_position())
-            # print("Distance to center: ", np.linalg.norm(state.ee_state.get_position()))
+        if print_count % freq == 0 and target_set:
+            print("EEF position: ", state.ee_state.get_pose())
+            print("hand EEF position from kin: ", eePos_hand.get_pose())
+            # print("link8 EE diff:", sr.CartesianPose(state.ee_state).data()- link8_pose.data() )
+            print("hand ee diff:", sr.CartesianPose(state.ee_state).data()- grasp_pose.data())
             # print("Joint positions: ", state.joint_state.get_positions())
+            # print("link8 Joint positions from kin: ", link8_joint_loop)
+            # print("link8 Joint difference:", js_for_model.get_positions()-link8_joint_loop)
+            # print("hand jp from kin :", hand_joint_loop.data())
+            print("hand jp diff :", js_for_model.get_positions()-hand_joint_loop.data())
             # print("EEF orientation: ", state.ee_state.get_orientation())
         print_count += 1
 
@@ -67,6 +108,25 @@ def control_loop(robot, freq):
             ds.set_parameter_value("attractor", target, sr.ParameterType.STATE, sr.StateType.CARTESIAN_POSE)
             target_set = True
         else:
+
+            # DEBUG FOR URDF
+            temp = np.zeros(9)
+            temp[0:7] = state.joint_state.get_positions()
+            js_for_model.set_positions(temp)
+            link8_pose = robot_model.forward_kinematics(sr.JointPositions(js_for_model), 'panda_link8')
+            eePos = link8_pose.get_position() + [0., 0., -0.1034]
+            link8_joint_loop = setup_jp(eePos, js_for_model, robot_model)
+
+            grasp_pose = robot_model.forward_kinematics(sr.JointPositions(js_for_model), 'panda_grasptarget')
+            eePos_hand = grasp_pose.get_position()
+            initial_cart_pos = sr.CartesianState("panda_ee", robot_model.get_base_frame())
+            initial_cart_pos.set_position(eePos_hand)
+            initial_cart_pos.set_orientation(state.ee_state.get_orientation())
+            param = InverseKinematicsParameters()
+            param.max_number_of_iterations = 15000
+            param.tolerance = 0.005
+            hand_joint_loop = sr.JointPositions(robot_model.inverse_kinematics(sr.CartesianPose(initial_cart_pos), sr.JointPositions(js_for_model), param, 'panda_grasptarget'))
+
             twist = sr.CartesianTwist(ds.evaluate(state.ee_state))
             twist.clamp(.25, .5)
             # print("Desired Angular Velocities: ", twist.data()[3:6])
