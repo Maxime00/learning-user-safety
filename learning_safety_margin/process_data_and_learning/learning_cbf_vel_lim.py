@@ -624,7 +624,7 @@ def vel_learning(user_number):
 
     pickle.dump(data, open(data_dir+"vel_data_dict.p", "wb"))
     print("COMPLETE LEARNING TIME : ", time.time() - start_time, " seconds \n")
-    # plt.show()
+    plt.show()
 
 if __name__ == '__main__':
 

@@ -14,16 +14,16 @@ from learning_safety_margin.vel_control_utils import *
 
 class trajGenerator():
 
-    def __init__(self, centers, stds, theta, bias, daring_offset=1.0, unsafe_offset=30., dt=0.1, n_steps=50, r_gains = 1, zero_acc_start = False):
+    def __init__(self, centers, stds, theta, bias, daring_offset=1.0, unsafe_offset=30., dt=0.1, n_steps=50, r_gains = 1, zero_acc_start = False, safe =True, unsafe =True):
 
         self.centers = centers
         self.stds = stds
         self.theta = theta
         self.bias = bias
         # print("TRAJ BIAS:", bias, self.bias)
-        self.safe = False
-        self.unsafe = True
-        self.semisafe = False
+        self.safe = safe
+        self.unsafe = unsafe
+        self.semisafe = False # obsolete
         if self.semisafe: self.daring_offset = daring_offset
         if self.unsafe: self.unsafe_offset = unsafe_offset
         #
@@ -77,7 +77,7 @@ class trajGenerator():
         T = np.array(T)
 
         # check if trajectory stops correctly
-        if np.any(np.abs(X[-1, 3:6]) > 0.1):
+        if np.any(np.abs(X[-1, 3:6]) > 0.15):
             print("End point has NON ZERO velocity :", X[-1, 3:6])
             return None
         # check if safe
@@ -126,7 +126,7 @@ class trajGenerator():
         T = np.array(T)
 
         # Check low velocity at end point
-        if np.any(np.abs(X[-1, 3:6]) > 0.1):
+        if np.any(np.abs(X[-1, 3:6]) > 0.15):
             print("End point has NON ZERO velocity :", X[-1, 3:6])
             return None
 
@@ -283,6 +283,7 @@ class trajGenerator():
                    start_list.append(x)
                    end_list.append(xt)
                    num_unsafe += 1
+
             print("Generated Unsafe Trajectories")
             cmap = plt.cm.get_cmap('Reds')
             crange = np.linspace(0, 1, len(x_list) + 2)

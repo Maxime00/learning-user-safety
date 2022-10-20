@@ -44,8 +44,8 @@ def plot_ref_vs_rec(user, safety, traj_df):
 
             # Plot Start and End Points
             if 'Start points' in traj_df.columns:
-                ax.scatter(start_list[i][0], start_list[i][1], start_list[i][2], s=3, c=rgba)
-                ax.scatter(end_list[i][0], end_list[i][1], end_list[i][2], '*', s=6, c=rgba)
+                ax.scatter(start_list[i][0], start_list[i][1], start_list[i][2], s=3, color=rgba)
+                ax.scatter(end_list[i][0], end_list[i][1], end_list[i][2], '*', s=6, color=rgba)
 
         if labels[i] == 'unsafe' and (safety =='unsafe' or safety=='both'):
             # Plot Trajectories
@@ -55,8 +55,8 @@ def plot_ref_vs_rec(user, safety, traj_df):
 
             # Plot Start and End Points
             if 'Start points' in traj_df.columns:
-                ax.scatter(start_list[i][0], start_list[i][1], start_list[i][2], s=3, c=rgba)
-                ax.scatter(end_list[i][0], end_list[i][1], end_list[i][2], '*', s=5, c=rgba)
+                ax.scatter(start_list[i][0], start_list[i][1], start_list[i][2], s=3, color=rgba)
+                ax.scatter(end_list[i][0], end_list[i][1], end_list[i][2], '*', s=5, color=rgba)
 
     ax.set_xlim(x_lim)
     ax.set_ylim(y_lim)
@@ -111,7 +111,7 @@ if __name__ == "__main__":
 
     # Check directories and create them if needed
     data_dir = "/home/ros/ros_ws/src/learning_safety_margin/data/User_" + user_nbr +"/"
-    fn = data_dir + "30_planned_trajectories_19-10.pkl"
+    fn = data_dir + "30_planned_trajectories.pkl"
 
     with open(fn, 'rb') as f:
         plannedTraj = pickle.load(f)

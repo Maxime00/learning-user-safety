@@ -77,7 +77,7 @@ def control_loop(cart_traj_dict, joint_traj_list, robot, freq, traj_type, do_plo
     start_ds.set_parameter_value("gain", [10., 10., 10., 10., 10., 10.], sr.ParameterType.DOUBLE_ARRAY)
 
     # ADD OBSTACLE
-    obstacle = Ellipsoid([0.55, 0.0, 0.035], [.10, .12, .12 ], 0.6) # x=0.55 when table obstacle against table
+    obstacle = Ellipsoid([0.55, 0.0, 0.035], [.10, .12, .12 ], 0.5) # x=0.55 when table obstacle against table
 
     # SET UP TORQUE controller - reach start position
     nb_joints = 7
@@ -90,14 +90,10 @@ def control_loop(cart_traj_dict, joint_traj_list, robot, freq, traj_type, do_plo
         damping = np.array([3., 2., 2., 1., .5, .5, .5])
     else:  # IRL GAINS
         # Getting to start position
-        # stiffness = np.array([220, 220, 200, 180, 110, 100, 40]) * 0.3
-        # damping = np.array([18, 17, 15.5, 13, 6, 5, 1.2]) * 2.0  ## Works well, bit too high in velocity for reaching start
         stiffness_start = np.array([220, 220, 220, 180, 120, 100, 50]) * 0.5
         damping_start = np.array([15, 15, 15, 13, 8, 7, 4]) * 0.8
         stiffness = np.array([220, 220, 220, 180, 100, 80, 50]) * 0.3
         damping = np.array([18, 17, 15, 14, 8, 7, 4]) * 1.8
-        # joint_ctrl.set_parameter_value("stiffness", [220, 200, 200, 180, 120, 100, 80], sr.ParameterType.DOUBLE_ARRAY)
-        # joint_ctrl.set_parameter_value("damping", [15, 15, 15, 13, 9, 8, 6], sr.ParameterType.DOUBLE_ARRAY)
         joint_ctrl.set_parameter_value("stiffness", stiffness_start.tolist(), sr.ParameterType.DOUBLE_ARRAY)
         joint_ctrl.set_parameter_value("damping", damping_start.tolist(), sr.ParameterType.DOUBLE_ARRAY)
         # Trajectory following
@@ -158,7 +154,7 @@ def control_loop(cart_traj_dict, joint_traj_list, robot, freq, traj_type, do_plo
     checked_first_state = True
 
     home_position = np.array([0.0, 0.0, 0.0,  -1.6478, 0.0, 1.6295, 0.785])
-    null_position = np.array([0.0, 0.1479, 0.0, -2.2249, 0.0, 2.3723, 0.7])  ## home pos np.array([0.0, 0.0, 0.0,  -1.6478, 0.0, 1.6295, 0.785])
+    null_position = np.array([0.0, 0.0, 0.0,  -1.6478, 0.0, 1.6295, 0.785])##  np.array([0.0, 0.1479, 0.0, -2.2249, 0.0, 2.3723, 0.7])  ## home pos np.array([0.0, 0.0, 0.0,  -1.6478, 0.0, 1.6295, 0.785])
     if in_sim: null_gain = 0.0
     else: null_gain = 2.0
 
@@ -744,17 +740,19 @@ def parser():
     myparser.add_argument("-n", "--number_of_demos", type=str, default='2',  nargs='?',
                         help="The number of demos to plan/replay for each safety category")
     myparser.add_argument("-t", "--trajectory_type", type=str, choices=['planned', 'replay', 'both'], default='both',  nargs='?',
-                          help="Option only select type of trajectories")
+                          help="Option to select type of trajectories")
     myparser.add_argument("-p", "--plot", type=str, choices=['True', 'False'], default='False',  nargs='?',
                           help="Option to plot reference vs recorded trajectories")
     myparser.add_argument("-g", "--generate_trajectories", type=str, choices=['True', 'False'], default='False',  nargs='?',
                           help="Option to generate planned traj or used previous dict trajectories")
+    myparser.add_argument("-s", "--safety_type", type=str, choices=['safe', 'unsafe', 'both'], default='both',  nargs='?',
+                          help="Option to select safety category")
 
     args, unknown = myparser.parse_known_args()
 
     print(args)
 
-    return args.user_number, args.number_of_demos, args.trajectory_type, eval(args.plot), eval(args.generate_trajectories)
+    return args.user_number, args.number_of_demos, args.trajectory_type, eval(args.plot), eval(args.generate_trajectories), args.safety_type
 
 ### Controller to play replays and planned trajectories from user specific CBF planner
 if __name__ == '__main__':
@@ -762,7 +760,7 @@ if __name__ == '__main__':
     rospy.init_node("test", anonymous=True)
 
     # Arguments parser
-    user_number, number_of_demos, traj_type, do_plots, gen_traj = parser()
+    user_number, number_of_demos, traj_type, do_plots, gen_traj, safety_type = parser()
 
     # BOOL FOR USING SIMULATOR
     in_sim = False
@@ -771,13 +769,21 @@ if __name__ == '__main__':
 
     # SET PARAMETERS FOR MPC CONTROL
     freq = 300
-    dt = 0.1  # 1./freq
-    n_steps = 50
+    dt = 0.2  # 1./freq
+    n_steps = 30
     nbr_demos = int(number_of_demos)
+
+    # Set up safety category
+    plan_safe = True
+    plan_unsafe = True
+    if safety_type == 'safe':
+        plan_unsafe = False
+    elif safety_type == 'unsafe':
+        plan_safe = False
 
     # PRINT INFO
     print("\n Running User Evaluation Controller for User_"+user_number+"\n")
-    if traj_type == 'planned': total_nbr_demos = nbr_demos*2
+    if traj_type == 'planned': total_nbr_demos = nbr_demos*int(plan_safe) + nbr_demos*int(plan_unsafe)
     elif traj_type == 'replay': total_nbr_demos = nbr_demos * 3
     elif traj_type == 'both': total_nbr_demos = nbr_demos * 5
     print("Total number of demos: "+str(total_nbr_demos)+"\n")
@@ -802,10 +808,10 @@ if __name__ == '__main__':
         # Init Trajectory Generation
         print("Instantiating Traj Planner, should take around %s seconds... \n" % ((n_steps/2)*3))
         instantiate_start = time.time()
-        traj_generator = trajGenerator(centers, stds, params, bias_param, dt=dt, n_steps=n_steps, r_gains=0.01, zero_acc_start=True)
+        traj_generator = trajGenerator(centers, stds, params, bias_param, dt=dt, n_steps=n_steps, r_gains=0.01, zero_acc_start=True, safe=plan_safe, unsafe=plan_unsafe)
         print("FINISH INSTANTIATING TRAJ PLANNER IN %s seconds \n" % (time.time() - instantiate_start))
 
-        print("Planning %s trajectories... \n" %(nbr_demos*2))
+        print("Planning %s trajectories... \n" %(nbr_demos*int(plan_safe) + nbr_demos*int(plan_unsafe)))
         plan_start = time.time()
         cbf_traj = traj_generator.generate_all_trajectories(num_demos=nbr_demos)#, init_guess_list=fpath_list)#, plot_debug=show_plots)
         with open(data_dir+str(nbr_demos*2)+'_planned_trajectories.pkl', 'wb') as f:
