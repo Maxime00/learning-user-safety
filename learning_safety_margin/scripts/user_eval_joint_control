@@ -101,13 +101,6 @@ def control_loop(cart_traj_dict, joint_traj_list, robot, freq, traj_type, do_plo
         joint_ctrl.set_parameter_value("stiffness", stiffness_start.tolist(), sr.ParameterType.DOUBLE_ARRAY)
         joint_ctrl.set_parameter_value("damping", damping_start.tolist(), sr.ParameterType.DOUBLE_ARRAY)
         # Trajectory following
-<<<<<<< HEAD
-        stiffness = np.array([220, 220, 200, 180, 110, 100, 40]) * 0.3
-        damping = np.array([18, 17, 15.5, 13, 6, 5, 1.2]) * 2.0 # 2.3 max lower this to avoid oscillations # reuse alberic gains ?? 6.5, 5.5 maybe ??
-=======
-
->>>>>>> feature/use_ds_for_start_pos
-
     # Import panda urdf
     urdf_path = "/home/ros/ros_ws/src/learning_safety_margin/urdf/panda_arm_hand.urdf"
     robot_model = Model('panda', urdf_path)
@@ -119,11 +112,7 @@ def control_loop(cart_traj_dict, joint_traj_list, robot, freq, traj_type, do_plo
     feedback_joint_state = sr.JointState("franka", nb_joints)
 
     flag = 1
-<<<<<<< HEAD
-    print_freq = freq*2
-=======
     print_freq = freq # *X (prints every X seconds)
->>>>>>> feature/use_ds_for_start_pos
 
     # Reaching start logic
     reached_start = False
@@ -206,14 +195,10 @@ def control_loop(cart_traj_dict, joint_traj_list, robot, freq, traj_type, do_plo
         correct_label = cart_traj_dict['Labels'][traj_idx]
         # append 0 accelerations to U to match size of other variables
         full_desired_U = np.append(full_desired_U, [[0, 0, 0]], axis=0)
-<<<<<<< HEAD
-        initial_joint_pos = setup_jp(full_desired_X[0, 0:3], sr.JointPositions(robot_model.get_robot_name(),null_position), robot_model)
-=======
         initial_joint_pos = setup_jp(full_desired_X[0, 0:3], sr.JointPositions(robot_model.get_robot_name(),home_position), robot_model)
         initial_cart_pose = sr.CartesianPose('panda_ee', full_desired_X[0, 0:3],  np.array([0., 1., 0., 0.]), 'panda_base')
         # Set integrator gains
         inte_gain = np.array([65, 55, 50, 45, 40, 30, 20]) * 0.5
->>>>>>> feature/use_ds_for_start_pos
 
     elif ctrl_flag == 'Replay':
         ## Set up joint trajectory + initial position
@@ -417,11 +402,7 @@ def control_loop(cart_traj_dict, joint_traj_list, robot, freq, traj_type, do_plo
             command.joint_state.set_torques(command_torques.get_torques() + inte_torques + null_command)
 
             # record data for plots
-<<<<<<< HEAD
-            if js_idx < js_record.shape[0] :
-=======
             if js_idx < len(js_record[:,0]):
->>>>>>> feature/use_ds_for_start_pos
                 js_record[js_idx, 0] = time_f0
                 js_record[js_idx, 1:8] = state.joint_state.get_positions()
                 js_record[js_idx, 8:15] = state.joint_state.get_velocities()

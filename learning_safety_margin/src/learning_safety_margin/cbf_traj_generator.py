@@ -17,7 +17,7 @@ class trajGenerator():
         self.theta = theta
         self.bias = bias
         # print("TRAJ BIAS:", bias, self.bias)
-        self.safe = False
+        self.safe = True
         self.unsafe = True
         self.semisafe = False
         if self.semisafe: self.daring_offset = daring_offset
@@ -151,20 +151,12 @@ class trajGenerator():
                     y = np.random.uniform(0.3, 0.45)
                 else:
                     y = np.random.uniform(-0.3, -0.45)
-<<<<<<< HEAD
-                xt = x + np.random.uniform(0.35-x, 0.66-x)
-=======
                 xt = x + np.random.uniform(0.35 - x, 0.66 - x)
->>>>>>> feature/use_ds_for_start_pos
                 yt = -y
             else:
                 y = np.random.uniform(y_lim[0], y_lim[1])
                 if x < 0.35:
-<<<<<<< HEAD
-                    xt = 0.66 + (0.35-x)
-=======
                     xt = 0.66 + (0.35 - x)
->>>>>>> feature/use_ds_for_start_pos
                 else:
                     xt = x - 0.38
                 yt = y + np.random.uniform(y_lim[0] - y, y_lim[1] - y)
@@ -176,11 +168,7 @@ class trajGenerator():
             zt = np.random.uniform(0.05, 0.3)
 
             # check coordinates are reachable by robot
-<<<<<<< HEAD
-            if  .3 <= np.linalg.norm([x,y,z0]) <= .77 and .3 <= np.linalg.norm([xt,yt,zt]) <= .77: # .8 should do it
-=======
             if .3 <= np.linalg.norm([x, y, z0]) <= .77 and .3 <= np.linalg.norm([xt, yt, zt]) <= .77:  # .8 should do it
->>>>>>> feature/use_ds_for_start_pos
                 inRange = True
 
         xdot = 0

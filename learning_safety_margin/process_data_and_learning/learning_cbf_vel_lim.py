@@ -338,8 +338,9 @@ def vel_learning(user_number):
 
     ### Define RBF Centers/Sigmas manually over the statespace (uniformly or randomly)
     # centers, stds = rbf_means_stds(X=None, X_lim = ws_lim,
-    #                                n=x_dim, k=n_dim_features, set_means='random',fixed_stds=True, std=rbf_std, nCenters=n_features)
-    # print("rbf shapes", centers.shape, stds.shape)
+    #                                n=x_dim, k=n_dim_features, set_means='random',
+    #                                fixed_stds=True, std=rbf_std, nCenters=n_features)
+
     ### Define RBF centers at data pts
     centers = onp.array(x_all)
     # Add RBF centers in uniform grid over workspace that are epsilon-distance away from any data
@@ -379,6 +380,7 @@ def vel_learning(user_number):
     is_slack_safe = False
     is_semisafe = True
     is_artificial = False
+
     theta = cp.Variable(n_features)
     print(theta.shape)
     assert not (is_slack_both and is_slack_safe), "Slack bool cannot be both and safe only"
@@ -416,7 +418,7 @@ def vel_learning(user_number):
     constraints = []
     # Safe Constraints
     print("SAFE CONSTRAINTS")
-    phis_safe = phi_vec(x_safe)#[phi(x) for x in x_safe]
+    phis_safe = phi_vec(x_safe)
     print("PHI CHECK", x_safe.shape, phis_safe.shape)
     if is_slack_both or is_slack_safe:
         print("Adding safe slack constraints")
@@ -446,14 +448,13 @@ def vel_learning(user_number):
             h_cost += cp.sum_squares(theta @ phis_unsafe[i] + bias)  # cost of norm(alpha_i * phi(x,xi) + b)
             constraints.append(
                 (theta @ phis_unsafe[i] + bias) <= unsafe_val[i] + unsafe_tte[i] * unsafe_slack[i])
-            # constraints.append(unsafe_slack[i] >= 0.)
 
+            # Only add unsafe slack if there is a safe point epsilon-close to unsafe point
             dist = np.linalg.norm(x_unsafe[i]-x_safe, axis=1)
             if np.any(dist) <= dist_eps:
                 constraints.append(unsafe_slack[i] >= 0.)
             else:
                 constraints.append(unsafe_slack[i] == 0)
-                # print('no slack allowed on neg constraint')
     else:
         print("adding no slack constraints")
         for i in range(n_unsafe):
@@ -461,9 +462,7 @@ def vel_learning(user_number):
             constraints.append((theta @ phis_unsafe[i] + bias) <= unsafe_val[i])
 
     if is_semisafe:
-        # Boundary Constraints: TODO: need to include semisafe control u values
         print("BOUNDARY CONSTRAINTS")
-
         phis_semisafe = phi_vec(x_semisafe)#[phi(x) for x in x_semisafe]
         print("SEMISAFE H CONSTRAINTS")
         for i in range(n_semisafe):

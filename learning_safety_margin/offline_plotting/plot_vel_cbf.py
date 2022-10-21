@@ -909,10 +909,10 @@ if __name__ == '__main__':
 
     plotter = PlotCBF(params, bias_param, centers, stds, data_dir)
 
-    # plotter.plot_xy_pos(num_pts=30)
-    # plotter.plot_xz_pos(num_pts=30)
-    # plotter.plot_yz_pos(num_pts=30)
-    # plotter.plot_xy_vel(num_pts=30)
+    plotter.plot_xy_pos(num_pts=30)
+    plotter.plot_xz_pos(num_pts=30)
+    plotter.plot_yz_pos(num_pts=30)
+    plotter.plot_xy_vel(num_pts=30)
     # plotter.plot_xz_vel(num_pts=30)
     # plotter.plot_yz_vel(num_pts=30)
     plotter.plot_centers_hvals()
