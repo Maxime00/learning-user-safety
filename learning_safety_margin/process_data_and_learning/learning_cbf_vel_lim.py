@@ -43,11 +43,11 @@ def vel_learning(user_number):
 
     eps = 1.0
     # X = [x, y, z, xdot, ydot, zdot]
-    # Xdot = [xdot, ydot, zdot, xddot, yddot,  zdot] = [u1*cos(theta), u1*sin(theta), u2]
+    # Xdot = [xdot, ydot, zdot, xddot, yddot,  zddot] = [u1*cos(theta), u1*sin(theta), u2]
 
     def dynamics(x, u):
         # continuous time: xdot = f(x(t)) + g(x(t))u((t))
-        # (xdot=[u1*cos(theta), u1*sin(theta), u2], x = x0 + xdot*dt)
+        # (x = x0 + xdot*dt)
         return np.array([x[3], x[4], x[5], u[0], u[1], u[2]])
 
 
@@ -149,14 +149,6 @@ def vel_learning(user_number):
         else:
             print("Daring Demo {} File Path does not exist: {}".format(i, fname))
 
-        # vel = daring_vel[i]
-        # acc = []
-        # for t in range(len(vel)-1):
-        #     dt = 1./200.#time[t+1]-time[t]
-        #     acc.append((vel[t+1]-vel[t])/dt)
-        # daring_acc.append(acc)
-        # ax.plot(acc[:,0], acc[:,1], acc[:,2], 'b')
-
     ax.set_xlabel('$\dot{x}$')
     ax.set_ylabel('$\dot{y}$')
     ax.set_zlabel('$\dot{z}$')
@@ -183,7 +175,6 @@ def vel_learning(user_number):
 
     ### Set unsafe tte list to all ones (no decay to end)
     unsafe_ttelist = onp.ones(len(unsafe_pts))
-
 
     xtraj = onp.hstack((daring_traj[0], daring_vel[0]))
     semisafe_pts = xtraj
@@ -225,7 +216,8 @@ def vel_learning(user_number):
     n_artificial = 0
 
     x_all = onp.vstack((x_safe, x_unsafe, x_semisafe))
-    # print("x-all", x_all.shape)
+
+    ## Check if any points are outside workspace and remove if so
     # x_out = onp.where((x_all[:,0]<= ws_lim[0,0]) | (ws_lim[0,1] <= x_all[:,0])) # and x_all[:,0] <= x_all[0,1])
     # y_out = onp.where((x_all[:, 1] <= ws_lim[1, 0]) | (ws_lim[1, 1] <= x_all[:, 1]))
     # z_out = onp.where((x_all[:, 2] <= ws_lim[2, 0]) | (ws_lim[2, 1] <= x_all[:, 2]))
@@ -316,11 +308,6 @@ def vel_learning(user_number):
         stds = np.squeeze(stds)
         return means, stds
 
-
-    # def alpha(x):
-    #     return psi * x
-
-
     def _rbf(x, c, s):
         # return np.exp(-1 / (2 * s[0] ** 2) * np.linalg.norm(x - c) ** 2)
         return np.exp(-1 / (2 * s[0] ** 2) * np.sum((x - c) ** 2))
@@ -342,68 +329,39 @@ def vel_learning(user_number):
     x_dim = 6
     n_features = 1000#n_dim_features**x_dim
     u_dim = 2
-    psi = 1.0
+    # psi = 1.0
     dt = 0.1
     dist_eps = 0.05
     mu_dist = (ws_lim[:, 1]-ws_lim[:,0])/n_dim_features
     print("Check: ", mu_dist, onp.max(mu_dist)*0.5)
-    rbf_std = 0.1#.1#onp.max(mu_dist) * 0.5 #0.1#1.0
-    print(rbf_std)
+    rbf_std = 0.1#onp.max(mu_dist) * 0.5
+
+    ### Define RBF Centers/Sigmas manually over the statespace (uniformly or randomly)
     # centers, stds = rbf_means_stds(X=None, X_lim = ws_lim,
     #                                n=x_dim, k=n_dim_features, set_means='random',fixed_stds=True, std=rbf_std, nCenters=n_features)
     # print("rbf shapes", centers.shape, stds.shape)
-    ## Trying RBF centers at data pts
-
-
+    ### Define RBF centers at data pts
     centers = onp.array(x_all)
-    # # centers = onp.array([x_all[0]])
-    # for i in range(len(x_all)):
-    #     dist = np.linalg.norm(centers - x_all[i], axis=1)
-    #     # print(i, centers.shape, dist.shape)
-    #     if np.all(dist > 0.01):#rbf_std):
-    #         centers = onp.vstack((centers, x_all[i]))
-    # stds = np.ones(centers.shape[0])*rbf_std
-    # print("Centers: {}".format(centers.shape))
+    # Add RBF centers in uniform grid over workspace that are epsilon-distance away from any data
+    pts = []
+    for i in range(ws_lim.shape[0]):
+        pts.append(np.linspace(start=ws_lim[i, 0], stop=ws_lim[i, 1], num=5, endpoint=True))
+    pts = np.array(pts)
+    pts = tuple(pts)
+    D = np.meshgrid(*pts)
+    means = onp.array([D[i].flatten() for i in range(len(D))]).T
+    for i in range(len(means)):
+        dist = np.linalg.norm(centers - means[i], axis=1)
+        # print(i, centers.shape, dist.shape)
+        if np.all(dist > 0.5):##2*rbf_std):
+            centers = onp.vstack((centers, means[i]))
 
-    # pts = []
-    # for i in range(ws_lim.shape[0]):
-    #     pts.append(np.linspace(start=ws_lim[i, 0], stop=ws_lim[i, 1], num=5, endpoint=True))
-    # pts = np.array(pts)
-    # pts = tuple(pts)
-    # D = np.meshgrid(*pts)
-    # means = onp.array([D[i].flatten() for i in range(len(D))]).T
-    # for i in range(len(means)):
-    #     dist = np.linalg.norm(centers - means[i], axis=1)
-    #     # print(i, centers.shape, dist.shape)
-    #     if np.all(dist > 0.5):##2*rbf_std):
-    #         centers = onp.vstack((centers, means[i]))
 
     stds = onp.ones((centers.shape[0], 1)) * rbf_std
     n_features = centers.shape[0]
     print("Centers: {}, Stds: {}, # Features: {}".format(centers.shape, stds.shape, n_features))
-    # print("RBF CHECK", phi(np.ones(6)).shape, phi_vec(np.ones((1,6))).shape)
 
-
-    # fig = plt.figure()
-    # ax = fig.add_subplot(111, projection='3d')
-    # colors = onp.zeros(centers[:, 3:].shape)
-    # colors[:,0] = (centers[:,3]-ws_lim[3,0])/(ws_lim[3,1]-ws_lim[3,0])
-    # colors[:,1] = (centers[:,4]-ws_lim[4,0])/(ws_lim[4,1]-ws_lim[4,0])
-    # colors[:,2] = (centers[:,5]-ws_lim[5,0])/(ws_lim[5,1]-ws_lim[5,0])
-    # print(onp.amin(colors), onp.amax(colors))
-    # ax.scatter(centers[:, 0], centers[:, 1], centers[:, 2], c=colors)
-    # plt.show()
-    #
-    # fig = plt.figure()
-    # ax = fig.add_subplot(111, projection='3d')
-    # colors = onp.zeros(centers[:, :3].shape)
-    # colors[:,0] = (centers[:,0]-ws_lim[0,0])/(ws_lim[0,1]-ws_lim[0,0])
-    # colors[:,1] = (centers[:,1]-ws_lim[1,0])/(ws_lim[1,1]-ws_lim[1,0])
-    # colors[:,2] = (centers[:,2]-ws_lim[2,0])/(ws_lim[2,1]-ws_lim[2,0])
-    # print(onp.amin(colors), onp.amax(colors))
-    # ax.scatter(centers[:, 3], centers[:, 4], centers[:, 5], c=colors)
-    # plt.show()
-    # print(x_all.shape, x_safe.shape, x_unsafe.shape, x_semisafe.shape)
+    ## Generate Artificial Safe Pts (far from Data)
     # art_safe_pts = []
     # print(range(len(centers)))
     # for i in range(len(centers)):
@@ -421,7 +379,7 @@ def vel_learning(user_number):
     is_slack_safe = False
     is_semisafe = True
     is_artificial = False
-    theta = cp.Variable(n_features)  # , nonneg=True)
+    theta = cp.Variable(n_features)
     print(theta.shape)
     assert not (is_slack_both and is_slack_safe), "Slack bool cannot be both and safe only"
     if is_bias:
@@ -438,19 +396,14 @@ def vel_learning(user_number):
         unsafe_slack = cp.Variable(n_unsafe)
 
     # Initialize reward parameters
-    r_scaling = 1.
-    safe_val = safe_rewards#np.ones(n_safe) * 2.  # np.array(onp.squeeze(safe_rewards)*r_scaling)#np.ones(n_safe)*0.3
-    unsafe_val = unsafe_rewards#np.ones(n_unsafe) * -1.0  # *-0.5#*-0.1
-    # if is_semisafe:
-    semisafe_val = semisafe_rewards#np.ones(n_semisafe) * 0.5  # np.array(onp.squeeze(semisafe_rewards)*r_scaling)#np.ones(n_semisafe)*0.
+    safe_val = safe_rewards
+    unsafe_val = unsafe_rewards
+    semisafe_val = semisafe_rewards
     gamma_dyn = np.ones(n_semisafe) * 0.1
-    # unsafe_tte = unsafe_ttelist ** 3
 
     if is_artificial:
-        art_safe_val = np.ones(len(art_safe_pts)) * 0.1  # *0.5
+        art_safe_val = np.ones(len(art_safe_pts)) * 0.1
         n_artificial = len(art_safe_pts)
-    print(safe_val.shape, unsafe_val.shape , semisafe_val.shape)#, art_safe_val.shape)
-    print(unsafe_val[0])
 
     # Initialize cost
     h_cost = 0
@@ -458,10 +411,9 @@ def vel_learning(user_number):
     slack_cost = 0
 
     ## Define Constraints
-    constraints = []
-
     start_constraints = time.time()
 
+    constraints = []
     # Safe Constraints
     print("SAFE CONSTRAINTS")
     phis_safe = phi_vec(x_safe)#[phi(x) for x in x_safe]
@@ -519,35 +471,18 @@ def vel_learning(user_number):
             constraints.append((theta @ phis_semisafe[i] + bias) >= semisafe_val[i])
 
         print("SEMISAFE DERIVATIVE CONSTRAINTS")
-
-        #     def q(x, u):
-        #         dh = grad(h_model, argnums=0)(x, theta, bias)
-        #         return np.dot(dh, dynamics(x, u)) + h_model(x, theta, bias)
-
-        #     qs = q(x_semisafe, u_semisafe)
-        #     for i in range(n_semisafe):
-        #         constraints.append((qs[i] >= gamma_dyn[i]))
-        # print(phi(x_semisafe[0]), x_semisafe[0], jacfwd(phi, argnums=0)(x_semisafe[0]).shape, jacfwd(phi, argnums=0)(x_semisafe[0]) )
-        print(dynamics(x_semisafe[0], u_semisafe[0]).shape)
         Dphixdots = device_get(
             vmap(lambda x, u: np.dot(jacfwd(phi, argnums=0)(x), dynamics(x, u)),
                  in_axes=(0, 0))(x_semisafe, u_semisafe))
-        # print(x_semisafe.shape, u_semisafe.shape, Dphixdots.shape)
         gamma_xu_fillers = gamma_dyn * np.ones((x_semisafe.shape[0],))
         for i, (this_phi, this_Dphixdot, this_gamma) in enumerate(zip(phis_semisafe, Dphixdots, gamma_xu_fillers)):
             if np.any(np.isnan(this_Dphixdot)):
-                print("NANANANANANA", i, this_Dphixdot, x_semisafe[i], u_semisafe[i])
+                print("Invalid Dphixdot", i, this_Dphixdot, x_semisafe[i], u_semisafe[i])
                 input()
-            #     constraints.append((theta.T * (this_Dphixdot.T + this_phi) + bias) >= this_gamma)
             constraints.append((theta @ this_Dphixdot+ theta @ this_phi + bias) >= this_gamma)
-        # print(this_Dphixdot.shape)
     print('All CONSTRAINTS DEFINED')
     print("TIME TO SET CONSTRAINTS : ", time.time() -start_constraints ," seconds \n")
 
-    # # Add Constraints on parameter values
-    # for i in range(theta.shape[0]):
-    #     constraints.append(cp.abs(theta[i]) <= 5.)
-    #
     ## Define Objective
 
     param_cost = cp.sum_squares(theta) #+ bias ** 2 # l2-norm on parameters
@@ -572,7 +507,7 @@ def vel_learning(user_number):
 
     params = theta.value
     if is_bias: bias_param = bias.value
-    else: bias_param = None
+    else: bias_param = bias
 
     if is_slack_both:
         safe_slack_param = safe_slack.value
