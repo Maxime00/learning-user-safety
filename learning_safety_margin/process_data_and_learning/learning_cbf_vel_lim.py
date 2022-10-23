@@ -189,7 +189,7 @@ def vel_learning(user_number):
     # Define reward lists
     safe_rewards = onp.ones(len(safe_pts))*2.
     unsafe_rewards = onp.ones(len(unsafe_pts)) * -1.
-    semisafe_rewards = onp.ones(len(semisafe_pts))* 0.5
+    semisafe_rewards = onp.ones(len(semisafe_pts))*0.# 0.5
 
     ### Set up Minimization
     # Sample Data
