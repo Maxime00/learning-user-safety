@@ -159,7 +159,18 @@ class CBFMPC_Controller(DoubleIntegrator):
 
         if ig_pos is None:
             ## Straight line initial guess
-            X0 = np.linspace(x0, xgoal, self.N+1)
+            # X0 = np.linspace(x0, xgoal, self.N+1)
+            # u0 = np.zeros((self.N, self.n_controls))
+
+            ## TRIANGLE initial guess
+            midpoint = [0.5, 0.0, 0.5, 0.0, 0.0, 0.0]
+            X0_1 = np.linspace(x0, midpoint, int((self.N + 1) / 2))
+            if (self.N + 1) % 2 == 0:
+                nb_steps = int((self.N + 1) / 2)
+            else:
+                nb_steps = int((self.N + 1) / 2) + 1
+            X0_2 = np.linspace(midpoint, xgoal, nb_steps)
+            X0 = np.concatenate((X0_1, X0_2))
             u0 = np.zeros((self.N, self.n_controls))
 
             # Integrate for velocity
@@ -167,17 +178,28 @@ class CBFMPC_Controller(DoubleIntegrator):
             #     X0[i, 3:6] = (X0[i+1, 0:3] - X0[i, 0:3])/ self.dt
 
             # DS for velocity
+            # Set first target to be midpoint so velocities matches position change
             ds = create_cartesian_ds(DYNAMICAL_SYSTEM_TYPE.POINT_ATTRACTOR)
             ds.set_parameter_value("gain", [10., 10., 10., 10., 10., 10.], sr.ParameterType.DOUBLE_ARRAY)
-            target = sr.CartesianPose('panda_ee', xgoal[0:3], np.array([0., 1., 0., 0.]), 'panda_base')
+            target = sr.CartesianPose('panda_ee', midpoint[0:3], np.array([0., 1., 0., 0.]), 'panda_base')
             ds.set_parameter_value("attractor", target, sr.ParameterType.STATE, sr.StateType.CARTESIAN_POSE)
             curr_state = sr.CartesianState('panda_ee', 'panda_base')
             curr_state.set_orientation(np.array([0., 1., 0., 0.]))
 
-            for i in range(self.N):
+            for i in range(int((self.N + 1) / 2)):  # range(self.N):
                 curr_state.set_position(X0[i, 0:3])
                 ds_twist = sr.CartesianTwist(ds.evaluate(curr_state))
-                # TODO:  need clamping ?? Initial velocities are very high
+                ds_twist.clamp(.25, .5)
+                X0[i, 3:6] = ds_twist.data()[0:3]
+
+            # change target to be x_goal
+            target = sr.CartesianPose('panda_ee', xgoal[0:3], np.array([0., 1., 0., 0.]), 'panda_base')
+            ds.set_parameter_value("attractor", target, sr.ParameterType.STATE, sr.StateType.CARTESIAN_POSE)
+
+            # use ds for velocity until before last point ( last point MUSt have zero velocity)
+            for i in range(int((self.N + 1) / 2), nb_steps - 1):
+                curr_state.set_position(X0[i, 0:3])
+                ds_twist = sr.CartesianTwist(ds.evaluate(curr_state))
                 ds_twist.clamp(.25, .5)
                 X0[i, 3:6] = ds_twist.data()[0:3]
 

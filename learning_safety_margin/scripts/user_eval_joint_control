@@ -77,7 +77,7 @@ def control_loop(cart_traj_dict, joint_traj_list, robot, freq, traj_type, do_plo
     start_ds.set_parameter_value("gain", [10., 10., 10., 10., 10., 10.], sr.ParameterType.DOUBLE_ARRAY)
 
     # ADD OBSTACLE
-    obstacle = Ellipsoid([0.55, 0.0, 0.035], [.10, .12, .12 ], 0.6) # x=0.55 when table obstacle against table
+    obstacle = Ellipsoid([0.55, 0.0, 0.035], [.10, .12, .12 ], 0.5) # x=0.55 when table obstacle against table
 
     # SET UP TORQUE controller - reach start position
     nb_joints = 7
@@ -607,7 +607,7 @@ def control_loop(cart_traj_dict, joint_traj_list, robot, freq, traj_type, do_plo
                 fn = os.path.splitext(complete_fn[1])
                 save_fn = fn[0] + "_" + correct_label + "_Replay"
 
-            # print("Traj name : ", save_fn)
+            print("Traj name : ", save_fn)
             # save file
             np.save(os.path.join(save_dir,correct_label,save_fn), recorded_state, allow_pickle=False)
 
