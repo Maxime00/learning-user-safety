@@ -189,7 +189,7 @@ def vel_learning(user_number):
     # Define reward lists
     safe_rewards = onp.ones(len(safe_pts))*2.
     unsafe_rewards = onp.ones(len(unsafe_pts)) * -1.
-    semisafe_rewards = onp.ones(len(semisafe_pts))* 0.5
+    semisafe_rewards = onp.ones(len(semisafe_pts))*0.# 0.5
 
     ### Set up Minimization
     # Sample Data
@@ -353,8 +353,7 @@ def vel_learning(user_number):
     means = onp.array([D[i].flatten() for i in range(len(D))]).T
     for i in range(len(means)):
         dist = np.linalg.norm(centers - means[i], axis=1)
-        # print(i, centers.shape, dist.shape)
-        if np.all(dist > 0.5):##2*rbf_std):
+        if np.all(dist > 0.25):##2*rbf_std):
             centers = onp.vstack((centers, means[i]))
 
 
@@ -372,6 +371,12 @@ def vel_learning(user_number):
     # art_safe_pts = np.array(art_safe_pts)
     # print(art_safe_pts.shape)
 
+    ## Add negative constraints for obstacle DS
+
+    obs_unsafe_pts = []
+    # TODO: Check which centers are inside the ellipsoid of the unsafe ds
+    # TODO: Add all centers which are to list of obs_unsafe_pts
+    obs_unsafe_pts = np.array(obs_unsafe_pts)
 
 
     # Initialize variables
@@ -460,6 +465,13 @@ def vel_learning(user_number):
         for i in range(n_unsafe):
             h_cost += cp.sum_squares(theta @ phis_unsafe[i] + bias)  # cost of norm(alpha_i * phi(x,xi) + b)
             constraints.append((theta @ phis_unsafe[i] + bias) <= unsafe_val[i])
+
+    # Usafe Obstacle Pts --> TODO: TEST THIS
+    print("UNSAFE CONSTRAINTS")
+    phis_obs_unsafe = phi_vec(obs_unsafe_pts)
+    for i in range(len(phis_obs_unsafe)):
+        h_cost += cp.sum_squares(theta @ phis_obs_unsafe[i] + bias)  # cost of norm(alpha_i * phi(x,xi) + b)
+        constraints.append((theta @ phis_obs_unsafe[i] + bias) <= unsafe_val[i])
 
     if is_semisafe:
         print("BOUNDARY CONSTRAINTS")
