@@ -16,6 +16,18 @@ palette = sns.color_palette()
 import jax
 print(jax.default_backend())
 print(jax.devices())
+
+def check_ellipse_interior(x,y,z):
+    center =  [xc, yc, zc] = [0.55, 0.0, 0.035]
+    axes =  [a, b, c] = [.10, .12, .12 ]
+
+    dist = ((x - xc)/a)**2 + ((y-yc)/b)**2 + ((z-zc)/c)**2
+    if dist <= 1.:
+        in_interior = True
+    else:
+        in_interior = False
+    return in_interior, dist
+
 def vel_learning(user_number):
 
     # benchmark
@@ -353,7 +365,7 @@ def vel_learning(user_number):
     means = onp.array([D[i].flatten() for i in range(len(D))]).T
     for i in range(len(means)):
         dist = np.linalg.norm(centers - means[i], axis=1)
-        if np.all(dist > 0.25):##2*rbf_std):
+        if np.all(dist > 0.5):##2*rbf_std):
             centers = onp.vstack((centers, means[i]))
 
 
@@ -374,14 +386,16 @@ def vel_learning(user_number):
     ## Add negative constraints for obstacle DS
 
     obs_unsafe_pts = []
-    # TODO: Check which centers are inside the ellipsoid of the unsafe ds
-    # TODO: Add all centers which are to list of obs_unsafe_pts
+    for i in range(len(centers)):
+        in_interior = check_ellipse_interior(centers[i][0], centers[i][1], centers[i][2])
+        if in_interior: obs_unsafe_pts.append(centers[i])
     obs_unsafe_pts = np.array(obs_unsafe_pts)
+
 
 
     # Initialize variables
     is_bias = False
-    is_slack_both = False
+    is_slack_both = True
     is_slack_safe = False
     is_semisafe = True
     is_artificial = False
@@ -411,7 +425,8 @@ def vel_learning(user_number):
     if is_artificial:
         art_safe_val = np.ones(len(art_safe_pts)) * 0.1
         n_artificial = len(art_safe_pts)
-
+    obs_unsafe_val = np.ones(len(obs_unsafe_pts))*-1.0
+    n_obs_pts = len(obs_unsafe_pts)
     # Initialize cost
     h_cost = 0
     param_cost = 0
@@ -471,7 +486,7 @@ def vel_learning(user_number):
     phis_obs_unsafe = phi_vec(obs_unsafe_pts)
     for i in range(len(phis_obs_unsafe)):
         h_cost += cp.sum_squares(theta @ phis_obs_unsafe[i] + bias)  # cost of norm(alpha_i * phi(x,xi) + b)
-        constraints.append((theta @ phis_obs_unsafe[i] + bias) <= unsafe_val[i])
+        constraints.append((theta @ phis_obs_unsafe[i] + bias) <= obs_unsafe_val[i])
 
     if is_semisafe:
         print("BOUNDARY CONSTRAINTS")
