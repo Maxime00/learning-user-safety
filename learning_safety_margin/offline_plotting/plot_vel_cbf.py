@@ -782,8 +782,8 @@ class PlotCBF():
 
     def plot_centers_hvals(self):
         colors = np.zeros(self.centers.shape[0])
-        for i in range(len(self.centers)):
-            colors[i] = self.h_fun(self.centers[i])
+        # for i in range(len(self.centers)):
+        #     colors[i] = self.h_fun(self.centers[i])
         print("CENTERS SHAPE: ", self.centers.shape, self.centers[0], colors[0], self.theta[0], self.bias)
 
         fig = plt.figure()
@@ -791,7 +791,7 @@ class PlotCBF():
 
         # divnorm = cm.TwoSlopeNorm(vcenter=0.)
         im = ax.scatter(self.centers[:, 0], self.centers[:, 1], self.centers[:, 2], c=colors, alpha=0.5, norm=self.norm,
-                        cmap="RdBu")
+                        cmap="hsv") #RdBu
 
         # print("start: ", x_list[i][0,0:3])
         # print("end: ", x_list[i][-1, 0:3])
@@ -802,7 +802,28 @@ class PlotCBF():
         ax.set_ylabel("$y$")
         ax.set_zlabel("$z$")
         fig.legend()
+        fig.suptitle("CBF centers in Position space")
         fig.colorbar(im)
+
+        fig2 = plt.figure()
+        ax2 = plt.axes(projection='3d')
+
+        # divnorm = cm.TwoSlopeNorm(vcenter=0.)
+        im2 = ax2.scatter(self.centers[:, 3], self.centers[:, 4], self.centers[:, 5], c=colors, alpha=0.5, norm=self.norm,
+                        cmap="hsv")
+        # print("start: ", x_list[i][0,0:3])
+        # print("end: ", x_list[i][-1, 0:3])
+        ax2.set_xlim(xdot_lim)
+        ax2.set_ylim(ydot_lim)
+        ax2.set_zlim(zdot_lim)
+        ax2.set_xlabel("$\dot{x}$")
+        ax2.set_ylabel("$\dot{y}$")
+        ax2.set_zlabel("$\dot{z}$")
+        fig2.legend()
+        fig2.suptitle("CBF centers in Velocity space")
+        fig2.colorbar(im2)
+
+        plt.show()
 
 # def plot_xz_vel(self, params, bias_param, x=0.5, y=0., z=0.25, ydot=0., num_pts=10):
 #     xdot = np.linspace(vdot_lim[0], vdot_lim[1], num=num_pts)
@@ -894,8 +915,8 @@ if __name__ == '__main__':
     print("Running CBF Plotting for User_"+user_number+"\n")
 
     # Get data
-    # data_dir = "/home/ros/ros_ws/src/learning_safety_margin/data/User_"+user_number+"/"
-    data_dir = "/home/ros/ros_ws/src/learning_safety_margin/data/cbf_tests/"
+    data_dir = "/home/ros/ros_ws/src/learning_safety_margin/data/User_"+user_number+"/"
+    # data_dir = "/home/ros/ros_ws/src/learning_safety_margin/data/cbf_tests/"
 
     data = pickle.load(open(data_dir + "vel_data_dict.p", "rb"))
     print(data.keys())
@@ -909,15 +930,15 @@ if __name__ == '__main__':
 
     plotter = PlotCBF(params, bias_param, centers, stds, data_dir)
 
-    plotter.plot_xy_pos(num_pts=30)
-    plotter.plot_xz_pos(num_pts=30)
-    plotter.plot_yz_pos(num_pts=30)
-    plotter.plot_xy_vel(num_pts=30)
+    # plotter.plot_xy_pos(num_pts=30)
+    # plotter.plot_xz_pos(num_pts=30)
+    # plotter.plot_yz_pos(num_pts=30)
+    # plotter.plot_xy_vel(num_pts=30)
     # plotter.plot_xz_vel(num_pts=30)
     # plotter.plot_yz_vel(num_pts=30)
     plotter.plot_centers_hvals()
     v = 0.4
-    plotter.plot_xyz_animate(xdot=v, ydot=v, zdot=v, num_slices=11, num_pts=11)
+    # plotter.plot_xyz_animate(xdot=v, ydot=v, zdot=v, num_slices=11, num_pts=11)
     # plotter.plot_xyz_neg_animate(num_slices=11, num_pts=11)
 
     # # plotter.plot_xz_pos_multiple()

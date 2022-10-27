@@ -8,6 +8,14 @@ class Ellipsoid():
         self.axes = np.array(axes_lengths)
         self.rho = sensitivity
 
+    def getDistance(self, cart_pos_world_frame):
+        # Reframe cartesian position around obstacle center
+        cart_pos = np.array(cart_pos_world_frame) - self.center
+
+        distance = np.sqrt((cart_pos[0]/self.axes[0])**2 + (cart_pos[1]/self.axes[1])**2 + (cart_pos[2]/self.axes[2])**2)
+
+        return distance
+
     def getGammaDistance(self, cart_pos_world_frame):
 
         # Reframe cartesian position around obstacle center
