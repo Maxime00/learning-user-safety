@@ -366,6 +366,7 @@ def vel_learning(user_number):
     for i in range(len(means)):
         dist = np.linalg.norm(centers - means[i], axis=1)
         if np.all(dist > 0.5):##2*rbf_std):
+            print("adding uniform grid center")
             centers = onp.vstack((centers, means[i]))
 
 

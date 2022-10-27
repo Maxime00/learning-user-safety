@@ -83,9 +83,13 @@ class trajGenerator():
         # hvals = self.h_fun.map(X.T)
         if np.any(hvals <= 0.):
             print('Unsafe Trajectory')
+            print('Lowest Hval:', np.amin(hvals))
+            print('Highest Hval:', np.amax(hvals))
             return None
         else:
             print("Check if safe: ", self.safe_mpc_planner.check_safety(X))
+            print('Lowest Hval:', np.amin(hvals))
+            print('Highest Hval:', np.amax(hvals))
             return [X,U,T]
 
     def generate_daring_traj(self, start, target):
@@ -134,6 +138,8 @@ class trajGenerator():
         # hvals = self.h.map(X.T)
         if np.any((hvals < 0.)):
             print('Unsafe Trajectory')
+            print('Lowest Hval:', np.amin(hvals))
+            print('Highest Hval:', np.amax(hvals))
             return [X, U, T]
         else:
             print('Safe Trajectory')
@@ -161,12 +167,9 @@ class trajGenerator():
                     xt = x - 0.38
                 yt = y + np.random.uniform(y_lim[0] - y, y_lim[1] - y)
 
-            z0 = 0.08 # np.random.uniform(0.05, 0.3)
-            zt = 0.08 # np.random.uniform(0.05, 0.3)
-
-            z0 = np.random.uniform(0.05, 0.3)
-            zt = np.random.uniform(0.05, 0.3)
-
+            z0 = 0.08 #np.random.uniform(0.08, 0.2) #
+            zt = 0.08 #np.random.uniform(0.08, 0.2) #
+            
             # check coordinates are reachable by robot
             if .3 <= np.linalg.norm([x, y, z0]) <= .77 and .3 <= np.linalg.norm([xt, yt, zt]) <= .77:  # .8 should do it
                 inRange = True
