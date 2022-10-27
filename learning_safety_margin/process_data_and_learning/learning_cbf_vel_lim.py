@@ -371,6 +371,7 @@ def vel_learning(user_number):
                 centers = onp.vstack((centers, means[i]))
     print("Number of new uniform points :", nbr_uniform_pts, "/", len(means))
     print("Points > 0.05: ", counter)
+
     stds = onp.ones((centers.shape[0], 1)) * rbf_std
     n_features = centers.shape[0]
     print("Centers: {}, Stds: {}, # Features: {}".format(centers.shape, stds.shape, n_features))
@@ -399,6 +400,7 @@ def vel_learning(user_number):
             obs_unsafe_pts.append(centers[i, :])
     obs_unsafe_pts = np.array(obs_unsafe_pts)
     print("Number of obs_unsafe_pts : ", obs_unsafe_pts.shape[0])
+
 
     # Initialize variables
     is_bias = False
@@ -432,7 +434,8 @@ def vel_learning(user_number):
     if is_artificial:
         art_safe_val = np.ones(len(art_safe_pts)) * 0.1
         n_artificial = len(art_safe_pts)
-
+    obs_unsafe_val = np.ones(len(obs_unsafe_pts))*-1.0
+    n_obs_pts = len(obs_unsafe_pts)
     # Initialize cost
     h_cost = 0
     param_cost = 0
@@ -492,7 +495,7 @@ def vel_learning(user_number):
     phis_obs_unsafe = phi_vec(obs_unsafe_pts)
     for i in range(len(phis_obs_unsafe)):
         h_cost += cp.sum_squares(theta @ phis_obs_unsafe[i] + bias)  # cost of norm(alpha_i * phi(x,xi) + b)
-        constraints.append((theta @ phis_obs_unsafe[i] + bias) <= unsafe_val[i])
+        constraints.append((theta @ phis_obs_unsafe[i] + bias) <= obs_unsafe_val[i])
 
     if is_semisafe:
         print("BOUNDARY CONSTRAINTS")
