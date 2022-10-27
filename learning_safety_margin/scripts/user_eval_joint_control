@@ -121,7 +121,7 @@ def control_loop(cart_traj_dict, joint_traj_list, robot, freq, traj_type, do_plo
     # Integrator Variables
     start_joint_control_m = 0.10 #m cartesian distance to start controlling joint position to reach start jp
     start_integrator_rad = 0.3 #rad # ideal 0.25 but doesn't reach that sometimes
-    start_integrator_m = 0.12 #m #threshold for itnegrator in Planned
+    start_integrator_m = 0.15 #m #threshold for itnegrator in Planned
     init_pos_err_threshold_cart = 0.01 # in m
     init_pos_err_threshold_joint = 0.02 # in rad
     integrator_reset_threshold = 0.05#0.10 # in rad #0.05
@@ -158,7 +158,7 @@ def control_loop(cart_traj_dict, joint_traj_list, robot, freq, traj_type, do_plo
     checked_obstacle = False
 
     home_position = np.array([0.0, 0.0, 0.0,  -1.6478, 0.0, 1.6295, 0.785])
-    null_position = np.array([0.0, 0.1479, 0.0, -2.2249, 0.0, 2.3723, 0.7])  ## home pos np.array([0.0, 0.0, 0.0,  -1.6478, 0.0, 1.6295, 0.785])
+    null_position = np.array([0.0, 0.0, 0.0,  -1.6478, 0.0, 1.6295, 0.785]) #np.array([0.0, 0.1479, 0.0, -2.2249, 0.0, 2.3723, 0.7])  ## home pos np.array([0.0, 0.0, 0.0,  -1.6478, 0.0, 1.6295, 0.785])
     if in_sim: null_gain = 0.0
     else: null_gain = 2.0
 
@@ -829,7 +829,7 @@ if __name__ == '__main__':
         print("FINISH planning trajectories in %s seconds \n" % (time.time() - plan_start))
     else:
         print("LOADING PLANNED TRAJECTORIES FROM SAVED FILE")
-        with open(data_dir+'30_planned_trajectories.pkl', 'rb') as f:
+        with open(data_dir+str(nbr_demos*2)+'_planned_trajectories.pkl', 'rb') as f:
             cbf_traj = pickle.load(f)
 
     ## Make list of trajectories for replaying
