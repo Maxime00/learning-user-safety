@@ -169,7 +169,7 @@ class trajGenerator():
 
             z0 = 0.08 #np.random.uniform(0.08, 0.2) #
             zt = 0.08 #np.random.uniform(0.08, 0.2) #
-            
+
             # check coordinates are reachable by robot
             if .3 <= np.linalg.norm([x, y, z0]) <= .77 and .3 <= np.linalg.norm([xt, yt, zt]) <= .77:  # .8 should do it
                 inRange = True

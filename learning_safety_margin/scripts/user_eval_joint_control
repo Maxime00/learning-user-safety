@@ -813,6 +813,10 @@ if __name__ == '__main__':
     stds = data["rbf_stds"]
     if bias_param is None: bias_param = 0.1
 
+    ## DEBUG PRINTs
+    print(params.shape)
+    print(centers.shape)
+
     # Generate traj if required, used previous generated ones from saved dictionary otherwise
     if gen_traj:
         # Init Trajectory Generation

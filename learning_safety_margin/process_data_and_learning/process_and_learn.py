@@ -27,6 +27,8 @@ def bags_need_processing(user_number):
     count_csv = sum(len(files) for _, _, files in os.walk(data_dir + "/csv"))
     count_rosbags = sum(len(files) for _, _, files in os.walk(data_dir + "/rosbags"))
 
+    print(f"# of rosbags : {count_rosbags} \t # of csv : {count_csv}")
+
     # bag2csv outputs 5 files per bag
     if count_csv >= 5*count_rosbags:
         return False
