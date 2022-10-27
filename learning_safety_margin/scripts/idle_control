@@ -69,18 +69,6 @@ def control_loop(robot, freq):
 
     print_count = 0
 
-    # DEBUG FOR URDF
-    # urdf_path = "/home/ros/ros_ws/src/learning_safety_margin/urdf/panda_arm.urdf"
-    urdf_path = "/home/ros/ros_ws/src/learning_safety_margin/urdf/panda_arm_hand.urdf"
-    robot_model = Model('panda', urdf_path)
-    link8_joint_loop = 0
-    eePos=0
-    link8_pose =0
-    grasp_pose = 0
-    hand_joint_loop= 0
-
-    js_for_model =sr.JointState("panda", 9)
-
     rate = rospy.Rate(freq)
     while not rospy.is_shutdown():
         state = robot.get_state()
@@ -91,6 +79,8 @@ def control_loop(robot, freq):
         # debug print
         if print_count % freq == 0 and target_set:
             print("EEF position: ", state.ee_state.get_position())
+            print("JS: ", state.joint_state.get_positions())
+
         print_count += 1
 
         if not target_set:

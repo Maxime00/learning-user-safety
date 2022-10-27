@@ -121,10 +121,11 @@ def control_loop(cart_traj_dict, joint_traj_list, robot, freq, traj_type, do_plo
     # Integrator Variables
     start_joint_control_m = 0.10 #m cartesian distance to start controlling joint position to reach start jp
     start_integrator_rad = 0.3 #rad # ideal 0.25 but doesn't reach that sometimes
-    start_integrator_m = 0.15 #m #threshold for itnegrator in Planned
+    start_integrator_m = 0.12 #m #threshold for itnegrator in Planned
     init_pos_err_threshold_cart = 0.01 # in m
     init_pos_err_threshold_joint = 0.02 # in rad
-    integrator_reset_threshold = 0.05#0.10 # in rad #0.05
+    inte_max_replay = 0.05#0.10 # in rad #0.05
+    inte_max = 0.1
     time_period = 1. / freq
     integral = np.zeros(nb_joints)
     inte_torques = np.zeros(nb_joints)
@@ -155,12 +156,11 @@ def control_loop(cart_traj_dict, joint_traj_list, robot, freq, traj_type, do_plo
 
     # wait a bit to receive correct state
     checked_first_state = False
-    checked_obstacle = False
 
     home_position = np.array([0.0, 0.0, 0.0,  -1.6478, 0.0, 1.6295, 0.785])
     null_position = np.array([0.0, 0.0, 0.0,  -1.6478, 0.0, 1.6295, 0.785]) #np.array([0.0, 0.1479, 0.0, -2.2249, 0.0, 2.3723, 0.7])  ## home pos np.array([0.0, 0.0, 0.0,  -1.6478, 0.0, 1.6295, 0.785])
     if in_sim: null_gain = 0.0
-    else: null_gain = 2.0
+    else: null_gain = 5.0
 
     # Successive traj follow - make random idx list to shuffle planned trajectories
     nbr_planned_traj = len(cart_traj_dict['Labels'])
@@ -198,7 +198,7 @@ def control_loop(cart_traj_dict, joint_traj_list, robot, freq, traj_type, do_plo
         initial_joint_pos = setup_jp(full_desired_X[0, 0:3], sr.JointPositions(robot_model.get_robot_name(),home_position), robot_model)
         initial_cart_pose = sr.CartesianPose('panda_ee', full_desired_X[0, 0:3],  np.array([0., 1., 0., 0.]), 'panda_base')
         # Set integrator gains
-        inte_gain = np.array([65, 55, 50, 45, 40, 30, 20]) * 0.5
+        inte_gain = np.array([65, 55, 50, 45, 40, 30, 20]) * 0.3
 
     elif ctrl_flag == 'Replay':
         ## Set up joint trajectory + initial position
@@ -218,14 +218,12 @@ def control_loop(cart_traj_dict, joint_traj_list, robot, freq, traj_type, do_plo
     start_ds.set_parameter_value("attractor", initial_cart_pose, sr.ParameterType.STATE, sr.StateType.CARTESIAN_POSE)
 
     print_count = 0
-    target = initial_joint_pos
 
     ### CONTROL LOOP
     rate = rospy.Rate(freq)
     while not rospy.is_shutdown():
 
         state = robot.get_state()
-
 
         if not state:
             continue
@@ -249,7 +247,7 @@ def control_loop(cart_traj_dict, joint_traj_list, robot, freq, traj_type, do_plo
             time_f0 = time.time() - start_f0
 
             # Check for time, move on if takes too long
-            if time_f0 > 12.0 :
+            if time_f0 > 10.0 :
                 # Stop robot
                 command.joint_state = state.joint_state
                 command.joint_state.set_torques(np.zeros(7))
@@ -324,7 +322,7 @@ def control_loop(cart_traj_dict, joint_traj_list, robot, freq, traj_type, do_plo
                 command.joint_state = state.joint_state
                 command.joint_state.set_torques(np.zeros(7))
                 robot.send_command(command)
-                rospy.sleep(0.1)    # To avoid going through the target and stopping too late
+                rospy.sleep(0.2)    # To avoid going through the target and stopping too late
                 robot.send_command(command)
                 print("SWITCHED TO JOINT CONTROL !!  \n  ")
                 continue
@@ -336,16 +334,25 @@ def control_loop(cart_traj_dict, joint_traj_list, robot, freq, traj_type, do_plo
                 # set different gains for each controller
                 if ctrl_flag == 'Replay':
                     # reset integral if overhsoot
-                    if np.any(abs(integral) > integrator_reset_threshold):
-                        print("RESETTING INTEGRATOR ")
+                    if np.any(abs(integral) > inte_max_replay):
+                        # print("RESETTING INTEGRATOR ")
                         integral *= 0
                 elif ctrl_flag == 'Planned':
-                    if np.any(abs(integral) > 2*integrator_reset_threshold):
-                        print("RESETTING INTEGRATOR ")
+                    if np.all(abs(integral) > inte_max):
+                        # print("RESETTING INTEGRATOR ")
                         integral *= 0
+                    elif np.any(abs(integral) > inte_max):
+                        # print("CLIPPING INTEGRATOR ")
+                        integral = np.clip(integral, -inte_max, inte_max)
+
                 inte_torques = inte_gain * integral
                 if print_count % print_freq == 0:
                     print("USING INTEGRATOR ")
+
+            # If robot is disturbed
+            if np.any(integral != 0) and np.all(error_cart > start_integrator_m):
+                print("RESETTING INTEGRATOR ")
+                integral *= 0
 
             # Set feedback state
             feedback_joint_state.set_positions(state.joint_state.get_positions())
@@ -386,16 +393,6 @@ def control_loop(cart_traj_dict, joint_traj_list, robot, freq, traj_type, do_plo
             pos_d = feedback_joint_state.get_positions() + time_period * velo_d
             desired_joint_state.set_positions(pos_d)
 
-            ## NULL SPACE
-            # Calculate jacobian pseudo inverse
-            jacobian = np.array(state.jacobian.data())
-            jacobian_damped_inverse = np.dot(jacobian.T, np.linalg.inv((np.dot(jacobian, jacobian.T) + 0.01 * np.eye(6))))
-            # calculate null space matrix and error
-            null_space_matrix = np.eye(nb_joints) - jacobian_damped_inverse.dot(jacobian)
-            null_error = null_position - state.joint_state.get_positions()
-            # get null space command
-            null_command = null_gain * null_space_matrix.dot(null_error)
-
             # Set command
             command_torques = sr.JointTorques(joint_ctrl.compute_command(desired_joint_state, feedback_joint_state))
             command.joint_state = state.joint_state
@@ -414,11 +411,12 @@ def control_loop(cart_traj_dict, joint_traj_list, robot, freq, traj_type, do_plo
             # debug print
             if print_count % print_freq == 0:
                 print("CTRL FLAG:", ctrl_flag)
+                # print("Null error:", null_error)
                 # print("MODULATION DIFFERENCE:", mod_dif)
                 # print("Error :", error_joint)
                 # print("Command:", command_torques.get_torques())
                 print("TARGET:", initial_cart_pose.get_position())
-                print("CURR POS:", state.ee_state.get_position())
+                # print("CURR POS:", state.ee_state.get_position())
                 print("ERROR CART:", error_cart)
                 print("ERROR:", error_joint)
                 # if ctrl_flag == 'Planned': print("DS twist post clamping : ", ds_twist)
@@ -685,7 +683,7 @@ def control_loop(cart_traj_dict, joint_traj_list, robot, freq, traj_type, do_plo
                     initial_cart_pose = sr.CartesianPose('panda_ee', full_desired_X[0, 0:3],
                                                          np.array([0., 1., 0., 0.]), 'panda_base')
                     # Set integrator gains
-                    inte_gain = np.array([65, 55, 50, 45, 40, 30, 20]) * 0.5
+                    inte_gain = np.array([65, 55, 50, 45, 40, 30, 20]) * 0.3
 
                 elif ctrl_flag == 'Replay':
                     ## Set up joint trajectory + initial position
@@ -721,11 +719,6 @@ def control_loop(cart_traj_dict, joint_traj_list, robot, freq, traj_type, do_plo
             inte_torques = np.zeros(nb_joints)
             dq_filtered = np.zeros(nb_joints)
             null_command = np.zeros(nb_joints)
-
-            # Reset target + obstacle check
-            target = initial_joint_pos
-            checked_obstacle = False
-            avoiding_obstacle = False
 
             if in_sim:  # SIMULATOR GAINS
                 joint_ctrl.set_parameter_value("stiffness", [10., 5., 4., 2., 2, 2, 2], sr.ParameterType.DOUBLE_ARRAY)
