@@ -78,6 +78,7 @@ def control_loop(cart_traj_dict, joint_traj_list, robot, freq, traj_type, do_plo
 
     # ADD OBSTACLE
     obstacle = Ellipsoid([0.55, 0.0, 0.035], [.10, .12, .12 ], 0.5) # x=0.55 when table obstacle against table
+    robot_base = Ellipsoid([0.10, 0.0, 0.0], [.15, .10, .20 ], 0.5)
 
     # SET UP TORQUE controller - reach start position
     nb_joints = 7
@@ -372,7 +373,9 @@ def control_loop(cart_traj_dict, joint_traj_list, robot, freq, traj_type, do_plo
                 ## ADD MODULATION
                 modulated_lin_vel = doModulation(obstacle, state.ee_state.get_position(), ds_twist.get_linear_velocity())
                 # mod_dif = ds_twist.get_linear_velocity()-modulated_lin_vel
-                ds_twist.set_linear_velocity(modulated_lin_vel)
+                mod_twice = doModulation(robot_base, state.ee_state.get_position(), modulated_lin_vel)
+
+                ds_twist.set_linear_velocity(mod_twice) #modulated_lin_vel)
 
                 # clamp and set desired angular velocities
                 ds_twist.clamp(.25, .5)
