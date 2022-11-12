@@ -111,7 +111,7 @@ if __name__ == "__main__":
 
     # Check directories and create them if needed
     data_dir = "/home/ros/ros_ws/src/learning_safety_margin/data/User_" + user_nbr +"/"
-    fn = data_dir + "30_planned_trajectories_19-10.pkl"
+    fn = data_dir + "30_planned_trajectories.pkl"
 
     with open(fn, 'rb') as f:
         plannedTraj = pickle.load(f)

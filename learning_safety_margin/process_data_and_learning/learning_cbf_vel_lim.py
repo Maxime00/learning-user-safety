@@ -319,7 +319,7 @@ def vel_learning(user_number):
     # Define reward lists
     safe_rewards = onp.ones(len(safe_pts))*2.
     unsafe_rewards = onp.ones(len(unsafe_pts)) * -1.
-    semisafe_rewards = onp.ones(len(semisafe_pts))*0.# 0.5
+    semisafe_rewards = onp.ones(len(semisafe_pts))*0.5# 0.5
 
     ### Set up Minimization
     # Sample Data
@@ -475,18 +475,37 @@ def vel_learning(user_number):
     centers = onp.array(x_all)
     # Add RBF centers in uniform grid over workspace that are epsilon-distance away from any data
     pts = []
+    nbr_uniform_pts = 0
+    counter = 0
+    obs_lim = onp.vstack(([0.45, 0.65], [-.12, 0.12], [0.5, 0.18]))
+
     for i in range(ws_lim.shape[0]):
-        pts.append(np.linspace(start=ws_lim[i, 0], stop=ws_lim[i, 1], num=5, endpoint=True))
-    pts = np.array(pts)
+        # if i <= 2: pts.append(np.linspace(start=obs_lim[i, 0], stop=obs_lim[i, 1], num=8, endpoint=True)) ## for obstacle
+        if i <= 2: pts.append(np.linspace(start=ws_lim[i, 0], stop=ws_lim[i, 1], num=5, endpoint=True))  # for positions
+        elif i > 2: pts.append(np.linspace(start=ws_lim[i, 0], stop=ws_lim[i, 1], num=4, endpoint=True))  # for velocities
+    pts = onp.array(pts, dtype=object)
     pts = tuple(pts)
-    D = np.meshgrid(*pts)
+    D = onp.meshgrid(*pts)
     means = onp.array([D[i].flatten() for i in range(len(D))]).T
     for i in range(len(means)):
+<<<<<<< HEAD
         dist = np.linalg.norm(centers - means[i], axis=1)
         if np.all(dist > 0.5):##2*rbf_std):
             # print("adding uniform grid center")
             centers = onp.vstack((centers, means[i]))
 
+=======
+        dist_pos = np.linalg.norm(centers[:,0:3] - means[i, 0:3], axis=1)
+        dist_vel = np.linalg.norm(centers[:,3:6] - means[i, 3:6], axis=1)
+        # if np.all(dist > 0.5):##2*rbf_std): #.25  # far in velocity and position (different thresholds)
+        if onp.all(dist_pos > 0.04): # small therehsold for positions
+            counter +=1
+            if onp.all(dist_vel > 0.1):##2*rbf_std): #.25  # higher thresholds for velocity
+                nbr_uniform_pts += 1
+                centers = onp.vstack((centers, means[i]))
+    print("Number of new uniform points :", nbr_uniform_pts, "/", len(means))
+    print("Points > 0.05: ", counter)
+>>>>>>> c6e25e9f77369385ce1ea3b755a4949f6aa63c0a
 
     stds = onp.ones((centers.shape[0], 1)) * rbf_std
     n_features = centers.shape[0]
@@ -645,7 +664,7 @@ def vel_learning(user_number):
     slack_norm = n_unsafe
     h_weight = 1.
     h_norm = n_safe + n_unsafe + n_semisafe + n_artificial
-    param_weight = 1.#500.
+    param_weight = 1.
     obj = cp.Minimize(param_weight * param_cost/param_norm + slack_weight * slack_cost / slack_norm + h_weight * h_cost / h_norm)
     print('All costs defined')
 
@@ -662,13 +681,13 @@ def vel_learning(user_number):
 
     if is_slack_both:
         safe_slack_param = safe_slack.value
-        unsafe_slack_param  = unsafe_slack.value
+        unsafe_slack_param = unsafe_slack.value
     elif is_slack_safe:
         safe_slack_param = safe_slack.value
-        unsafe_slack_param  = None
+        unsafe_slack_param = None
     else:
         safe_slack_param = None
-        unsafe_slack_param  = unsafe_slack.value
+        unsafe_slack_param = unsafe_slack.value
 
     if is_semisafe:
         data = {
