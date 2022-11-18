@@ -492,7 +492,7 @@ def control_loop(cart_traj_dict, joint_traj_list, robot, freq, traj_type, do_plo
                 ds_twist.clamp(.25, .5)
 
                 # Get joint positions
-                joint_pos = setup_jp(X_desired[0:3],state.joint_state, robot_model)
+                joint_pos = setup_jp(X_desired[0:3], state.joint_state, robot_model)
 
                 desired_joint_state.set_positions(joint_pos)
 

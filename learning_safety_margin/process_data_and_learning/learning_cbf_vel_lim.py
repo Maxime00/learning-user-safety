@@ -79,7 +79,7 @@ class Obs_Cbf():
         ylist = onp.linspace(y_lim[0], y_lim[1], num_pts)
         zlist = onp.linspace(z_lim[0], z_lim[1], num_pts)
 
-        XX, YY, ZZ = o.meshgrid(xlist, ylist, zlist)
+        XX, YY, ZZ = onp.meshgrid(xlist, ylist, zlist)
         pts = onp.array([onp.ravel(XX), onp.ravel(YY), onp.ravel(ZZ)]).T
         vals = onp.array(list(map(self.obs_cbf, pts)))
         print(pts.shape, vals.shape, onp.min(vals), onp.max(vals))
@@ -488,13 +488,10 @@ def vel_learning(user_number):
     D = onp.meshgrid(*pts)
     means = onp.array([D[i].flatten() for i in range(len(D))]).T
     for i in range(len(means)):
-<<<<<<< HEAD
-        dist = np.linalg.norm(centers - means[i], axis=1)
-        if np.all(dist > 0.5):##2*rbf_std):
-            # print("adding uniform grid center")
-            centers = onp.vstack((centers, means[i]))
-
-=======
+        # dist = np.linalg.norm(centers - means[i], axis=1)
+        # if np.all(dist > 0.5):##2*rbf_std):
+        #     # print("adding uniform grid center")
+        #     centers = onp.vstack((centers, means[i]))
         dist_pos = np.linalg.norm(centers[:,0:3] - means[i, 0:3], axis=1)
         dist_vel = np.linalg.norm(centers[:,3:6] - means[i, 3:6], axis=1)
         # if np.all(dist > 0.5):##2*rbf_std): #.25  # far in velocity and position (different thresholds)
@@ -505,7 +502,6 @@ def vel_learning(user_number):
                 centers = onp.vstack((centers, means[i]))
     print("Number of new uniform points :", nbr_uniform_pts, "/", len(means))
     print("Points > 0.05: ", counter)
->>>>>>> c6e25e9f77369385ce1ea3b755a4949f6aa63c0a
 
     stds = onp.ones((centers.shape[0], 1)) * rbf_std
     n_features = centers.shape[0]
@@ -691,7 +687,7 @@ def vel_learning(user_number):
 
     if is_semisafe:
         data = {
-           "theta": params,
+            "theta": params,
             "bias": bias_param,
             "safe_slack": safe_slack_param,
             "unsafe_slack": unsafe_slack_param,
@@ -712,7 +708,7 @@ def vel_learning(user_number):
         }
     else:
         data = {
-           "theta": params,
+            "theta": params,
             "bias": bias_param,
             "safe_slack": safe_slack_param,
             "unsafe_slack": unsafe_slack_param,

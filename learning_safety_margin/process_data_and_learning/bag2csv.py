@@ -27,6 +27,10 @@ def process_user_rosbags(user_num='0', smooth_flag = '1'):
 	urdf_path = "/home/ros/ros_ws/src/learning_safety_margin/urdf/panda_arm_hand.urdf"
 	robot = Model("franka", urdf_path)
 
+	## URDF CHECK
+	urdf_2 = "/home/ros/ros_ws/src/learning_safety_margin/urdf/panda_arm.urdf"
+	robot2 = Model("franka", urdf_2)
+
 	# Verify directory
 	listOfBagFiles = glob.glob(rosbag_dir + '/**/*.bag', recursive=True)
 
@@ -70,6 +74,11 @@ def process_user_rosbags(user_num='0', smooth_flag = '1'):
 		# access bag
 		bag = rosbag.Bag(bagFile)
 
+		# URDF CHECK
+		# temp_jointState2 = sr.JointState("franka", robot2.get_joint_frames())
+		# eePositions2 = []
+		# eeVelocities2 = []
+
 		# DEBUG PRINT
 		# frames = robot.get_frames()
 		# base_frame = robot.get_base_frame()
@@ -92,7 +101,7 @@ def process_user_rosbags(user_num='0', smooth_flag = '1'):
 				temp_jointState.set_positions(temp)
 				eePos = robot.forward_kinematics(sr.JointPositions(temp_jointState), 'panda_grasptarget')  # outputs cartesian pose (7d)
 				# convert back from sr to save to list
-				eePositions.append(eePos.data()) # only saving transitional pos, not orientation
+				eePositions.append(eePos.data())# only saving transitional pos, not orientation
 
 				# velocities
 				# must convert to sr Joint state to compute forward velocities
@@ -101,6 +110,16 @@ def process_user_rosbags(user_num='0', smooth_flag = '1'):
 				eeVel = robot.forward_velocity(temp_jointState, 'panda_grasptarget')  # outputs cartesian twist (6d)
 				# convert back from sr to save to list
 				eeVelocities.append(eeVel.data())  # only saving transitional vel, not orientation
+
+				# URDF CHECK
+				# jointPos = sr.JointPositions("franka", np.array(msg.position))
+				# eePos2 = robot2.forward_kinematics(jointPos, 'panda_link8')
+				# eePositions2.append(eePos2.data())
+				# temp_jointState2.set_velocities(np.array(msg.velocity))
+				# temp_jointState2.set_positions(np.array(msg.position))
+				# eeVel2 = robot.forward_velocity(temp_jointState, 'panda_link8')
+				# eeVelocities2.append(eeVel2.data())
+
 
 				# Joint State
 				jointPositions.append(np.array(msg.position))#temp_jointState.get_positions())
@@ -133,6 +152,8 @@ def process_user_rosbags(user_num='0', smooth_flag = '1'):
 			smoothTorques = np.zeros(jointTorq2save.shape)
 			smoothJointVel = np.zeros(jointVel2save.shape)
 			smoothTwistVel = np.zeros(twist2save.shape)
+			# twist2save2 = np.array(eeVelocities2)
+			# smoothTwistVel2 = np.zeros(twist2save2.shape)
 			for i in range(0,len(jointTorq2save[0,:])):
 				window_len = 100
 				if window_len > jointTorq2save[:,i].shape[0]: window_len = jointTorq2save[:,i].shape[0]
@@ -143,6 +164,7 @@ def process_user_rosbags(user_num='0', smooth_flag = '1'):
 
 			for i in range(0, len(twist2save[0, :])):
 				smoothTwistVel[:, i] = signal.savgol_filter(x=twist2save[:, i], window_length=window_len, polyorder=3)
+				# smoothTwistVel2[:, i] = signal.savgol_filter(x=twist2save2[:, i], window_length=window_len, polyorder=3)
 
 			# plot velocities
 			# plt.figure()
@@ -153,6 +175,17 @@ def process_user_rosbags(user_num='0', smooth_flag = '1'):
 			# plt.figure()
 			# plt.plot(time_idx, smoothVel)
 			# plt.title("smooth")
+			# plt.show()
+
+			# URDF CHECK
+			# pose2save2 = np.array(eePositions2)
+			#
+			# plt.figure
+			# plt.plot(time_idx, smoothTwistVel)
+			# # plt.figure
+			# plt.plot(time_idx, smoothTwistVel2)
+			# plt.title("eePositions")
+			# plt.legend()
 			# plt.show()
 
 			# compute accelerations - use smooth vel to avoid noise

@@ -41,7 +41,7 @@ class Obs_Cbf():
         ylist = onp.linspace(y_lim[0], y_lim[1], num_pts)
         zlist = onp.linspace(z_lim[0], z_lim[1], num_pts)
 
-        XX, YY, ZZ = o.meshgrid(xlist, ylist, zlist)
+        XX, YY, ZZ = onp.meshgrid(xlist, ylist, zlist)
         pts = onp.array([onp.ravel(XX), onp.ravel(YY), onp.ravel(ZZ)]).T
         vals = onp.array(list(map(self.obs_cbf, pts)))
         print(pts.shape, vals.shape, onp.min(vals), onp.max(vals))
